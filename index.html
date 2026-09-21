@@ -6,19 +6,18 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
 <!-- RELEASE CHECKLIST — every fix/release must bump ALL of these together, or the app-build
-     meta tag below, the Overview page's version badge, package.json, and the service worker's
+     meta tag below, the header's visible version badge, package.json, and the service worker's
      CACHE_VERSION will disagree with each other:
        1. This app-build content (any short unique label works, e.g. a date + fix name).
-       2. The #appVersionTag text — set in js/overview.js's overviewPanel(), rendered as a
-          small badge in the bottom-right corner of the Overview page — plain "vX.Y.Z", so
-          opening the app confirms which build is actually running, even if the "app updated"
-          toast doesn't fire (e.g. after a fresh install/reinstall, which starts with no prior
-          build to compare against).
+       2. The #appVersionTag text — a small pill in the bottom-right corner of the header,
+          <header class="appbar"> below — plain "vX.Y.Z", so opening the app confirms which
+          build is actually running, even if the "app updated" toast doesn't fire (e.g. after
+          a fresh install/reinstall, which starts with no prior build to compare against).
        3. "version" in package.json — same X.Y.Z, one patch number higher than the last release
-          (e.g. 3.11.5 -> 3.11.6 for the next fix).
-       4. CACHE_VERSION in service-worker.js (e.g. 'v47' -> 'v48') — bump on every release,
+          (e.g. 3.11.7 -> 3.11.8 for the next fix).
+       4. CACHE_VERSION in service-worker.js (e.g. 'v49' -> 'v50') — bump on every release,
           not just ones that add/remove files, so phones actually fetch the new set. -->
-<meta name="app-build" content="2026-09-23-1-version-badge-overview">
+<meta name="app-build" content="2026-09-23-3-version-badge-header-bottomright">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -166,7 +165,12 @@
   .appbar-titles{ flex:1 1 auto; min-width:0; padding-left:6px; }
   .appbar-titles h1{ font-size:19px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .appbar-titles .sub{ color:rgba(255,255,255,0.8); font-size:11px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .app-version{ flex:0 0 auto; color:rgba(255,255,255,0.72); font-size:11px; font-weight:700; white-space:nowrap; padding:0 8px; letter-spacing:0.2px; }
+  .app-version{
+    position:absolute; right:8px; bottom:4px; z-index:1; pointer-events:none;
+    display:inline-block; padding:2px 8px; border-radius:20px;
+    background:rgba(255,255,255,0.16); color:rgba(255,255,255,0.85);
+    font-size:9px; font-weight:600; white-space:nowrap; letter-spacing:0.2px;
+  }
   /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
      restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
      replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
@@ -469,8 +473,6 @@
   .badge{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
   .badge.month{ background:var(--rust-tonal); color:var(--rust-deep); }
   .badge.progress{ background:var(--tonal-progress-bg); color:var(--tonal-progress-ink); }
-  .badge.version{ background:var(--paper-dim); color:var(--ink-soft); font-size:10px; font-weight:600; letter-spacing:0.2px; }
-  .version-badge-row{ display:flex; justify-content:flex-end; margin-top:18px; }
   .name{ font-weight:700; font-size:14.5px; color:var(--ink); }
   /* Loom number in Production and Warp Beam logs — the first thing scanned for on the
      factory floor, so it gets its own bigger, badge-style treatment rather than just
@@ -651,6 +653,7 @@
   </div>
 
   <header class="appbar">
+    <span class="app-version" id="appVersionTag">v3.11.8</span>
     <button id="menuBtn" class="icon-btn" type="button" aria-label="Open menu">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
