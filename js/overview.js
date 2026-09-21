@@ -291,6 +291,7 @@ function overviewPanel(){
       </div>
     </div>
     <div id="statsWrap"></div>
+    <div class="version-badge-row"><span class="badge version" id="appVersionTag">v3.11.6</span></div>
   `;
 }
 
