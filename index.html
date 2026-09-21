@@ -14,10 +14,10 @@
           build is actually running, even if the "app updated" toast doesn't fire (e.g. after
           a fresh install/reinstall, which starts with no prior build to compare against).
        3. "version" in package.json — same X.Y.Z, one patch number higher than the last release
-          (e.g. 3.11.7 -> 3.11.8 for the next fix).
-       4. CACHE_VERSION in service-worker.js (e.g. 'v49' -> 'v50') — bump on every release,
+          (e.g. 3.11.8 -> 3.11.9 for the next fix).
+       4. CACHE_VERSION in service-worker.js (e.g. 'v50' -> 'v51') — bump on every release,
           not just ones that add/remove files, so phones actually fetch the new set. -->
-<meta name="app-build" content="2026-09-23-3-version-badge-header-bottomright">
+<meta name="app-build" content="2026-09-23-4-fix-duplicate-version-badge">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -653,7 +653,7 @@
   </div>
 
   <header class="appbar">
-    <span class="app-version" id="appVersionTag">v3.11.8</span>
+    <span class="app-version" id="appVersionTag">v3.11.9</span>
     <button id="menuBtn" class="icon-btn" type="button" aria-label="Open menu">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
