@@ -478,6 +478,30 @@ const SEARCH_DEBOUNCE_TIMERS = {};
     save();
     const activeTab = document.querySelector('nav.tabs button.active');
     switchTab(activeTab ? activeTab.dataset.tab : 'overview');
+    if((status === 'Pending' || status === 'Cleared') && replacementLinks().some(l=>l.recoveryId===recoveryId && l.chequeId===chequeId)){
+      showToast('A payment is still linked as replacing this cheque — edit that payment to remove the link.', 6000);
+    }
+  });
+  // Bounced cheque -> "Log replacement": open the payment form for that client with the cheque ticked.
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-replace-cheque]');
+    if(!btn) return;
+    const [recoveryId, chequeId] = btn.dataset.replaceCheque.split(':');
+    if(!findCheque(recoveryId, chequeId)) return;
+    PENDING_REPLACE = {recoveryId, chequeId};
+    EDITING = null;
+    switchTab('recovery');
+  });
+  // "Replaced cheques not linked to a payment" -> tap the payment that replaced it.
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('[data-link-replacement]');
+    if(!btn) return;
+    const [paymentId, recoveryId, chequeId, amount] = btn.dataset.linkReplacement.split('|');
+    const r = linkReplacement(paymentId, recoveryId, chequeId, Number(amount));
+    if(!r.ok){ showToast(r.error, 6000); return; }
+    await save();
+    switchTab('recovery');
+    showToast('Linked ✓ — the payment now shows which cheque it replaced.');
   });
   // Toggles the "Before Last Sale" column on Overview's client breakdown table. Re-renders
   // just the stats card (not the whole panel) using the filter that was last applied, so

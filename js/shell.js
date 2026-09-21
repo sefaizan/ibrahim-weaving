@@ -513,7 +513,7 @@ function ledgerSizeLineHtml(){
 const EXPORT_SOURCES = {}; // pageKey -> () => ({headers, cells}) for the log table as last drawn (all filtered rows, not just the page shown)
 const EXPORT_LABELS = {sale:'Sales', recovery:'Recovery', expense:'Expenses', family:'Family_Expenses', warp:'Warp', weft:'Weft', production:'Production',
   wageBonuses:'Wage_Bonuses', wagePayments:'Wage_Payments', wageSettlements:'Wage_Settlements', loanPayments:'Loans', rateCalcs:'Grey_Cloth_Rates',
-  checkpoints:'Cash_Checkpoints', warpBeams:'Warp_Beams', warpBeamsFinished:'Warp_Beams_Finished', pendingCheques:'Pending_Cheques', bouncedCheques:'Bounced_Cheques'};
+  checkpoints:'Cash_Checkpoints', warpBeams:'Warp_Beams', warpBeamsFinished:'Warp_Beams_Finished', pendingCheques:'Pending_Cheques', bouncedCheques:'Bounced_Cheques', unlinkedReplaced:'Replaced_Cheques_Not_Linked'};
 function exportBarHtml(pageKey, count){
   if(!count) return '';
   const share = canShareFiles() ? `<button type="button" class="ghost" data-export-share="${pageKey}" style="margin:0">Share CSV</button>` : '';
@@ -560,6 +560,7 @@ document.addEventListener('click', async (e)=>{
 
 /* ---------------- Quick add (Overview buttons + app-icon shortcuts) ---------------- */
 let PENDING_QUICK = null;
+let PENDING_REPLACE = null; // set by a Bounced-cheque row's "Log replacement": {recoveryId, chequeId} to pre-tick on the payment form
 function quickAdd(kind){
   const recovery = kind === 'recovery';
   switchTab(recovery ? 'recovery' : 'sale');

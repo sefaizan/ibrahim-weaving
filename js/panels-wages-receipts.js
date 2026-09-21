@@ -569,7 +569,8 @@ function buildReceiptFields(saleId){
   const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
   // Reuses the same "before last sale" snapshot as the Overview tab (see
   // receivableBeforeLastSale): face value, so a cheque counts as paid the moment it's
-  // recorded even if it's later marked Bounced. Only meaningful for a client's most recent
+  // recorded even if it's later marked Bounced (a Replaced cheque is not counted, because the
+  // payment that replaced it is its own entry). Only meaningful for a client's most recent
   // sale, which is what this figure has always represented elsewhere in the app.
   const beforeLastSale = receivableBeforeLastSale(r.client);
   const previousBalance = beforeLastSale ? beforeLastSale.amount : 0;
@@ -730,10 +731,27 @@ async function shareSaleReceiptAsPdf(saleId){
     setStatus('Could not build/share the receipt PDF: ' + (e && (e.name + ' ' + e.message) || 'unknown error'));
   }
 }
+// Plain-English lines about bounced-cheque replacements on one payment, for the Recovery log, the
+// Client Statement and receipts: what this payment replaces, and what replaced this payment's own
+// cheques. Both come from the links stored on the replacing payment (see calc.js).
+function replacementNoteTexts(rec){
+  const notes = replacementNotes(rec.id);
+  const chq = n => 'cheque' + (n.chequeNo ? ' No. ' + n.chequeNo : '');
+  const out = [];
+  notes.replaces.forEach(n=>{
+    const part = n.amount < n.chequeAmount - 0.005 ? ` (part of ${fmtRs(n.chequeAmount)})` : '';
+    out.push(`Replaces ${chq(n)}${n.owner ? ' of ' + n.owner : ''} from ${fmtDate(n.date)} — ${fmtRs(n.amount)}${part}`);
+  });
+  notes.replacedBy.forEach(n=>{
+    out.push(`${chq(n).replace(/^c/, 'C')} (${fmtRs(n.chequeAmount)}) replaced by ${n.by.map(b=>`${fmtRs(b.amount)} paid ${fmtDate(b.date)}`).join(' + ')}`);
+  });
+  return out;
+}
 // Human-readable one-line summary of a recovery payment's cash/bank/cheque split, for the
 // Client Statement ledger — e.g. "Cash Rs 5,000 + Cheque Rs 10,000 + Cheque Rs 5,000 (Bounced — not credited)".
 function recoveryDescription(rec){
   const {cashAmount, bankAmount, cheques} = recoveryParts(rec);
+  const notes = replacementNotes(rec.id);
   // Non-breaking spaces keep "Cheque Rs 5,000" together, so a wrapped Details column only breaks
   // between the "+" items.
   const item = (label, n) => `${label}\u00a0${fmtRs(n).replace(' ', '\u00a0')}`;
@@ -743,10 +761,16 @@ function recoveryDescription(rec){
   // Every cheque is listed with its amount so the Credit can be added up by hand. A Bounced or
   // Replaced cheque is left out of the Credit (see recoveryReceivableAmount), so it is marked as such.
   (cheques||[]).forEach(c=>{
-    const notCredited = (c.status === 'Bounced' || c.status === 'Replaced') ? ` (${c.status} — not credited)` : '';
+    let notCredited = (c.status === 'Bounced' || c.status === 'Replaced') ? ` (${c.status} — not credited)` : '';
+    const by = notes.replacedBy.find(n=>n.chequeId===c.id);
+    if(by && c.status === 'Replaced') notCredited = ` (Replaced — not credited; made good by the payment${by.by.length>1?'s':''} of ${by.by.map(b=>fmtDate(b.date)).join(' and ')})`;
     parts.push(item('Cheque', Number(c.amount)||0) + notCredited);
   });
-  return parts.join(' + ') || 'Payment';
+  let text = parts.join(' + ') || 'Payment';
+  if(notes.replaces.length){
+    text += ' — ' + notes.replaces.map(n=>`${fmtRs(n.amount)} of this replaces cheque${n.chequeNo ? ' No. ' + n.chequeNo : ''} from ${fmtDate(n.date)}`).join('; ');
+  }
+  return text;
 }
 // Shared by printRecoveryReceipt and shareRecoveryReceipt. Balance figures come from the same
 // running ledger as the Client Statement (buildClientLedger), so a payment receipt's numbers
@@ -776,14 +800,15 @@ function buildRecoveryReceiptFields(recoveryId){
   const safe = s => String(s||'').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_');
   // Naming convention for every shareable file: <ClientName>_<Date>_<Time> (see dateTimeStamp).
   const fileBase = `${safe(r.client)||'Payment'}_${dateTimeStamp()}`;
-  return {r, biz, bizName, items, totalReceived, previousBalance, currentBalance, amountCredited, fileBase};
+  const notes = replacementNoteTexts(r);
+  return {r, biz, bizName, items, totalReceived, previousBalance, currentBalance, amountCredited, fileBase, notes};
 }
 // Prints a payment receipt for one Recovery entry, same #receiptPrintArea mechanism as
 // printSaleReceipt.
 function printRecoveryReceipt(recoveryId, opts){
   const f = buildRecoveryReceiptFields(recoveryId);
   if(!f) return;
-  const {r, bizName, biz, items, totalReceived, previousBalance, amountCredited, currentBalance, fileBase} = f;
+  const {r, bizName, biz, items, totalReceived, previousBalance, amountCredited, currentBalance, fileBase, notes} = f;
   const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
     biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',
     biz.phone ? `<div class="biz-line">Phone: ${escHtml(biz.phone)}</div>` : ''].join('');
@@ -807,6 +832,7 @@ function printRecoveryReceipt(recoveryId, opts){
     </table>
     ${balanceHtml}
     ${r.desc ? `<div class="meta-row" style="margin-top:14px"><span>Description</span><b>${escHtml(r.desc)}</b></div>` : ''}
+    ${(notes||[]).map(t=>`<div class="meta-row" style="margin-top:8px"><span>Note</span><b>${escHtml(t)}</b></div>`).join('')}
     <div class="footer-note">Thank you for your payment.</div>
   </div>`;
   if(opts && opts.htmlOnly) return html;

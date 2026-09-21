@@ -371,6 +371,45 @@ function wirePanel(id){
     rCashBtn.addEventListener('click', ()=>{ rCashWrap.style.display === 'none' ? showCash() : hideCash(); });
     updateTotalPreview();
 
+    // "Does part of this payment replace a bounced cheque?" — one row per bounced cheque of the chosen
+    // client. `replaceState` maps "recoveryId:chequeId" -> {on, amount}; it is rebuilt when the client
+    // changes and filled from the record when a payment is edited.
+    let replaceState = {};
+    const editingPaymentId = ()=> (EDITING && EDITING.key==='recovery') ? EDITING.id : null;
+    const renderReplaceRows = ()=>{
+      const wrap = document.getElementById('r_replaceWrap');
+      const rowsEl = document.getElementById('r_replaceRows');
+      const client = v('r_client');
+      const list = client ? replaceableCheques(client, editingPaymentId()) : [];
+      if(!list.length){ wrap.hidden = true; rowsEl.innerHTML = ''; return; }
+      wrap.hidden = false;
+      rowsEl.innerHTML = list.map(c=>{
+        const key = c.recoveryId + ':' + c.chequeId;
+        const st = replaceState[key] || {on:false, amount:''};
+        const label = ['Cheque' + (c.chequeNo ? ' No. ' + escHtml(c.chequeNo) : ''), c.owner ? escHtml(c.owner) : '', c.bank ? escHtml(c.bank) : '', fmtRs(c.amount), 'from ' + fmtDate(c.date)].filter(Boolean).join(' · ');
+        const part = c.owed < c.amount - 0.005 ? `<div class="note" style="margin:2px 0 0 26px">${fmtRs(c.owed)} of it is still owed.</div>` : '';
+        return `<div data-rep="${key}" style="margin-top:10px">
+          <label style="display:flex;align-items:flex-start;gap:8px"><input type="checkbox" data-rep-on style="width:auto;margin:3px 0 0"${st.on ? ' checked' : ''}><span>${label}</span></label>${part}
+          <div class="field" data-rep-amt-wrap style="margin:6px 0 0 26px"${st.on ? '' : ' hidden'}><label>How much of this payment replaces it (Rs)</label><input type="number" step="0.01" data-rep-amt value="${st.amount === '' ? '' : escHtml(String(st.amount))}"></div>
+        </div>`;
+      }).join('');
+      rowsEl.querySelectorAll('[data-rep]').forEach(rowEl=>{
+        const key = rowEl.dataset.rep;
+        const item = list.find(c=> c.recoveryId + ':' + c.chequeId === key);
+        const on = rowEl.querySelector('[data-rep-on]'), amtWrap = rowEl.querySelector('[data-rep-amt-wrap]'), amt = rowEl.querySelector('[data-rep-amt]');
+        on.addEventListener('change', ()=>{
+          const st = replaceState[key] = replaceState[key] || {on:false, amount:''};
+          st.on = on.checked;
+          amtWrap.hidden = !on.checked;
+          if(on.checked && (st.amount === '' || st.amount == null)){ st.amount = String(item.owed); amt.value = st.amount; }
+        });
+        amt.addEventListener('input', ()=>{ (replaceState[key] = replaceState[key] || {on:true, amount:''}).amount = amt.value; });
+      });
+    };
+    const clientSel = document.getElementById('r_client');
+    clientSel.addEventListener('change', ()=>{ replaceState = {}; renderReplaceRows(); });
+    renderReplaceRows();
+
     document.getElementById('addRecovery').onclick = async ()=>{
       if(!requireFields([
         [v('r_date'), 'Pick the date first.', 'r_date'],
@@ -384,14 +423,36 @@ function wirePanel(id){
       if(!requireFields([[amount > 0, 'Enter a Cash Amount, Bank Transfer Amount, or at least one cheque before saving.', 'r_bank']])) return;
       const rec = {date:v('r_date'), time:v('r_time'), client:v('r_client'), amount, desc:v('r_desc'),
         cashAmount, bankAmount, cheques: validCheques};
+      // Bounced cheques this payment replaces (only those still shown for this client are kept).
+      const shown = new Set(replaceableCheques(rec.client, editingPaymentId()).map(c=>c.recoveryId + ':' + c.chequeId));
+      const links = Object.keys(replaceState).filter(k=> replaceState[k].on && shown.has(k)).map(k=>{
+        const [recoveryId, chequeId] = k.split(':');
+        return {recoveryId, chequeId, amount: Number(replaceState[k].amount) || 0};
+      });
+      const problem = links.length ? checkReplacementLinks(editingPaymentId(), rec.client, amount, links) : null;
+      if(!requireFields([[!problem, problem, 'r_replaceWrap']])) return;
+      let ownId, oldLinks = [];
       if(EDITING && EDITING.key==='recovery'){
         const idx = DATA.recovery.findIndex(r=>r.id===EDITING.id);
-        if(idx>-1) DATA.recovery[idx] = {...DATA.recovery[idx], ...rec};
+        if(idx>-1){
+          oldLinks = (Array.isArray(DATA.recovery[idx].replaces) ? DATA.recovery[idx].replaces : []).map(l=>({...l}));
+          const merged = {...DATA.recovery[idx], ...rec};
+          if(links.length) merged.replaces = links; else delete merged.replaces;
+          DATA.recovery[idx] = merged;
+          ownId = merged.id;
+        }
         EDITING = null;
       } else {
-        DATA.recovery.push({id:uid(), ...rec}); PAGE.recovery = 1;
+        const fresh = {id:uid(), ...rec};
+        if(links.length) fresh.replaces = links;
+        DATA.recovery.push(fresh); PAGE.recovery = 1;
+        ownId = fresh.id;
       }
+      const changes = settleReplacementLinks(oldLinks, links, ownId);
       await save(); switchTab('recovery');
+      const nowReplaced = changes.filter(c=>c.to==='Replaced').length, nowBounced = changes.filter(c=>c.to==='Bounced').length;
+      if(nowReplaced) showToast(`${nowReplaced} bounced cheque${nowReplaced===1?'':'s'} now marked Replaced ✓`);
+      else if(nowBounced) showToast(`${nowBounced} cheque${nowBounced===1?' is':'s are'} back on the Bounced list (no longer fully replaced).`, 5000);
     };
     wireEnterSubmit(['r_date','r_time','r_client','r_cash','r_bank'],'addRecovery');
     wireDelete('recovery');
@@ -408,7 +469,22 @@ function wirePanel(id){
         chequeRows = parts.cheques.map(c=>({...c}));
         renderChequeRows();
         updateTotalPreview();
+        replaceState = {};
+        (editingRec && Array.isArray(editingRec.replaces) ? editingRec.replaces : []).forEach(l=>{ replaceState[l.recoveryId + ':' + l.chequeId] = {on:true, amount:String(l.amount)}; });
+        renderReplaceRows();
       });
+    // "Log replacement" on a Bounced cheque: open a fresh payment for that cheque's client with it ticked.
+    if(PENDING_REPLACE){
+      const want = PENDING_REPLACE; PENDING_REPLACE = null;
+      const f = findCheque(want.recoveryId, want.chequeId);
+      if(f){
+        document.getElementById('r_client').value = f.rec.client;
+        replaceState = {};
+        replaceState[want.recoveryId + ':' + want.chequeId] = {on:true, amount:String(chequeStillOwed(want.recoveryId, want.chequeId))};
+        renderReplaceRows();
+        setTimeout(()=>{ const box = document.getElementById('r_client'); const card = box && box.closest('.card'); if(card) card.scrollIntoView({block:'start', behavior:'smooth'}); }, 80);
+      }
+    }
     const rfClient = document.getElementById('rf_client');
     rfClient.value = FILTER.recovery || '';
     rfClient.addEventListener('change', ()=>{
@@ -1389,7 +1465,12 @@ function wireDelete(key){
       clearTimeout(btn._disarmTimer);
       haptic(25); // firm single buzz right at the moment a delete is actually confirmed
       const delId = btn.dataset.del.split(':')[1];
+      // A payment that replaced a bounced cheque takes its link with it, so that cheque may need to go
+      // back on the Bounced list (and links pointing at this payment's own cheques are dropped).
+      const gone = key === 'recovery' ? DATA.recovery.find(r=>r.id===delId) : null;
+      const goneLinks = gone && Array.isArray(gone.replaces) ? gone.replaces.map(l=>({...l})) : [];
       DATA[key] = DATA[key].filter(r=>r.id!==delId);
+      if(key === 'recovery') settleReplacementLinks(goneLinks, [], null);
       if(EDITING && EDITING.key===key && EDITING.id===delId) EDITING = null;
       await save(); switchTab(tabForKey(key));
     };

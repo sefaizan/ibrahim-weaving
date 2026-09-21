@@ -205,13 +205,15 @@ function recoveryBouncedAmount(r){
   return cheques.filter(c=>c.status==='Bounced').reduce((s,c)=>s+(Number(c.amount)||0),0);
 }
 
-// Same as recoveryReceivableAmount but at face value — every cheque counts as paid the
-// moment it's recorded, regardless of whether it later cleared or bounced. Used only for the
-// "before last sale" checkpoint below, which is meant to stay frozen as of when that sale was
-// entered rather than move around every time a cheque's status changes afterward.
+// Same as recoveryReceivableAmount but every cheque counts as paid the moment it's recorded,
+// whether it later cleared or bounced (a Bounced cheque still counts here). The one exception is
+// a Replaced cheque: it bounced and the client then paid again through a separate payment entry,
+// so counting it too would credit the same money twice. Used only for the "before last sale"
+// checkpoint below, which is meant to stay frozen as of when that sale was entered rather than
+// move around every time a cheque's status changes afterward.
 function recoveryFaceAmount(r){
   const {cashAmount, bankAmount, cheques} = recoveryParts(r);
-  return cashAmount + bankAmount + cheques.reduce((s,c)=>s+(Number(c.amount)||0),0);
+  return cashAmount + bankAmount + cheques.filter(c=>c.status!=='Replaced').reduce((s,c)=>s+(Number(c.amount)||0),0);
 }
 
 // A client's receivable balance right before their most recent sale was entered — i.e. sum
@@ -222,7 +224,8 @@ function recoveryFaceAmount(r){
 // several sales on the exact same date are broken by id so the "last" one is picked
 // consistently. This is a frozen checkpoint at face value: cheques count as paid as of the
 // date they were recorded, and a later bounce does NOT change this figure — it only affects
-// the overall (live) Receivable total elsewhere, not this snapshot.
+// the overall (live) Receivable total elsewhere, not this snapshot. Cheques marked Replaced are
+// left out (see recoveryFaceAmount), since their replacement payment is counted on its own.
 function receivableBeforeLastSale(clientName){
   const sales = DATA.sale.filter(s=>s.client===clientName).slice()
     .sort((a,b)=> a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
@@ -299,6 +302,202 @@ function computeBouncedCheques(){
   });
   bouncedCheques.sort((a,b)=> new Date(b.date+'T00:00:00Z') - new Date(a.date+'T00:00:00Z'));
   return bouncedCheques;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Replacing a bounced cheque
+//
+// When a client makes good on a bounced cheque, the money comes in as its own new payment. To keep
+// the two connected, that payment carries  replaces: [{recoveryId, chequeId, amount}]  — "this much
+// of this payment replaces that bounced cheque". The link lives ONLY on the replacing payment; the
+// other direction ("this cheque was replaced by ...") is always worked out from the links, so the two
+// sides can never disagree. None of the money figures (Receivable, Cash, statements) read these
+// links — a Replaced cheque still simply isn't credited and the replacing payment still credits in
+// full. The links exist so the app can show what replaced what, and warn when something is missing.
+// ---------------------------------------------------------------------------------------------
+const REPLACE_TOLERANCE = 0.005;
+const plainRs = n => 'Rs ' + Math.round(Number(n)||0).toLocaleString('en-IN'); // same digit grouping as fmtRs, so messages read like the rest of the app
+
+// A payment's full value, before Bounced/Replaced cheques are left out.
+function paymentTotal(r){
+  const {cashAmount, bankAmount, cheques} = recoveryParts(r);
+  return cashAmount + bankAmount + cheques.reduce((sum,c)=>sum+(Number(c.amount)||0),0);
+}
+// Every link from every payment, one flat list: {paymentId, recoveryId, chequeId, amount}.
+function replacementLinks(){
+  const out = [];
+  DATA.recovery.forEach(p=>{
+    (Array.isArray(p.replaces) ? p.replaces : []).forEach(l=>{
+      if(l && l.recoveryId && l.chequeId) out.push({paymentId:p.id, recoveryId:l.recoveryId, chequeId:l.chequeId, amount:Number(l.amount)||0});
+    });
+  });
+  return out;
+}
+function findCheque(recoveryId, chequeId){
+  const rec = DATA.recovery.find(x=>x.id===recoveryId);
+  if(!rec) return null;
+  const cheque = recoveryParts(rec).cheques.find(x=>x.id===chequeId);
+  return cheque ? {rec, cheque} : null;
+}
+// How much of a cheque has been made good by linked payments (optionally ignoring one payment,
+// e.g. the one being edited, so its own earlier link isn't counted against it).
+function chequeReplacedAmount(recoveryId, chequeId, exceptPaymentId){
+  return replacementLinks()
+    .filter(l=> l.recoveryId===recoveryId && l.chequeId===chequeId && l.paymentId!==exceptPaymentId)
+    .reduce((sum,l)=>sum+l.amount, 0);
+}
+function chequeStillOwed(recoveryId, chequeId, exceptPaymentId){
+  const f = findCheque(recoveryId, chequeId);
+  if(!f) return 0;
+  return Math.max(0, (Number(f.cheque.amount)||0) - chequeReplacedAmount(recoveryId, chequeId, exceptPaymentId));
+}
+// The cheques a payment from this client could replace: their Bounced cheques that are still (partly)
+// owed, plus any cheque this same payment already replaces (so editing it keeps its ticks). A cheque
+// that is part of the payment itself is never offered.
+function replaceableCheques(client, editingPaymentId){
+  const out = [];
+  const mine = editingPaymentId ? replacementLinks().filter(l=>l.paymentId===editingPaymentId) : [];
+  DATA.recovery.forEach(r=>{
+    if(r.client !== client || r.id === editingPaymentId) return;
+    recoveryParts(r).cheques.forEach(c=>{
+      const linkedHere = mine.some(l=> l.recoveryId===r.id && l.chequeId===c.id);
+      if(c.status !== 'Bounced' && !linkedHere) return;
+      const owed = chequeStillOwed(r.id, c.id, editingPaymentId);
+      if(owed <= REPLACE_TOLERANCE && !linkedHere) return;
+      out.push({recoveryId:r.id, chequeId:c.id, date:r.date, chequeNo:c.chequeNo||'', bank:c.bank||'', owner:c.owner||'',
+        chequeDate:c.chequeDate||'', amount:Number(c.amount)||0, owed});
+    });
+  });
+  out.sort((a,b)=> a.date.localeCompare(b.date));
+  return out;
+}
+// Returns a plain-English problem with a set of links a payment is about to save, or null if fine.
+// `links` = [{recoveryId, chequeId, amount}], `total` = the payment's full value.
+function checkReplacementLinks(paymentId, client, total, links){
+  let sum = 0;
+  for(const l of (links||[])){
+    const f = findCheque(l.recoveryId, l.chequeId);
+    const name = f ? `cheque ${f.cheque.chequeNo ? 'No. '+f.cheque.chequeNo+' ' : ''}(${plainRs(f.cheque.amount)})` : 'a cheque';
+    if(!f) return 'One of the cheques this payment replaces no longer exists — untick it.';
+    if(f.rec.client !== client) return `The ${name} belongs to a different client.`;
+    if(f.rec.id === paymentId) return `A payment can't replace its own cheque (${name}).`;
+    const amt = Number(l.amount)||0;
+    if(!(amt > 0)) return `Enter how much of this payment replaces the ${name}.`;
+    const owed = chequeStillOwed(l.recoveryId, l.chequeId, paymentId);
+    if(amt > owed + REPLACE_TOLERANCE) return `Only ${plainRs(owed)} of the ${name} is still owed — the amount replacing it is ${plainRs(amt)}.`;
+    sum += amt;
+  }
+  if(sum > (Number(total)||0) + REPLACE_TOLERANCE) return `The amounts replacing cheques add up to ${plainRs(sum)}, which is more than this payment (${plainRs(total)}).`;
+  return null;
+}
+// After links change, brings the affected cheques' status in line: fully made good -> Replaced,
+// and a Replaced cheque that is no longer fully covered -> back to Bounced. Only touches the
+// cheques it is told about (a cheque marked Replaced by hand is left alone unless it is listed).
+function applyReplacementLinks(refs){
+  const changes = [], seen = new Set();
+  (refs||[]).forEach(ref=>{
+    const key = ref.recoveryId+':'+ref.chequeId;
+    if(seen.has(key)) return;
+    seen.add(key);
+    const f = findCheque(ref.recoveryId, ref.chequeId);
+    if(!f) return;
+    const full = chequeReplacedAmount(ref.recoveryId, ref.chequeId) >= (Number(f.cheque.amount)||0) - REPLACE_TOLERANCE;
+    if(full && f.cheque.status === 'Bounced'){ f.cheque.status = 'Replaced'; changes.push({recoveryId:ref.recoveryId, chequeId:ref.chequeId, to:'Replaced'}); }
+    else if(!full && f.cheque.status === 'Replaced'){ f.cheque.status = 'Bounced'; changes.push({recoveryId:ref.recoveryId, chequeId:ref.chequeId, to:'Bounced'}); }
+  });
+  return changes;
+}
+// Removes links whose cheque has been deleted (the cheque row was removed from its payment).
+function pruneReplacementLinks(){
+  let removed = 0;
+  DATA.recovery.forEach(p=>{
+    if(!Array.isArray(p.replaces)) return;
+    const keep = p.replaces.filter(l=> l && findCheque(l.recoveryId, l.chequeId));
+    removed += p.replaces.length - keep.length;
+    if(keep.length) p.replaces = keep; else delete p.replaces;
+  });
+  return removed;
+}
+// The one call the Save / Delete buttons use: given a payment's links from before and after a change
+// (either may be empty), updates statuses and drops dead links. `ownChequeIds` are the payment's own
+// cheques — included so a cheque whose amount changed is re-checked, but only if something links to it.
+function settleReplacementLinks(oldLinks, newLinks, ownRecoveryId){
+  const refs = [].concat(oldLinks||[], newLinks||[]).map(l=>({recoveryId:l.recoveryId, chequeId:l.chequeId}));
+  if(ownRecoveryId){
+    const own = DATA.recovery.find(x=>x.id===ownRecoveryId);
+    if(own) recoveryParts(own).cheques.forEach(c=>{ if(chequeReplacedAmount(ownRecoveryId, c.id) > 0) refs.push({recoveryId:ownRecoveryId, chequeId:c.id}); });
+  }
+  pruneReplacementLinks();
+  return applyReplacementLinks(refs);
+}
+// Ties `amount` of an existing payment to a cheque (used by "Link" on the check list). Returns
+// {ok:true} or {ok:false, error}.
+function linkReplacement(paymentId, recoveryId, chequeId, amount){
+  const p = DATA.recovery.find(x=>x.id===paymentId);
+  if(!p) return {ok:false, error:'That payment no longer exists.'};
+  const old = (Array.isArray(p.replaces) ? p.replaces : []).map(l=>({...l}));
+  const next = old.filter(l=> !(l.recoveryId===recoveryId && l.chequeId===chequeId)).concat([{recoveryId, chequeId, amount:Number(amount)||0}]);
+  const problem = checkReplacementLinks(paymentId, p.client, paymentTotal(p), next);
+  if(problem) return {ok:false, error:problem};
+  p.replaces = next;
+  settleReplacementLinks(old, next, null);
+  return {ok:true};
+}
+// Bounced/Replaced cheques as the check list sees them: {recoveryId, chequeId, client, date, chequeNo, bank, owner,
+// amount, linked, missing}. `missing` is how much of a Replaced cheque no linked payment accounts for.
+function uncoveredReplacedCheques(){
+  const out = [];
+  DATA.recovery.forEach(r=>{
+    recoveryParts(r).cheques.forEach(c=>{
+      if(c.status !== 'Replaced') return;
+      const amount = Number(c.amount)||0, linked = chequeReplacedAmount(r.id, c.id);
+      if(linked < amount - REPLACE_TOLERANCE) out.push({recoveryId:r.id, chequeId:c.id, client:r.client, date:r.date, chequeNo:c.chequeNo||'',
+        bank:c.bank||'', owner:c.owner||'', amount, linked, missing: amount - linked});
+    });
+  });
+  out.sort((a,b)=> b.date.localeCompare(a.date));
+  return out;
+}
+// Payments that could plausibly be the one that made good on a cheque: same client, dated on or after
+// the payment holding the cheque, with enough of its value not already assigned to other cheques.
+// Nearest date first, at most 3. The person confirms one; nothing is linked automatically.
+function suggestReplacementPayments(recoveryId, chequeId){
+  const f = findCheque(recoveryId, chequeId);
+  if(!f) return [];
+  const missing = Math.max(0, (Number(f.cheque.amount)||0) - chequeReplacedAmount(recoveryId, chequeId));
+  if(missing <= REPLACE_TOLERANCE) return [];
+  const out = [];
+  DATA.recovery.forEach(p=>{
+    if(p.client !== f.rec.client || p.id === recoveryId || p.date < f.rec.date) return;
+    const assigned = (Array.isArray(p.replaces) ? p.replaces : []).filter(l=>!(l.recoveryId===recoveryId && l.chequeId===chequeId)).reduce((sum,l)=>sum+(Number(l.amount)||0),0);
+    const room = paymentTotal(p) - assigned;
+    if(room + REPLACE_TOLERANCE >= missing) out.push({paymentId:p.id, date:p.date, total:paymentTotal(p), room, missing});
+  });
+  out.sort((a,b)=> a.date.localeCompare(b.date));
+  return out.slice(0,3);
+}
+// Everything one payment says about replacements, resolved to readable pieces:
+//   replaces:   the cheques this payment makes good  [{recoveryId, chequeId, amount, chequeNo, bank, owner, chequeAmount, date}]
+//   replacedBy: for each of this payment's own cheques, the payments that made it good
+//               [{chequeId, chequeNo, chequeAmount, by:[{paymentId, date, amount}]}]
+function replacementNotes(paymentId){
+  const p = DATA.recovery.find(x=>x.id===paymentId);
+  const notes = {replaces:[], replacedBy:[]};
+  if(!p) return notes;
+  (Array.isArray(p.replaces) ? p.replaces : []).forEach(l=>{
+    const f = findCheque(l.recoveryId, l.chequeId);
+    if(f) notes.replaces.push({recoveryId:l.recoveryId, chequeId:l.chequeId, amount:Number(l.amount)||0, chequeNo:f.cheque.chequeNo||'',
+      bank:f.cheque.bank||'', owner:f.cheque.owner||'', chequeAmount:Number(f.cheque.amount)||0, date:f.rec.date});
+  });
+  const links = replacementLinks();
+  recoveryParts(p).cheques.forEach(c=>{
+    const by = links.filter(l=>l.recoveryId===p.id && l.chequeId===c.id).map(l=>{
+      const q = DATA.recovery.find(x=>x.id===l.paymentId);
+      return {paymentId:l.paymentId, date:q ? q.date : '', amount:l.amount};
+    }).sort((a,b)=>a.date.localeCompare(b.date));
+    if(by.length) notes.replacedBy.push({chequeId:c.id, chequeNo:c.chequeNo||'', chequeAmount:Number(c.amount)||0, by});
+  });
+  return notes;
 }
 
 // "100-12 mtr @ Rs 350.00" — the quantity and rate of one Sale line on a Client Statement, so

@@ -249,15 +249,41 @@ function bouncedChequesCardHtml(){
   if(!bouncedCheques.length) return '';
   const bouncedTotal = bouncedCheques.reduce((s,c)=>s+(Number(c.amount)||0),0);
   const headers = ['Date','Client','Cheque Owner','Cheque No','Bank','Cheque Date','Amount',''];
-  const mapFn = c=>[
+  const mapFn = c=>{
+    const made = chequeReplacedAmount(c.recoveryId, c.id);
+    const progress = made > 0.004 ? `<div class="note" style="margin:3px 0 0">${fmtRs(made)} replaced so far — ${fmtRs(Math.max(0,(Number(c.amount)||0)-made))} still owed</div>` : '';
+    return [
     fmtDate(c.date), `<span class="name">${escHtml(c.client)}</span>`, `<b>${escHtml(c.owner||'—')}</b>`, escHtml(c.chequeNo||'—'), escHtml(c.bank||'—'),
-    c.chequeDate?fmtDate(c.chequeDate):'—', fmtRs(c.amount),
-    `<div class="chq-actions"><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Replaced">Mark Replaced</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Pending">Reopen as Pending</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Cleared">Mark Cleared</button></div>`
-  ];
+    c.chequeDate?fmtDate(c.chequeDate):'—', fmtRs(c.amount) + progress,
+    `<div class="chq-actions"><button class="ghost" data-replace-cheque="${c.recoveryId}:${c.id}">Log replacement</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Replaced">Mark Replaced</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Pending">Reopen as Pending</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Cleared">Mark Cleared</button></div>`
+    ];
+  };
   return `
     <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Bounced Cheques — ${fmtRs(bouncedTotal)}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Cheque Owner tells you exactly whose cheque failed, even when your client passed on a third party's cheque — useful when they ask which one it was. Once the client has made good on it — cash, transfer, a new cheque, or some mix — log that as its own new payment below, then click "Mark Replaced" here to drop this one off the list. It stays out of your Receivable either way; Replaced just keeps this list down to cheques that still need chasing.</p>
+      <p class="note info-note" hidden>Cheque Owner tells you exactly whose cheque failed, even when your client passed on a third party's cheque — useful when they ask which one it was. Once the client has made good on it — cash, transfer, a new cheque, or some mix — tap "Log replacement": it opens the payment form with this cheque ticked, so the new payment is linked to it. When the payments linked to a cheque add up to its amount, it drops off this list as Replaced by itself (and comes back here if that payment is later removed). "Mark Replaced" does the same without linking a payment — it then shows up under "Replaced cheques not linked to a payment" until you link one. Either way the cheque stays out of your Receivable; this only changes which cheques still need chasing.</p>
       ${logTable('bouncedCheques', headers, bouncedCheques, mapFn)}
+    </div>`;
+}
+// Cheques marked Replaced whose replacement payment was never linked (older entries, or "Mark
+// Replaced" used on its own). Nothing is wrong with the money — this list only exists so each such
+// cheque can be tied to the payment that made good on it. The person picks; nothing links itself.
+function unlinkedReplacedCardHtml(){
+  const list = uncoveredReplacedCheques();
+  if(!list.length) return '';
+  const total = list.reduce((s,c)=>s+c.missing,0);
+  const headers = ['Client','Cheque','Not linked','Link it to the payment that replaced it'];
+  const mapFn = c=>{
+    const sugg = suggestReplacementPayments(c.recoveryId, c.chequeId);
+    const buttons = sugg.length
+      ? sugg.map(s=>`<button class="ghost" data-link-replacement="${s.paymentId}|${c.recoveryId}|${c.chequeId}|${c.missing}">${fmtDate(s.date)} payment · ${fmtRs(s.total)}</button>`).join('')
+      : `<span class="note" style="margin:0">No later payment from this client is big enough.</span><button class="ghost" data-cheque="${c.recoveryId}:${c.chequeId}:Bounced">Reopen as Bounced</button>`;
+    const name = [c.chequeNo ? 'No. ' + escHtml(c.chequeNo) : '', c.owner ? escHtml(c.owner) : '', fmtDate(c.date)].filter(Boolean).join(' · ');
+    return [`<span class="name">${escHtml(c.client)}</span>`, name, fmtRs(c.missing) + (c.linked > 0.004 ? `<div class="note" style="margin:3px 0 0">of ${fmtRs(c.amount)}</div>` : ''), `<div class="chq-actions">${buttons}</div>`];
+  };
+  return `
+    <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Replaced cheques not linked to a payment — ${list.length}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>These cheques are marked Replaced, but the payment that made good on each one was never tied to it. Your balances are not affected. Tap the payment that replaced the cheque and the two are linked: the payment then shows "Replaces cheque…" in the Recovery Log and on statements, and the cheque shows which payment replaced it. Only payments from the same client, dated on or after the cheque, and big enough to cover it are offered. If it wasn't really replaced, "Reopen as Bounced" puts it back on the Bounced list.</p>
+      ${logTable('unlinkedReplaced', headers, list, mapFn)}
     </div>`;
 }
 function recoveryPanel(){
@@ -297,7 +323,7 @@ function recoveryPanel(){
     </div>
     ${clientTable}
   ${sumCardClose()}`;
-  return `${summary}${pendingChequesCardHtml()}${bouncedChequesCardHtml()}<div class="card"><div class="card-head"><h2>Log Payment Received</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+  return `${summary}${pendingChequesCardHtml()}${bouncedChequesCardHtml()}${unlinkedReplacedCardHtml()}<div class="card"><div class="card-head"><h2>Log Payment Received</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>A single payment can be part cash, part bank transfer, and part cheques, all at once — fill in whichever apply. Leave any that don't apply at 0 / empty.</p>
     <div class="grid cols-3">
       ${field('Date','r_date','date',`value="${todayStr()}" autofocus`)}
@@ -318,6 +344,11 @@ function recoveryPanel(){
       <div id="r_chequeRows"></div>
       <button type="button" class="ghost" id="r_addChequeRow" style="margin-top:8px">+ Add Cheque</button>
     </div>
+    <div id="r_replaceWrap" style="margin-top:12px" hidden>
+      <div class="group-label">Does part of this payment replace a bounced cheque? (optional)</div>
+      <p class="note" style="margin-top:0">Tick the cheque this money makes good on and say how much of the payment it is. The two are then linked — you'll see it in the Recovery Log and on statements — and the cheque drops off the Bounced list once it is fully covered. Leave everything unticked for an ordinary payment.</p>
+      <div id="r_replaceRows"></div>
+    </div>
     <div class="calc-amount" id="r_totalPreview">Total: Rs 0</div>
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Description (optional)','r_desc')}
@@ -334,7 +365,7 @@ function recoveryPanel(){
       ${logTable('recovery',
       ['Date','Time','Client','Amount','Method','Description',''],
       filteredRecovery.slice().reverse(),
-      r=>[fmtDate(r.date), r.time||'—', `<span class="name">${escHtml(r.client)}</span>`, fmtRs(r.amount), recoveryMethodLabel(r), escHtml(r.desc||''), `<span class="row-actions">${recoveryReceiptBtn(r.id)}${canShareFiles() ? shareRecoveryReceiptBtn(r.id) : ''}${actionBtns('recovery',r.id)}</span>`]
+      r=>[fmtDate(r.date), r.time||'—', `<span class="name">${escHtml(r.client)}</span>`, fmtRs(r.amount), recoveryMethodLabel(r), escHtml(r.desc||'') + replacementNoteTexts(r).map(t=>`<div class="note" style="margin:3px 0 0">↳ ${escHtml(t)}</div>`).join(''), `<span class="row-actions">${recoveryReceiptBtn(r.id)}${canShareFiles() ? shareRecoveryReceiptBtn(r.id) : ''}${actionBtns('recovery',r.id)}</span>`]
     )}</div>`;
 }
 function expensePanel(){
