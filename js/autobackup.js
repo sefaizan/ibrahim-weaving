@@ -2,9 +2,11 @@
  * owner's own Netlify function + Resend account (see backup-service/), so an off-phone copy exists
  * without anyone having to remember to share one.
  *
- * When it sends: 2 minutes after a save (so a run of entries goes out as one backup), and when the
- * app is opened, comes back to the screen, or the phone gets internet again. It only sends when
- * something changed since the last emailed backup, and at most once every AUTO_BACKUP_MIN_HOURS.
+ * When it sends: once a day. If the app is open at midnight (the phone's own 00:00) it sends then;
+ * otherwise it sends the first time the app is opened, comes back to the screen, or the phone gets
+ * internet after midnight (that backup holds everything entered up to the end of the day before).
+ * It only sends when something changed since the last emailed backup, and never more than once per
+ * calendar day. If a send fails (e.g. no signal) it tries again the next time the app wakes up.
  * The address and key are typed into Backup & Restore on the phone and kept in this browser's own
  * storage: they are NOT in the app's files, which are public.
  *
@@ -17,8 +19,7 @@
 
 const AUTO_BACKUP_CFG_KEY = 'khata-autobackup';
 const AUTO_BACKUP_STATE_KEY = 'khata-autobackup-state';
-const AUTO_BACKUP_MIN_HOURS = 3;            // never email more often than this
-const AUTO_BACKUP_DELAY_MS = 2 * 60 * 1000; // wait this long after a save, so a run of entries is one backup
+// The daily check is remembered per calendar day of the phone's own clock (state.lastCheckDay).
 let AUTO_BACKUP_TIMER = null;
 let AUTO_BACKUP_BUSY = false;
 
@@ -45,6 +46,16 @@ function autoBackupSetState(patch){
 function autoBackupReady(){
   const c = autoBackupConfig();
   return c.on && /^https:\/\//i.test(c.url) && c.key.length > 0;
+}
+
+// The phone's local calendar day as text (2026-09-21), and how long until its next 00:00.
+function autoBackupDayKey(d){
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function autoBackupMsToMidnight(){
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1).getTime() - n.getTime();
 }
 
 // A fingerprint of the ledger, to tell "changed since the last emailed backup" from "same as before".
@@ -89,9 +100,9 @@ async function autoBackupSend(force){
   if(encEnabled() && !ENC_DEK) return {ok: false, skipped: true, message: 'Unlock the app first.'};
   if(!totalEntries(backupCounts(DATA))) return {ok: false, skipped: true, message: 'There is nothing to back up yet.'};
   const cfg = autoBackupConfig(), st = autoBackupState();
-  if(!force && st.lastOkAt){
-    const waitMs = Date.parse(st.lastOkAt) + AUTO_BACKUP_MIN_HOURS * 3600000 - Date.now();
-    if(waitMs > 0) return {ok: false, skipped: true, tooSoon: true, waitMs, message: 'Backed up recently.'};
+  const today = autoBackupDayKey();
+  if(!force && st.lastCheckDay === today){
+    return {ok: false, skipped: true, tooSoon: true, waitMs: autoBackupMsToMidnight(), message: 'Already checked today; the next automatic backup is after midnight.'};
   }
   AUTO_BACKUP_BUSY = true;
   const ctl = new AbortController();
@@ -107,7 +118,10 @@ async function autoBackupSend(force){
       autoBackupSetState({lastError: message});
       return {ok: false, message};
     }
-    if(!force && st.lastHash === hash) return {ok: false, skipped: true, message: 'No changes since the last emailed backup.'};
+    if(!force && st.lastHash === hash){
+      autoBackupSetState({lastCheckDay: today});
+      return {ok: false, skipped: true, message: 'No changes since the last emailed backup.'};
+    }
     const res = await fetch(cfg.url, {
       method: 'POST',
       headers: {'Authorization': 'Bearer ' + cfg.key, 'Content-Type': 'application/json'},
@@ -116,7 +130,7 @@ async function autoBackupSend(force){
     });
     if(res.ok){
       const nowIso = new Date().toISOString();
-      autoBackupSetState({lastOkAt: nowIso, lastHash: hash, lastError: ''});
+      autoBackupSetState({lastOkAt: nowIso, lastHash: hash, lastError: '', lastCheckDay: today});
       // An emailed backup is a real off-phone backup: quiet the "take a backup" reminders too.
       try{
         localStorage.setItem(LAST_BACKUP_KEY, nowIso);
@@ -144,20 +158,24 @@ async function autoBackupSend(force){
   }
 }
 
-// One automatic attempt. If it was too soon after the last one, tries again when the wait is over
-// (works while the app stays open; otherwise the next open of the app does it).
-async function autoBackupRun(){
+// Makes sure a check will run just after the next midnight, if the app is still open then
+// (otherwise the first wake-up after midnight does it).
+function autoBackupArmMidnight(){
   clearTimeout(AUTO_BACKUP_TIMER);
+  if(!autoBackupReady()) return;
+  AUTO_BACKUP_TIMER = setTimeout(autoBackupRun, Math.min(autoBackupMsToMidnight() + 2000, 2147000000));
+}
+// One automatic attempt (a no-op if today's check is already done), then waits for the next midnight.
+async function autoBackupRun(){
   const r = await autoBackupSend(false);
-  if(r.tooSoon) AUTO_BACKUP_TIMER = setTimeout(autoBackupRun, Math.min(r.waitMs + 2000, 2147000000));
+  autoBackupArmMidnight();
   autoBackupRefreshStatus();
   return r;
 }
-// Called after every save().
+// Called after every save(). Saving no longer sends anything by itself: the daily backup picks the change up.
 function autoBackupSchedule(){
   if(!autoBackupReady()) return;
-  clearTimeout(AUTO_BACKUP_TIMER);
-  AUTO_BACKUP_TIMER = setTimeout(autoBackupRun, AUTO_BACKUP_DELAY_MS);
+  autoBackupArmMidnight();
 }
 // Called when the app opens, returns to the screen, or the phone comes back online.
 function autoBackupOnWake(){
@@ -197,7 +215,7 @@ function autoBackupCardHtml(){
   return `
     <div class="card">
       <div class="card-head"><h2>Automatic email backup</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>The app emails a full backup to your own address a couple of minutes after you save an entry, and when you open it — only if something changed, and at most once every ${AUTO_BACKUP_MIN_HOURS} hours. It goes through your own Netlify backup service and Resend account; nothing else receives it. It can only send while the app is open and the phone is online, so an entry made right before closing the app goes out the next time you open it. Set a password below to lock the emailed file: without one, anyone who can read that mailbox can read your ledger. If you forget the password the emailed backups cannot be opened.</p>
+      <p class="note info-note" hidden>The app emails a full backup to your own address once a day: at midnight if the app happens to be open, otherwise the first time you open it after midnight (so it holds everything entered up to the end of the day before). It only sends if something changed, and never more than once a day. It goes through your own Netlify backup service and Resend account; nothing else receives it. It can only send while the app is open and the phone is online. Entries made today go out after midnight; for anything you can't lose sooner, tap Send a backup now. Set a password below to lock the emailed file: without one, anyone who can read that mailbox can read your ledger. If you forget the password the emailed backups cannot be opened.</p>
       <div class="field" style="margin-bottom:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ab_on" style="width:auto;margin:0"${c.on ? ' checked' : ''}> Email me a backup automatically</label></div>
       <div class="field" style="max-width:420px"><label>Backup service address</label><input type="url" id="ab_url" value="${autoBackupEsc(c.url)}" placeholder="https://your-site.netlify.app/api/backup" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
       <div class="field" style="max-width:420px"><label>Backup key</label><input type="password" id="ab_key" placeholder="${keyHint}" autocomplete="off"></div>
@@ -230,9 +248,10 @@ function autoBackupWire(){
     }
     if(pw && pw.length < 6){ say('The password must be at least 6 characters (or leave it empty).'); return; }
     if(!autoBackupSetConfig({on, url, key, pw})){ say('Could not save these settings on this phone.'); return; }
-    if(!on){ say('Automatic email backup turned off.'); return; }
+    if(!on){ autoBackupArmMidnight(); say('Automatic email backup turned off.'); return; }
     busy(true); say('Saved. Sending a first backup…');
     const r = await autoBackupSend(true);
+    autoBackupArmMidnight();
     busy(false);
     say(r.ok ? 'Saved. ' + r.message + ' Check your inbox (and spam) in a minute.' : 'Settings saved, but: ' + r.message);
     if($('ab_key')) $('ab_key').value = '';
