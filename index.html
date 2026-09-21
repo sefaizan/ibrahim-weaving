@@ -5,7 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
-<meta name="app-build" content="2026-09-22-9-beam-banner-dismiss">
+<!-- RELEASE CHECKLIST — every fix/release must bump ALL of these together, or the app-build
+     meta tag below, the header's visible version badge, package.json, and the service worker's
+     CACHE_VERSION will disagree with each other:
+       1. This app-build content (any short unique label works, e.g. a date + fix name).
+       2. The #appVersionTag text in the <header class="appbar"> below — plain "vX.Y.Z" — so a
+          glance at the top-right corner of the header confirms which build is actually running,
+          even if the "app updated" toast doesn't fire (e.g. after a fresh install/reinstall,
+          which starts with no prior build to compare against).
+       3. "version" in package.json — same X.Y.Z, one patch number higher than the last release
+          (e.g. 3.11.4 -> 3.11.5 for the next fix).
+       4. CACHE_VERSION in service-worker.js (e.g. 'v46' -> 'v47') — bump on every release,
+          not just ones that add/remove files, so phones actually fetch the new set. -->
+<meta name="app-build" content="2026-09-22-10-version-badge">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -153,6 +165,7 @@
   .appbar-titles{ flex:1 1 auto; min-width:0; padding-left:6px; }
   .appbar-titles h1{ font-size:19px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .appbar-titles .sub{ color:rgba(255,255,255,0.8); font-size:11px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .app-version{ flex:0 0 auto; color:rgba(255,255,255,0.72); font-size:11px; font-weight:700; white-space:nowrap; padding:0 8px; letter-spacing:0.2px; }
   /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
      restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
      replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
@@ -642,6 +655,7 @@
       <h1 id="appbarTitle">Overview</h1>
       <div class="sub" id="statusLine">Loading…</div>
     </div>
+    <span class="app-version" id="appVersionTag">v3.11.5</span>
     <button id="undoBtn" class="icon-btn" type="button" aria-label="Undo recent changes" title="Undo recent changes" style="display:none">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>
       <span id="undoBadge" class="undo-badge"></span>
