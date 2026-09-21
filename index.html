@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
-<meta name="app-build" content="2026-09-22-5-cheque-links">
+<meta name="app-build" content="2026-09-22-9-beam-banner-dismiss">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -456,6 +456,12 @@
   .badge.month{ background:var(--rust-tonal); color:var(--rust-deep); }
   .badge.progress{ background:var(--tonal-progress-bg); color:var(--tonal-progress-ink); }
   .name{ font-weight:700; font-size:14.5px; color:var(--ink); }
+  /* Loom number in Production and Warp Beam logs — the first thing scanned for on the
+     factory floor, so it gets its own bigger, badge-style treatment rather than just
+     matching plain body text like other cells. */
+  .loom-no{ display:inline-block; min-width:22px; padding:3px 9px; border-radius:8px;
+    background:var(--rust-tonal); color:var(--rust-deep); font-weight:800; font-size:16.5px; text-align:center; }
+  .table-lg .loom-no{ font-size:18px; }
   .stat.compact{ padding:9px 12px; }
   .stat.compact .label{ font-size:9.5px; }
   .stat.compact .value{ font-size:14px; margin-top:2px; }
