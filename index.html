@@ -6,18 +6,19 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
 <!-- RELEASE CHECKLIST — every fix/release must bump ALL of these together, or the app-build
-     meta tag below, the header's visible version badge, package.json, and the service worker's
+     meta tag below, the Overview page's version badge, package.json, and the service worker's
      CACHE_VERSION will disagree with each other:
        1. This app-build content (any short unique label works, e.g. a date + fix name).
-       2. The #appVersionTag text in the <header class="appbar"> below — plain "vX.Y.Z" — so a
-          glance at the top-right corner of the header confirms which build is actually running,
-          even if the "app updated" toast doesn't fire (e.g. after a fresh install/reinstall,
-          which starts with no prior build to compare against).
+       2. The #appVersionTag text — set in js/overview.js's overviewPanel(), rendered as a
+          small badge in the bottom-right corner of the Overview page — plain "vX.Y.Z", so
+          opening the app confirms which build is actually running, even if the "app updated"
+          toast doesn't fire (e.g. after a fresh install/reinstall, which starts with no prior
+          build to compare against).
        3. "version" in package.json — same X.Y.Z, one patch number higher than the last release
-          (e.g. 3.11.4 -> 3.11.5 for the next fix).
-       4. CACHE_VERSION in service-worker.js (e.g. 'v46' -> 'v47') — bump on every release,
+          (e.g. 3.11.5 -> 3.11.6 for the next fix).
+       4. CACHE_VERSION in service-worker.js (e.g. 'v47' -> 'v48') — bump on every release,
           not just ones that add/remove files, so phones actually fetch the new set. -->
-<meta name="app-build" content="2026-09-22-10-version-badge">
+<meta name="app-build" content="2026-09-23-1-version-badge-overview">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -468,6 +469,8 @@
   .badge{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
   .badge.month{ background:var(--rust-tonal); color:var(--rust-deep); }
   .badge.progress{ background:var(--tonal-progress-bg); color:var(--tonal-progress-ink); }
+  .badge.version{ background:var(--paper-dim); color:var(--ink-soft); font-size:10px; font-weight:600; letter-spacing:0.2px; }
+  .version-badge-row{ display:flex; justify-content:flex-end; margin-top:18px; }
   .name{ font-weight:700; font-size:14.5px; color:var(--ink); }
   /* Loom number in Production and Warp Beam logs — the first thing scanned for on the
      factory floor, so it gets its own bigger, badge-style treatment rather than just
@@ -655,7 +658,6 @@
       <h1 id="appbarTitle">Overview</h1>
       <div class="sub" id="statusLine">Loading…</div>
     </div>
-    <span class="app-version" id="appVersionTag">v3.11.5</span>
     <button id="undoBtn" class="icon-btn" type="button" aria-label="Undo recent changes" title="Undo recent changes" style="display:none">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>
       <span id="undoBadge" class="undo-badge"></span>
