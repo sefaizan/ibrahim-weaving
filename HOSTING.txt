@@ -1,0 +1,58 @@
+Ibrahim Weaving - Power Loom Ledger (installable app)
+
+Files (keep them together, in one folder, keeping the same folder layout):
+  index.html   manifest.json   service-worker.js   icons/   js/   jspdf.umd.min.js   _headers
+
+SET UP
+1. Upload the whole folder to any HTTPS static host (Netlify Drop, Cloudflare Pages,
+   GitHub Pages, ...). The address must start with https:// - installing and offline use
+   don't work from a local file or plain http:// (localhost is fine for testing).
+2. On the phone, open that address once while online.
+   Android (Chrome): menu (three dots) > Install app / Add to Home screen.
+   iPhone (Safari):  Share > Add to Home Screen.
+3. Open the app from its home-screen icon and leave it open a few seconds while online the
+   first time, so it can save itself for offline use.
+
+GOOD TO KNOW
+- Your ledger is stored only in the phone's browser storage for that exact web address.
+  The host just serves the app files; it never sees your data.
+- On iPhone the home-screen app has its own storage, separate from Safari. Set up and use it
+  from the home-screen icon; data entered in Safari won't appear there.
+- Changing the address (new domain, renamed site) gives a fresh, empty app. Take a backup
+  first and Restore it at the new address.
+- Updating: replace the files on the host (Netlify: drag the folder onto the SAME site's Deploys
+  tab). Before deploying, change the app-build value in the <meta name="app-build"> tag near the
+  top of index.html (any new text, e.g. the date) — that is what lets phones that already have the
+  app open show a "new version ready — Reload" bar. Also change CACHE_VERSION near the top of
+  service-worker.js (e.g. 'v27'), since the app is now several files that phones should fetch together. The app opens the old copy once (instantly)
+  while it downloads the new one; the launch after that (or tapping Reload) uses the new copy.
+- Automatic email backup (Backup & Restore > Automatic email backup): once set up, the app emails a full
+  backup to your own address a couple of minutes after you save an entry and when you open it (only if
+  something changed, at most every 3 hours). It goes through your own backup service (backup-service/ on
+  Netlify, with Resend for the email) - the app files on the host still never see your data. The service
+  address and key are typed into the app on the phone and kept in its own storage, not in these files.
+  It can only send while the app is open and online. Set a password there to lock the emailed file.
+  Restore one exactly like any backup: Backup & Restore > Restore from a backup > choose the file.
+- Take regular backups (Backup & Restore > Share Backup). Clearing browser data or deleting
+  the app erases the ledger. Backups can optionally be password-protected; a forgotten password
+  cannot be recovered. The app also keeps a few automatic "safety copies" on the phone itself
+  (Backup & Restore tab) - these help after a mistaken restore or edit, but they are erased
+  together with the app's data, so keep sending real backups too.
+- Encrypt Data (Settings): scrambles the ledger and the safety copies stored on the phone, so they can't be read
+  without the PIN even if someone copies the phone's storage. Turn on PIN Lock first (with a recovery question).
+  Use a 6 or 8 digit PIN - a 4 digit PIN can be guessed by a determined attacker who has a copy of the storage.
+  While encryption is on the app asks for the PIN every time it is opened. Forgot the PIN: the recovery answer
+  still unlocks the data. Forgot both: the data cannot be recovered except from a backup (Backup & Restore),
+  so keep taking backups. Exported backups are NOT encrypted unless you tick the password option on that tab.
+- Long-press the app icon (Android) for the Add Sale / Add Recovery shortcuts. They are baked
+  into the APK when PWABuilder builds it, so rebuild the APK once to get them.
+- Forgot the PIN: use "Forgot PIN?" on the lock screen and answer your recovery question.
+  If that is forgotten too, the only way in is to clear the app's data and Restore a backup.
+- The tests/ folder and package.json are for development only (run the tests with: node --test).
+  You don't need to upload them to the host; the files listed at the top are all the app needs.
+
+- Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
+  output over its last 7 days and how much of their logged length your last finished beams actually wove),
+  the Overview shows a "Beams ending soon" card, and a message appears when you open the app or save a
+  Production entry if a beam has 3 days or less left (change or turn off under Settings > Beam Alerts).
+  Each beam is announced once a day. It is a guide, not a promise: it moves as the looms' output changes.

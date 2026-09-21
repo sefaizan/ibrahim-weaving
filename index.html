@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#163B3D">
+<meta name="app-build" content="2026-09-22-2-autobackup">
+<script>
+  // Applies the saved theme before first paint, straight from localStorage (not the app's
+  // window.storage-backed DATA, which loads async later) — this is a pure device/UI
+  // preference, not ledger data, so it isn't part of Backup/Restore either. Wrapped in
+  // try/catch since localStorage can throw in some embedded/locked-down webviews.
+  try{
+    var t = localStorage.getItem('khata-theme');
+    if(t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    // Device preference: log tables as compact cards on phones (default) or classic tables.
+    if(localStorage.getItem('khata-logs') === 'table') document.documentElement.setAttribute('data-logs', 'table');
+  }catch(e){}
+</script>
+<meta name="description" content="Ibrahim Weaving — power loom ledger: production, sales, recovery, wages and cash position. All data stays on this device.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ibrahim Weaving">
+<title>Ibrahim Weaving — Power Loom Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: only light;
+    --paper:#EDEFF1;
+    --paper-dim:#E1E4E8;
+    --ink:#1B2126;
+    --ink-soft:#626B72;
+    --line:#D9DEE3;
+    --field-border:#B9C2C9;
+    --rust:#204E52;
+    --rust-deep:#163B3D;
+    --rust-tonal:#DCEDEB;
+    --gold:#C1652D;
+    --green:#3D8361;
+    --red:#B5402E;
+    --card:#FFFFFF;
+    --elev-1: 0 1px 2px rgba(27,20,54,0.10), 0 1px 3px 1px rgba(27,20,54,0.08);
+    --elev-2: 0 1px 2px rgba(27,20,54,0.12), 0 2px 6px 2px rgba(27,20,54,0.10);
+    --elev-3: 0 4px 8px -2px rgba(27,20,54,0.18), 0 2px 4px rgba(27,20,54,0.10);
+    --appbar-h: 60px;
+    --shape-sm: 8px;
+    --shape-md: 14px;
+    --shape-lg: 20px;
+    --warn-bg-1:#F4E0D9;
+    --warn-bg-2:#F1DAD1;
+    --tonal-edit:#DCEDEB;
+    --tonal-edit-hover:#CFE3E1;
+    --tonal-del:#F7E0DB;
+    --tonal-del-hover:#F0CCC3;
+    --tonal-progress-bg:#F3DFCB;
+    --tonal-progress-ink:#8A4A1D;
+    --tonal-receipt-hover:#EACBA0;
+  }
+  /* Dark theme — same tokens, different values, toggled via [data-theme="dark"] on <html>
+     (see the small inline script right after <head> for FOUC-free early apply, and the
+     Appearance toggle in Settings for switching it — see wirePanel(id==='settings')). Every
+     rule in this file is written against these variables, so this block is almost the whole
+     of dark mode; only a handful of literal colors below it needed their own override. */
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper:#15181B;
+    --paper-dim:#1D2226;
+    --ink:#E7EAEC;
+    --ink-soft:#9AA3AA;
+    --line:#2B3136;
+    --field-border:#3C444A;
+    --rust:#4A9A93;
+    --rust-deep:#2E6E68;
+    --rust-tonal:#1C302E;
+    --gold:#D98A4B;
+    --green:#5FBE8D;
+    --red:#E2685A;
+    --card:#1E2327;
+    --elev-1: 0 1px 2px rgba(0,0,0,0.5), 0 1px 3px 1px rgba(0,0,0,0.4);
+    --elev-2: 0 1px 2px rgba(0,0,0,0.55), 0 2px 6px 2px rgba(0,0,0,0.45);
+    --elev-3: 0 4px 8px -2px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.5);
+    --warn-bg-1:#3A2A22;
+    --warn-bg-2:#3A2A22;
+    --tonal-edit:#1C302E;
+    --tonal-edit-hover:#24403C;
+    --tonal-del:#3A2320;
+    --tonal-del-hover:#4A2C28;
+    --tonal-progress-bg:#3A2C1C;
+    --tonal-progress-ink:#E0A870;
+    --tonal-receipt-hover:#4A3826;
+  }
+  html[data-theme="dark"]{ background:#0B0D0F; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{ background:#C7CDD2; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Roboto','Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;
+    -webkit-font-smoothing:antialiased; font-size:14px;
+  }
+  h1,h2,h3{ font-family:'Roboto',sans-serif; font-weight:700; margin:0; letter-spacing:0; }
+  .mono{ font-family: 'Roboto Condensed', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .icon{ display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .icon svg{ width:1em; height:1em; display:block; }
+  /* App shell — full-bleed edge-to-edge on an actual phone; on wider screens it collapses to
+     a phone-width column with a soft device silhouette so the app still *reads* as a phone
+     app rather than a stretched-out desktop page. Purely cosmetic wrapper, changes nothing
+     about IDs or event wiring below it. */
+  .app-shell{ position:relative; min-height:100vh; background:var(--paper); overflow-x:clip; } /* clip (not hidden) so the sticky header can stick to the screen */
+  @media (min-width:700px){
+    html{ display:flex; justify-content:center; }
+    body{ display:flex; justify-content:center; padding:28px 0; min-height:100vh; }
+    .app-shell{
+      width:420px; min-height:844px; max-height:calc(100vh - 56px);
+      border-radius:34px; box-shadow: var(--elev-3), 0 0 0 8px #14181B, 0 0 0 9px #2B3236;
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+    .scrim, nav.tabs{ position:absolute; }
+    .fab-backup{ position:absolute; }
+    .app-shell #panels{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  }
+  /* Status bar — mimics the OS status strip so the app reads as installed/full-screen even
+     inside a browser preview. On a real installed PWA the system draws its own on top of
+     this bar's color; the mock glyphs here never block real system UI. */
+  .statusbar{
+    height:30px; padding:0 20px; display:flex; align-items:center; justify-content:space-between;
+    background:var(--rust-deep); color:#fff; font-size:12px; font-weight:700; flex:0 0 auto;
+  }
+  .statusbar .sb-icons{ display:flex; align-items:center; gap:5px; }
+  .statusbar .icon{ font-size:15px; }
+  @media (max-width:699px){ .statusbar{ display:none; } }
+  header.appbar{
+    position:sticky; top:0; z-index:40; flex:0 0 auto;
+    background:linear-gradient(165deg, var(--rust), var(--rust-deep));
+    color:#fff; height:calc(var(--appbar-h) + env(safe-area-inset-top, 0px)); padding:env(safe-area-inset-top, 0px) 6px 0 4px;
+    display:flex; align-items:center; gap:2px;
+    box-shadow: var(--elev-2);
+  }
+  .icon-btn{
+    position:relative; overflow:hidden; flex:0 0 auto; width:44px; height:44px; border-radius:50%;
+    border:none; background:transparent; color:#fff; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ background:rgba(255,255,255,0.12); }
+  .icon-btn .icon{ font-size:23px; }
+  .appbar-titles{ flex:1 1 auto; min-width:0; padding-left:6px; }
+  .appbar-titles h1{ font-size:19px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .appbar-titles .sub{ color:rgba(255,255,255,0.8); font-size:11px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
+     restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
+     replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
+  .scrim{
+    position:fixed; inset:0; z-index:49; background:rgba(15,12,30,0.45);
+    opacity:0; pointer-events:none; transition:opacity 180ms ease;
+  }
+  .scrim.open{ opacity:1; pointer-events:auto; }
+  nav.tabs{
+    position:fixed; top:0; bottom:0; left:0; z-index:50; width:296px; max-width:84vw;
+    background:var(--card); box-shadow:var(--elev-3); overflow-y:auto; -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    transform:translateX(-100%); transition:transform 220ms cubic-bezier(.2,.8,.2,1);
+    padding:8px 0 20px; display:block;
+  }
+  nav.tabs.open{ transform:translateX(0); }
+  /* PIN Lock overlay — sits above everything (drawer included) so the ledger is fully
+     covered and unreachable until the correct PIN is entered. Mounted directly on <body>,
+     outside #appShell, so it survives even if #appShell's own content gets re-rendered. */
+  .pin-lock-overlay{
+    position:fixed; inset:0; z-index:1000; background:linear-gradient(165deg, var(--rust), var(--rust-deep));
+    color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    justify-content:safe center; /* ignored where unsupported; stops tall content (e.g. with the keyboard open) being cut off at the top */
+    gap:22px; padding:24px; padding-top:calc(24px + env(safe-area-inset-top, 0px)); padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px)); text-align:center;
+    overflow-y:auto;
+  }
+  .pin-lock-overlay .mark{ font-size:40px; }
+  .pin-lock-overlay h1{ font-size:19px; font-weight:700; }
+  .pin-lock-overlay p.hint{ font-size:13px; color:rgba(255,255,255,0.82); margin:0; max-width:280px; }
+  .pin-dots{ display:flex; gap:16px; margin:6px 0; }
+  .pin-dots span{
+    width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,255,255,0.7);
+    background:transparent; transition:background 120ms ease;
+  }
+  .pin-dots span.filled{ background:#fff; }
+  .pin-dots.shake{ animation:pinShake 380ms ease; }
+  @keyframes pinShake{ 0%,100%{transform:translateX(0);} 20%{transform:translateX(-8px);} 40%{transform:translateX(8px);} 60%{transform:translateX(-6px);} 80%{transform:translateX(6px);} }
+  .pin-keypad{ display:grid; grid-template-columns:repeat(3,64px); gap:14px; }
+  .pin-key{
+    width:64px; height:64px; border-radius:50%; border:1px solid rgba(255,255,255,0.35);
+    background:rgba(255,255,255,0.08); color:#fff; font-size:22px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .pin-key:hover{ background:rgba(255,255,255,0.18); }
+  .pin-key.ghost-key{ border:none; background:transparent; font-size:14px; }
+  .pin-lock-overlay .error-text{ color:#FFD9CC; font-size:13px; min-height:18px; }
+  .pin-lock-overlay .link-btn{
+    background:none; border:none; color:rgba(255,255,255,0.85); text-decoration:underline;
+    font-size:13px; cursor:pointer; padding:6px;
+  }
+  .pin-lock-overlay .field{ width:min(280px,84vw); text-align:left; }
+  .pin-lock-overlay .field input{ background:rgba(255,255,255,0.92); }
+  .pin-lock-overlay .field label{ color:rgba(255,255,255,0.9); }
+  .pin-lock-overlay .primary, .pin-lock-overlay .ghost{ width:min(280px,84vw); }
+  .drawer-head{
+    padding:calc(26px + env(safe-area-inset-top, 0px)) 20px 18px; background:linear-gradient(165deg, var(--rust), var(--rust-deep)); color:#fff;
+    margin-bottom:8px;
+  }
+  .drawer-head .mark{
+    width:42px; height:42px; border-radius:12px; background:rgba(255,255,255,0.18);
+    display:flex; align-items:center; justify-content:center; font-size:21px; margin-bottom:10px;
+  }
+  .drawer-head .mark{ background:none; padding:0; }
+  .drawer-head .mark img{ width:100%; height:100%; display:block; border-radius:12px; }
+  .pin-lock-overlay .mark img{ width:64px; height:64px; display:block; border-radius:16px; }
+  .drawer-head .appname{ font-size:17px; font-weight:700; }
+  .drawer-head .appsub{ font-size:11.5px; color:rgba(255,255,255,0.78); margin-top:1px; }
+  nav.tabs button{
+    position:relative; overflow:hidden; width:calc(100% - 24px); margin:1px 12px; display:flex; align-items:center; gap:16px;
+    background:transparent; border:none; border-radius:var(--shape-lg); padding:11px 16px; font-size:13.5px; font-weight:600;
+    color:var(--ink); cursor:pointer; white-space:nowrap; text-align:left; font-family:inherit;
+  }
+  nav.tabs button .icon{ font-size:20px; color:var(--ink-soft); flex:0 0 auto; }
+  nav.tabs button.active{ color:var(--rust-deep); background:var(--rust-tonal); }
+  nav.tabs button.active .icon{ color:var(--rust-deep); }
+  nav.tabs button:hover:not(.active){ background:var(--paper-dim); }
+  main{ padding:16px 14px 90px; max-width:1180px; margin:0 auto; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--shape-md);
+    padding:18px 18px; margin-bottom:14px; box-shadow: var(--elev-1);
+  }
+  .card h2{ font-size:15.5px; margin-bottom:14px; color:var(--ink); font-weight:700; }
+  /* Card headings that used to be followed by a long explanatory paragraph now show a small
+     info toggle next to the title instead — the note stays in the DOM (for search/adjacency
+     purposes) but starts [hidden], and a delegated click handler (registered once, in Init)
+     flips it open/closed. Keeps the card compact by default; the explanation is one tap away. */
+  .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+  .card-head h2{ margin-bottom:0; }
+  .info-btn{
+    position:relative; overflow:hidden;
+    flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:none;
+    background:var(--rust-tonal); color:var(--rust-deep); font-size:13px; font-weight:800; font-style:normal;
+    line-height:1; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center;
+  }
+  .info-btn:hover, .info-btn.active{ background:var(--rust); color:#fff; }
+  .dismiss-btn{
+    flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:none;
+    background:transparent; color:var(--ink-soft); font-size:15px; font-weight:700;
+    line-height:1; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center;
+  }
+  .dismiss-btn:hover{ background:rgba(0,0,0,0.08); color:var(--ink); }
+  /* Slim reminder shown on every tab (except Overview/Backup, which have their own) once a
+     backup is overdue. Turns red and can't be dismissed after 2 weeks. */
+  .backup-strip{ display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; padding:10px 14px;
+    background:var(--warn-bg-1); color:var(--ink); font-size:13px; border-bottom:1px solid var(--line); flex:0 0 auto; }
+  .backup-strip:empty{ display:none; }
+  .backup-strip .bs-msg{ flex:1 1 190px; font-weight:600; line-height:1.3; }
+  .backup-strip .bs-btn{ margin:0; padding:8px 14px; font-size:13px; }
+  .backup-strip .dismiss-btn{ position:static; }
+  .backup-strip.urgent{ background:var(--red); color:#fff; }
+  .backup-strip.urgent .bs-btn{ background:#fff; color:var(--red); }
+  .info-note[hidden]{ display:none; }
+  /* Collapsible Summary / Breakdown cards: title row is one big tap target with a chevron. */
+  .summary-card .summary-head{ margin-bottom:0; }
+  .summary-card.open .summary-head{ margin-bottom:14px; }
+  button.summary-toggle{
+    all:unset; box-sizing:border-box; flex:1 1 auto; min-width:0; min-height:36px; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; -webkit-tap-highlight-color:transparent;
+  }
+  button.summary-toggle:focus-visible{ outline:2px solid var(--rust); outline-offset:4px; border-radius:8px; }
+  .summary-toggle h2{ margin:0; }
+  .summary-chev{ flex:0 0 auto; width:28px; height:28px; border-radius:50%; background:var(--rust-tonal); color:var(--rust-deep); display:inline-flex; align-items:center; justify-content:center; transition:transform 160ms ease; }
+  .summary-chev svg{ width:18px; height:18px; display:block; }
+  .summary-card.open .summary-chev{ transform:rotate(180deg); }
+  .summary-body[hidden]{ display:none; }
+  .card-head + .info-note{ margin-top:-6px; }
+  .grid{ display:grid; gap:12px; }
+  .grid.cols-2{ grid-template-columns: repeat(2,1fr); }
+  .grid.cols-3{ grid-template-columns: repeat(3,1fr); }
+  .grid.cols-4{ grid-template-columns: repeat(4,1fr); }
+  @media (max-width:720px){ .grid.cols-2,.grid.cols-3,.grid.cols-4{ grid-template-columns:1fr; } }
+  label{ display:block; font-size:12px; font-weight:500; text-transform:none; letter-spacing:0; color:var(--ink-soft); margin-bottom:5px; }
+  input, select, textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--field-border); border-radius:var(--shape-sm);
+    font-size:14px; background:var(--paper-dim); color:var(--ink); font-family:inherit;
+  }
+  textarea{ resize:vertical; min-height:60px; line-height:1.4; }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--rust); outline-offset:1px; border-color:var(--rust); background:var(--card); }
+  input[type="file"]{ padding:7px 8px; font-size:12.5px; color:var(--ink-soft); }
+  input[type="file"]::file-selector-button{
+    background:var(--rust); color:#fff; border:none; padding:7px 14px; border-radius:9px;
+    font-size:12.5px; font-weight:700; font-family:inherit; cursor:pointer; margin-right:10px;
+  }
+  input[type="file"]::file-selector-button:hover{ background:var(--rust-deep); }
+  .field{ margin-bottom:0; }
+  /* Custom dropdown: every native <select> gets wrapped (see enhanceSelects() near Init) so
+     tapping an option commits and closes immediately — mobile browsers otherwise open a native
+     wheel picker with its own separate "Done" button, which feels like two taps for one choice.
+     The real <select> stays in the DOM, fully hidden, as the actual source of truth: existing
+     code that reads `.value` or listens for 'change' on it keeps working completely unchanged. */
+  .sel-wrap{ position:relative; }
+  .sel-wrap select{ position:absolute; inset:0; width:100%; height:100%; opacity:0; pointer-events:none; }
+  .sel-fake{
+    width:100%; padding:10px 34px 10px 12px; border:1px solid var(--field-border); border-radius:var(--shape-sm);
+    font-size:14px; background:var(--paper-dim); color:var(--ink); font-family:inherit; text-align:left;
+    cursor:pointer; position:relative; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .sel-fake:focus{ outline:2px solid var(--rust); outline-offset:1px; border-color:var(--rust); background:var(--card); }
+  .sel-fake:disabled{ opacity:0.55; cursor:not-allowed; }
+  .sel-fake::after{
+    content:''; position:absolute; right:15px; top:50%; margin-top:-5px;
+    width:8px; height:8px; pointer-events:none;
+    border-right:2px solid var(--ink-soft); border-bottom:2px solid var(--ink-soft);
+    transform:rotate(45deg);
+  }
+  .sel-list{
+    position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20; max-height:240px;
+    overflow-y:auto; background:var(--card); border:1px solid var(--line); border-radius:var(--shape-sm);
+    box-shadow:var(--elev-3); padding:4px;
+  }
+  .sel-item{ position:relative; overflow:hidden; padding:10px 12px; border-radius:8px; font-size:14px; cursor:pointer; }
+  .sel-item:hover, .sel-item.selected{ background:var(--rust-tonal); }
+  .sel-item.disabled{ color:var(--ink-soft); cursor:default; }
+  .sel-group-label{ padding:6px 12px 2px; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.4px; color:var(--ink-soft); }
+  .value-label{
+    padding:10px 12px; border:1px solid var(--field-border); border-radius:var(--shape-sm);
+    background:var(--paper-dim); font-size:14px; color:var(--ink); font-weight:700;
+    min-height:16.8px; line-height:1.2;
+  }
+  button.primary{
+    position:relative; overflow:hidden;
+    background:var(--rust); color:#fff; border:none; padding:11px 22px; border-radius:100px;
+    font-size:13.5px; font-weight:700; cursor:pointer; margin-top:14px;
+    box-shadow:var(--elev-1);
+  }
+  button.primary:hover{ background:var(--rust-deep); box-shadow:var(--elev-2); }
+  button.ghost{
+    position:relative; overflow:hidden;
+    background:var(--rust-tonal); border:none; color:var(--rust-deep); padding:9px 17px;
+    border-radius:100px; font-size:12.5px; cursor:pointer; font-family:inherit; font-weight:700;
+  }
+  button.ghost:hover{ background:var(--tonal-edit-hover); color:var(--rust-deep); }
+  button.ghost:disabled{ background:var(--paper-dim); color:var(--ink-soft); cursor:default; }
+  button.ghost:disabled:hover{ background:var(--paper-dim); color:var(--ink-soft); }
+  /* Row actions (Receipt / Share / Edit / Remove, plus the Move arrows and Activate toggle on
+     Settings lists). One flex group with a uniform gap, identical button height, and icon-only
+     square buttons on phones so every column lines up row to row. Nested groups flatten into
+     the outer one (display:contents) so the gap stays even however a row composes them. */
+  .row-actions{ display:inline-flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:nowrap; vertical-align:middle; }
+  .row-actions .row-actions{ display:contents; }
+  td:has(> .row-actions){ padding-right:14px; text-align:right; }
+  button.rowbtn{
+    position:relative; overflow:hidden; box-sizing:border-box; flex:0 0 auto;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none;
+    height:34px; min-width:34px; padding:0 12px; line-height:1; white-space:nowrap;
+    border-radius:var(--shape-sm); font-size:12px; font-weight:700;
+  }
+  button.rowbtn .ic{ display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; line-height:1; }
+  button.rowbtn .ic svg{ width:16px; height:16px; display:block; }
+  /* Remove sits a little apart from the safe actions so it is harder to hit by mistake. */
+  .row-actions button.rowbtn.del{ margin-left:6px; }
+  button.rowbtn.toggle{ background:var(--paper-dim); color:var(--ink-soft); }
+  button.rowbtn.toggle:hover{ background:var(--line); color:var(--ink); border-color:transparent; }
+  button.rowbtn.edit{ background:var(--tonal-edit); color:var(--rust-deep); }
+  button.rowbtn.edit:hover{ background:var(--tonal-edit-hover); border-color:transparent; color:var(--rust-deep); }
+  button.rowbtn.del{ background:var(--tonal-del); color:var(--red); }
+  button.rowbtn.del:hover{ background:var(--tonal-del-hover); border-color:transparent; color:var(--red); }
+  button.rowbtn.receipt{ background:var(--tonal-progress-bg); color:var(--tonal-progress-ink); }
+  button.rowbtn.receipt:hover{ background:var(--tonal-receipt-hover); border-color:transparent; color:var(--tonal-progress-ink); }
+  button.rowbtn.move{ background:var(--paper-dim); color:var(--ink-soft); padding:0 10px; font-size:14px; }
+  button.rowbtn.move:hover{ border-color:transparent; color:var(--ink); background:var(--line); }
+  button.rowbtn:disabled{ opacity:0.4; cursor:default; }
+  button.rowbtn:disabled:hover{ background:var(--paper-dim); color:var(--ink-soft); }
+  @media (max-width:720px){
+    button.ghost, button.primary{ min-height:38px; }
+    button.rowbtn{ width:40px; height:40px; min-width:40px; padding:0; }
+    button.rowbtn.toggle{ width:auto; padding:0 14px; }
+    button.rowbtn.move{ padding:0; }
+    button.rowbtn .lbl{ display:none; }
+    button.rowbtn.toggle .lbl{ display:inline; }
+    .row-actions{ gap:10px; }
+    .row-actions button.rowbtn.del{ margin-left:4px; }
+  }
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th{ text-align:left; padding:11px 10px; border-bottom:1px solid var(--field-border); background:var(--paper-dim); color:var(--ink-soft); font-size:11.5px; font-weight:700; text-transform:none; letter-spacing:0.2px; }
+  td{ padding:11px 10px; border-bottom:1px solid var(--line); white-space:pre-wrap; }
+  @media (hover:hover){ tr:hover td{ background:var(--rust-tonal); } }
+  /* On phones, tables were being squeezed to the screen width, forcing every column into
+     a cramped multi-line mess. Instead: let each table size itself naturally (auto width,
+     no forced wrapping) and let the card scroll sideways for whatever doesn't fit — the
+     standard "swipe to see more columns" pattern. The whole table scrolls as one block
+     (no pinned/sticky column). */
+  @media (max-width:720px){
+    .card{ overflow-x:auto; -webkit-overflow-scrolling:touch; } /* fallback for browsers without :has() */
+    /* overflow-x:auto silently turns overflow-y into auto as well, so EVERY card became its own
+       (vertical) scroll container nested inside the page scroller. On a phone that makes the
+       page-scroll swipe get caught/bounced by whichever card the finger lands on — the choppy
+       scrolling on Production. Only cards that hold a bare (non-.log-scroll) table need to
+       scroll sideways; every other card stays a plain box. */
+    @supports selector(:has(*)){
+      .card{ overflow:visible; -webkit-overflow-scrolling:auto; }
+      .card:has(table:not(.log-scroll table)){ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    }
+    /* Warp Beam page's per-purchase tables live inside .purchase-panel, one level below
+       .card (inside the .purchase-panels grid) — the outer card scrolling isn't enough
+       since each panel is its own grid cell, so give the panel itself the same "swipe to
+       see more columns" scroll instead of letting its table get squished. */
+    .purchase-panel{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    table{ width:auto; min-width:100%; }
+    td, th{ white-space:nowrap; }
+  }
+  .empty{ padding:24px; text-align:center; color:var(--ink-soft); font-size:13.5px; }
+  .stat{
+    background:var(--paper-dim); border:none; border-left:4px solid var(--rust);
+    border-radius:var(--shape-sm); padding:14px 16px;
+  }
+  .stat.balance{ border-left-color:var(--gold); }
+  .stat .label{ font-size:10.5px; text-transform:none; letter-spacing:0.2px; color:var(--ink-soft); font-weight:600; }
+  .stat .value{ font-size:20px; font-weight:700; margin-top:4px; }
+  .stat .value.neg{ color:var(--red); }
+  .stat .value.pos{ color:var(--green); }
+  .legend{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .month-bar{ display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+  .month-bar .field{ max-width:220px; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{
+    position:relative; overflow:hidden;
+    background:var(--paper-dim); border:1px solid var(--field-border); color:var(--ink);
+    padding:8px 16px; border-radius:100px; font-size:12.5px; font-weight:700;
+    cursor:pointer; font-family:inherit;
+  }
+  .chip:hover{ background:var(--line); }
+  .chip.active{ background:var(--rust); border-color:var(--rust); color:#fff; }
+  .note{ font-size:12px; color:var(--ink-soft); font-style:normal; margin-top:8px; }
+  .group-label{ font-size:11px; font-weight:700; text-transform:none; letter-spacing:0.2px; color:var(--rust-deep); margin:16px 0 8px; padding-top:10px; border-top:1px dashed var(--line); }
+  /* min(420px,100%): on a phone narrower than 420px a fixed minimum made every panel wider than the screen (cards cut off at the right edge) */
+  .purchase-panels{ display:grid; grid-template-columns:repeat(auto-fit, minmax(min(420px,100%),1fr)); gap:18px; align-items:start; }
+  @media (max-width:480px){ .purchase-panels{ grid-template-columns:minmax(0,1fr); } }
+  .purchase-panel{ min-width:0; border:1px solid var(--line); border-radius:var(--shape-md); padding:14px 16px; background:var(--card); }
+  .panel-subhead{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:10px; }
+  .purchase-panel .ptitle{ font-weight:700; margin-bottom:2px; }
+  .purchase-panel .psub{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; }
+  @media (max-width:720px){ .purchase-panel .grid.cols-3{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } }
+  .purchase-panel .stat{ padding:10px 12px; }
+  .purchase-panel .stat .value{ font-size:18px; }
+  .purchase-panel table{ margin-top:12px; font-size:12.5px; }
+  .purchase-panel th, .purchase-panel td{ padding:6px 8px; }
+  .badge{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .badge.month{ background:var(--rust-tonal); color:var(--rust-deep); }
+  .badge.progress{ background:var(--tonal-progress-bg); color:var(--tonal-progress-ink); }
+  .name{ font-weight:700; font-size:14.5px; color:var(--ink); }
+  .stat.compact{ padding:9px 12px; }
+  .stat.compact .label{ font-size:9.5px; }
+  .stat.compact .value{ font-size:14px; margin-top:2px; }
+  .table-lg{ font-size:16.5px; }
+  .table-lg th{ font-size:12px; padding:10px 12px; }
+  .table-lg td{ padding:13px 12px; }
+  .table-lg .name{ font-size:16px; }
+  /* Cards that combine a Summary (stat grid / totals) with a Log (a table that can grow to
+     many rows) — Stock Position, Sales & Receivables, Receivables Aging, and each Warp Beam
+     purchase panel. The log grows with the page (no internal vertical scroll/cap) so every
+     row is visible without a nested scrollbar; only horizontal overflow (for wide tables on
+     narrow screens) scrolls within the box. Header row stays pinned for when it does. */
+  .log-scroll{
+    overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; /* y hidden: never traps a vertical swipe */
+    border:1px solid var(--line); border-radius:12px;
+  }
+  .log-scroll table{ margin-top:0; }
+  /* Cheque action buttons (Mark Cleared / Bounced / Replaced ...): a tidy wrapping row in tables. */
+  .chq-actions{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chq-actions button{ margin:0; }
+  /* Phone card layout for log tables (Production, Sale, Recovery, ...). Each record becomes a
+     compact card: small label over value tiles that wrap to fit, empty fields left out, the
+     Edit/Remove buttons on their own row underneath. No sideways swiping to read one entry.
+     Wide screens keep the normal table; Settings → Appearance can switch phones back to tables. */
+  @media (max-width:720px){
+    html:not([data-logs="table"]) .log-scroll.log-cards{ border:none; border-radius:0; overflow:visible; }
+    html:not([data-logs="table"]) .log-cards table{ display:block; width:100%; min-width:0; }
+    html:not([data-logs="table"]) .log-cards thead{ display:none; }
+    html:not([data-logs="table"]) .log-cards tbody{ display:block; }
+    html:not([data-logs="table"]) .log-cards tr{
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:10px 8px;
+      padding:12px 12px; margin-bottom:10px; background:var(--card);
+      border:1px solid var(--line); border-radius:12px;
+    }
+    html:not([data-logs="table"]) .log-cards td{
+      display:block; border:0; padding:0; min-width:0; white-space:normal; overflow-wrap:break-word; font-size:13.5px;
+    }
+    html:not([data-logs="table"]) .log-cards td[data-label]::before{
+      content:attr(data-label); display:block; margin-bottom:2px;
+      font-size:10.5px; font-weight:700; color:var(--ink-soft); letter-spacing:0.2px;
+    }
+    html:not([data-logs="table"]) .log-cards td:first-child{ font-weight:700; }
+    html:not([data-logs="table"]) .log-cards td[data-empty]{ display:none; }
+    html:not([data-logs="table"]) .log-cards td.act{
+      grid-column:1 / -1; padding-top:8px; border-top:1px solid var(--line); font-weight:400;
+      display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px;
+    }
+    html:not([data-logs="table"]) .log-cards td.act .row-actions{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+    html:not([data-logs="table"]) .log-cards tr:hover td{ background:none; }
+    /* Cheque action buttons in a card: two equal columns, a lone last button spans the full
+       width — instead of ragged, right-shoved rows of different lengths. */
+    html:not([data-logs="table"]) .log-cards .chq-actions{
+      display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; width:100%;
+    }
+    html:not([data-logs="table"]) .log-cards .chq-actions button{
+      width:100%; margin:0; white-space:normal; line-height:1.25; padding-left:10px; padding-right:10px;
+    }
+    html:not([data-logs="table"]) .log-cards .chq-actions button:last-child:nth-child(odd){ grid-column:1 / -1; }
+  }
+  .log-scroll thead th{ background:var(--paper-dim); } /* was position:sticky, but this box never scrolls vertically, so it only cost extra layers */
+  /* Live-calculated amount previews (Sale/Warp/Weft "Amount", Recovery "Total") — shown
+     before the entry is submitted. These used to render as small italic grey .note text,
+     easy to miss next to the actual figure being submitted; now styled identically
+     everywhere as a bold, colored callout so the number stands out. */
+  .calc-amount{
+    margin-top:10px; padding:10px 14px; background:var(--paper-dim);
+    border:1px solid var(--field-border); border-radius:12px;
+    font-size:16px; font-weight:800; color:var(--rust-deep); font-style:normal;
+  }
+  /* Floating Backup & Restore shortcut — stays fixed over every tab/screen so a backup is
+     always one tap away, instead of having to navigate through the tab bar first. */
+  .fab-backup{
+    position:absolute; overflow:hidden; right:18px; bottom:22px; z-index:45;
+    width:56px; height:56px; border-radius:16px; border:none;
+    background:var(--gold); color:#2C160A;
+    font-size:22px; line-height:1; cursor:pointer;
+    box-shadow:var(--elev-3);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fab-backup .icon{ font-size:24px; }
+  .fab-backup:hover{ background:#D98A4B; }
+  .fab-backup:active{ transform:scale(0.94); }
+  @media (max-width:699px){
+    .fab-backup{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:52px; height:52px; }
+  }
+  /* Ripple — a single delegated listener (see script near Init) spawns one of these inside
+     whichever button/row/drawer-item was pressed; it removes itself once the animation ends. */
+  .ripple{
+    position:absolute; border-radius:50%; transform:scale(0); pointer-events:none;
+    background:rgba(0,0,0,0.14); animation:ripple-anim 480ms ease-out;
+  }
+  button.primary .ripple, .fab-backup .ripple, header.appbar .ripple, .drawer-head .ripple{ background:rgba(255,255,255,0.45); }
+  nav.tabs button.active .ripple{ background:rgba(52,72,216,0.22); }
+  @keyframes ripple-anim{ to{ transform:scale(2.6); opacity:0; } }
+  @media (prefers-reduced-motion: reduce){
+    .ripple{ animation:none; opacity:0; }
+    nav.tabs{ transition:none; }
+  }
+  /* Sale receipt — kept off-screen (display:none) at all times except when printing, when
+     print media rules below hide the rest of the app and show only this. See
+     printSaleReceipt() near Init, which fills #receiptPrintArea and calls window.print(). */
+  #receiptPrintArea{ display:none; }
+  .receipt{ font-family:'Roboto',sans-serif; color:#1a1a1a; max-width:640px; margin:0 auto; padding:28px; position:relative; }
+  /* Watermark for the Print/Save-as-PDF path — background-image is set inline per receipt
+     (see receiptWatermarkDiv in JS) since this block can't reference the JS logo constant. */
+  .receipt-watermark{ position:absolute; top:50%; left:50%; width:70%; aspect-ratio:1145/360; transform:translate(-50%,-50%);
+    background-size:contain; background-repeat:no-repeat; background-position:center; opacity:0.08; pointer-events:none; z-index:0;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .receipt > *:not(.receipt-watermark){ position:relative; z-index:1; }
+  .receipt-logo{ display:block; height:44px; width:auto; margin:0 0 6px; }
+  .receipt .biz-line{ font-size:12.5px; color:#444; margin:1px 0; }
+  .receipt .receipt-title{ text-align:center; font-size:15px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; margin:20px 0 16px; border-top:1px solid #999; border-bottom:1px solid #999; padding:8px 0; }
+  /* Label in a fixed narrow column with its value right beside it (was pushed to the far edge). */
+  .receipt .meta-row{ display:flex; justify-content:flex-start; align-items:baseline; gap:10px; font-size:13px; margin:3px 0; }
+  .receipt .meta-row > span:first-child{ flex:0 0 82px; color:#444; }
+  .receipt .meta-row > b{ min-width:0; overflow-wrap:anywhere; }
+  .receipt table{ width:100%; border-collapse:collapse; margin-top:18px; font-size:13px; }
+  .receipt th, .receipt td{ border:1px solid #999; padding:7px 9px; text-align:left; }
+  .receipt th{ background:#eee; }
+  .receipt td.num, .receipt th.num{ text-align:right; }
+  .receipt tfoot td{ font-weight:700; }
+  .receipt .balance-summary{ margin-top:16px; border:1px solid #999; border-radius:4px; overflow:hidden; }
+  .receipt .balance-summary .row{ display:flex; justify-content:space-between; align-items:baseline; padding:7px 9px; font-size:13px; background:#fff; border-bottom:1px solid #ddd; }
+  .receipt .balance-summary .row span:first-child{ color:#444; }
+  .receipt .balance-summary .row.total{ background:#eee; border-bottom:none; font-weight:700; font-size:14px; }
+  .receipt .balance-summary .row.total span:first-child{ color:#1a1a1a; }
+  .receipt .balance-summary .sub{ font-size:10.5px; color:#777; display:block; font-weight:400; }
+  .receipt .footer-note{ margin-top:26px; font-size:12px; color:#555; text-align:center; }
+
+  /* Visible feedback for Share buttons — the header status line is off-screen once you scroll. */
+  #appToast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(20px);
+    max-width:min(92vw,420px); background:#2b2b2b; color:#fff; padding:12px 18px; border-radius:12px; font-size:13.5px; line-height:1.35;
+    box-shadow:0 6px 24px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:99999; text-align:center; }
+  #appToast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  .toast-undo{ margin-left:10px; padding:4px 12px; border-radius:8px; border:1px solid rgba(255,255,255,.55);
+    background:transparent; color:#fff; font-weight:700; font-size:13px; cursor:pointer; }
+  .toast-undo:active{ background:rgba(255,255,255,.18); }
+  .undo-badge{ position:absolute; top:3px; right:1px; min-width:17px; height:17px; padding:0 4px; border-radius:9px; background:#fff; color:var(--rust-deep,#8a3d16);
+    font-size:10.5px; font-weight:800; line-height:17px; text-align:center; pointer-events:none; }
+  #undoSheet{ position:fixed; inset:0; z-index:900; }
+  #undoSheet .undo-scrim{ position:absolute; inset:0; background:rgba(15,12,30,.45); }
+  #undoSheet .undo-panel{ position:absolute; left:0; right:0; bottom:0; max-height:78vh; overflow:auto; background:var(--card,#fff); color:var(--ink,#222);
+    border-radius:18px 18px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px)); box-shadow:0 -8px 30px rgba(0,0,0,.3); }
+  .undo-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .undo-head h2{ font-size:17px; margin:0; }
+  .undo-close{ border:0; background:transparent; font-size:20px; color:inherit; padding:6px 10px; cursor:pointer; }
+  .undo-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid var(--line,rgba(0,0,0,.12)); }
+  .undo-text{ flex:1; min-width:0; }
+  .undo-label{ font-weight:600; font-size:14px; overflow-wrap:anywhere; }
+  .undo-when{ font-size:12px; opacity:.65; margin-top:2px; }
+  .undo-do{ margin:0; padding:7px 14px; flex:0 0 auto; }
+  @media print{
+    #appShell{ display:none !important; }
+    #receiptPrintArea{ display:block !important; }
+    @page{ margin:16mm; }
+  }
+</style>
+<script src="./jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app-shell" id="appShell">
+
+  <div class="statusbar" aria-hidden="true">
+    <span id="sbClock">9:41</span>
+    <div class="sb-icons">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20v-12M22 20v-16"/></svg></span>
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg></span>
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="18" height="10" rx="2"/><line x1="22" y1="10.5" x2="22" y2="13.5"/><rect x="4" y="9" width="13" height="6" fill="currentColor" stroke="none"/></svg></span>
+    </div>
+  </div>
+
+  <header class="appbar">
+    <button id="menuBtn" class="icon-btn" type="button" aria-label="Open menu">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+    </button>
+    <div class="appbar-titles">
+      <h1 id="appbarTitle">Overview</h1>
+      <div class="sub" id="statusLine">Loading…</div>
+    </div>
+    <button id="undoBtn" class="icon-btn" type="button" aria-label="Undo recent changes" title="Undo recent changes" style="display:none">
+      <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>
+      <span id="undoBadge" class="undo-badge"></span>
+    </button>
+  </header>
+
+  <div class="scrim" id="scrim"></div>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div id="backupStrip"></div>
+
+  <main id="panels"></main>
+
+  <button id="fabBackup" class="fab-backup" type="button" title="Backup & Restore" aria-label="Backup & Restore">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  </button>
+
+</div>
+
+<div id="receiptPrintArea" aria-hidden="true"></div>
+
+<script src="./js/calc.js"></script>
+<script src="./js/core.js"></script>
+<script src="./js/shell.js"></script>
+<script src="./js/panels-daily.js"></script>
+<script src="./js/panels-wages-receipts.js"></script>
+<script src="./js/overview.js"></script>
+<script src="./js/wiring.js"></script>
+<script src="./js/encryption.js"></script>
+<script src="./js/autobackup.js"></script>
+<script src="./js/lock-init.js"></script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js', {updateViaCache:'none'}).catch(()=>{ /* offline support just won't be available */ });
+  });
+}
+</script>
+</body>
+</html>

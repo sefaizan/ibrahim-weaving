@@ -1,0 +1,66 @@
+{
+  "name": "Ibrahim Weaving — Power Loom Ledger",
+  "short_name": "Ibrahim Weaving",
+  "description": "Power loom ledger: production, sales, recovery, wages and cash position. All data stays on this device.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDEFF1",
+  "theme_color": "#163B3D",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Sale",
+      "short_name": "Add Sale",
+      "description": "Log a new sale",
+      "url": "./?action=addsale",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Add Recovery",
+      "short_name": "Add Recovery",
+      "description": "Log a payment received",
+      "url": "./?action=addrecovery",
+      "icons": [
+        {
+          "src": "./icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}
