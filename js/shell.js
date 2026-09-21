@@ -113,8 +113,24 @@ function enhanceSelects(root){
   });
 }
 let CURRENT_TAB = 'overview'; // tracked here (not read off the DOM) so the back-button handler knows where it is
+// Remembers which tab was open so a mid-session reload — e.g. an accidental pull-to-refresh
+// while scrolled down on a page — reopens that same page instead of always landing back on
+// Overview. sessionStorage (not localStorage) on purpose: it survives a reload of the same
+// browser/WebView tab but starts fresh — back at Overview — the next time the app is actually
+// opened from the icon, which is the expected first screen for a new session.
+const LAST_TAB_KEY = 'khata-last-tab';
+function rememberTab(id){
+  try{ sessionStorage.setItem(LAST_TAB_KEY, id); }catch(e){ /* best effort only */ }
+}
+function restoredTab(){
+  try{
+    const id = sessionStorage.getItem(LAST_TAB_KEY);
+    return TABS.some(t=>t.id===id) ? id : 'overview';
+  }catch(e){ return 'overview'; }
+}
 function switchTab(id){
   CURRENT_TAB = id;
+  rememberTab(id);
   renderNav(id);
   refreshBackupStrip();
   closeDrawer();
@@ -614,6 +630,33 @@ function showUpdateBar(){
   el.querySelector('#updateLater').onclick = ()=> el.remove();
 }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ checkForNewVersion(); maybeAutoSnapshot(); runBeamAlerts(); } });
+
+// The service worker can finish updating in the background and take over (skipWaiting +
+// clients.claim) between one launch and the next, so the very next open is already running
+// the new build with no "Reload" prompt ever shown — the switch happened silently. This
+// compares this launch's build against the last one we know the person actually saw and, if
+// they differ, shows a brief dismissible notice so an update is never completely invisible.
+// Nothing shows on the very first-ever launch (nothing to compare against yet).
+const LAST_SEEN_BUILD_KEY = 'khata-last-seen-build';
+function noteIfJustUpdated(){
+  if(!APP_BUILD) return;
+  let prevBuild = null;
+  try{ prevBuild = localStorage.getItem(LAST_SEEN_BUILD_KEY); }catch(e){ /* best effort only */ }
+  try{ localStorage.setItem(LAST_SEEN_BUILD_KEY, APP_BUILD); }catch(e){ /* best effort only */ }
+  if(prevBuild === null || prevBuild === APP_BUILD) return;
+  showJustUpdatedBar();
+}
+function showJustUpdatedBar(){
+  if(document.getElementById('justUpdatedBar')) return;
+  const el = document.createElement('div');
+  el.id = 'justUpdatedBar';
+  el.setAttribute('role', 'status');
+  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:100000;background:#163B3D;color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px';
+  el.innerHTML = '<span style="flex:1">App updated to the latest version.</span><button type="button" id="justUpdatedX" aria-label="Dismiss" title="Dismiss" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">✕</button>';
+  document.body.appendChild(el);
+  el.querySelector('#justUpdatedX').onclick = ()=> el.remove();
+  setTimeout(()=>{ if(document.body.contains(el)) el.remove(); }, 8000); // clears itself so it never lingers as a stuck banner
+}
 
 /* ---------------- Undo for edits and deletes (header button + recent-changes list) ---------------- */
 // Everything the app changes goes through save(), so save() compares each top-level part of the

@@ -196,11 +196,16 @@ function beamForecastBasisNote(f){
   return `Estimate from each loom's output over its last ${BEAM_RATE_WINDOW_DAYS} days, with ${yieldPart}. Treat it as a guide — it moves as output changes.`;
 }
 // Overview: only shows when a beam is ending / fully woven / due within a week; silent otherwise.
+// Dismissible like the other Overview warning banners — the signature is the exact set of
+// beams and states being shown, so dismissing it lasts until that changes (a beam moves to a
+// more urgent state, a new one joins the list, etc.), not just until tomorrow.
 function beamsEndingCard(){
   const list = computeBeamForecasts(beamAlertDays() || 3).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon');
   if(!list.length) return '';
+  const signature = list.map(f=>`${f.id}:${f.state}`).sort().join(',');
+  if(isBannerDismissed('beams', signature)) return '';
   return `<div class="card" id="banner-beams" style="background:var(--warn-bg-1)">
-    <div class="card-head"><h2>⏳ Beams ending soon</h2></div>
+    <div class="card-head"><h2>⏳ Beams ending soon</h2><button type="button" class="dismiss-btn" onclick="dismissBanner('beams','${signature}')" aria-label="Dismiss" title="Dismiss">✕</button></div>
     ${beamForecastRows(list)}
     <p class="note" style="margin:8px 0 0">${beamForecastBasisNote(list[0])}</p>
     <button type="button" class="ghost" style="margin-top:10px" onclick="switchTab('warpbeams')">View Beams</button>

@@ -146,7 +146,7 @@ function productionPanel(){
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), escHtml(r.loom), escHtml(r.quality), fmtNum(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtNum(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtNum(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtNum(r.e3m)})`:'—', fmtNum(diff), actionBtns('production',r.id)];
+        return [fmtDate(r.date), `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtNum(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtNum(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtNum(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtNum(r.e3m)})`:'—', fmtNum(diff), actionBtns('production',r.id)];
       }
     )}</div>`;
 }
@@ -602,7 +602,7 @@ function renderYieldPanel(r, beamDetails){
     const shrinkPctCell = d.isActive ? '—' : (d.shrinkagePct!=null ? fmtNum(Math.round(d.shrinkagePct*100)/100)+'%' : '—');
     const daysCell = fmtNum(Math.round(d.daysTaken*10)/10) + (d.isActive ? ' (so far)' : '');
     return [
-      fmtDate(b.date), escHtml(b.warpType||'—'), `<span class="name">${escHtml(b.loom)}</span>`,
+      fmtDate(b.date), escHtml(b.warpType||'—'), `<span class="loom-no">${escHtml(b.loom)}</span>`,
       fmtNum(b.length), fmtNum(d.woven), shrinkCell, shrinkPctCell, daysCell,
       finishedOnCell(d), d.isActive ? '<b>Active</b>' : 'Finished'
     ];
@@ -764,7 +764,7 @@ function warpBeamsPanel(){
           ? `<span style="color:var(--rust)">${fmtNum(d.shrinkage)} (over)</span>`
           : fmtNum(d.shrinkage));
         const cells = [
-          fmtDate(r.date), r.time||'—', escHtml(r.warpType||'—'), `<span class="name">${escHtml(r.loom)}</span>`,
+          fmtDate(r.date), r.time||'—', escHtml(r.warpType||'—'), `<span class="loom-no">${escHtml(r.loom)}</span>`,
           fmtNum(r.length), fmtNum(u.woven), remainingCell, shrinkCell,
           purchaseLabel(r.purchaseId), statusCell, actionBtns('warpBeams',r.id)
         ];

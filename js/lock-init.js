@@ -624,7 +624,7 @@ const SEARCH_DEBOUNCE_TIMERS = {};
   });
   await load();
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort only */ } // Undo baseline for this session
-  switchTab('overview');
+  switchTab(restoredTab());
   try{
     const act = new URLSearchParams(location.search).get('action');
     if(act === 'addsale' || act === 'addrecovery'){ PENDING_QUICK = act === 'addrecovery' ? 'recovery' : 'sale'; history.replaceState(null, '', location.pathname); }
@@ -634,6 +634,7 @@ const SEARCH_DEBOUNCE_TIMERS = {};
   if(isPinEnabled() && (pinIdleTooLong() || (encEnabled() && !ENC_DEK))) mountLockScreen();
   else { markPinActive(); runPendingQuickAdd(); } // within the grace period (or PIN off) — resume unlocked and reset the clock
   setTimeout(runBeamAlerts, 2500);
+  setTimeout(noteIfJustUpdated, 1200);
   setTimeout(()=>{ maybeAutoSnapshot(); checkForNewVersion(); }, 4000);
   setTimeout(autoBackupOnWake, 8000); // emails a backup if one is due (Backup & Restore > Automatic email backup)
   // All data lives in this browser's storage, so ask it not to clear that under storage
