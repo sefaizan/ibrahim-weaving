@@ -431,19 +431,29 @@ function renderStats(monthVal){
         ${card('Receivable (Outstanding)', s.receivable, fmtRs(s.receivable), 'balance compact')}
       </div>
     </div>
-    <div class="card"><div class="card-head"><h2>Warp Usage by Purchase</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Every warp purchase with at least one beam linked to it — Woven comes straight from Production entries. Yield% and Remaining are running totals until every linked beam is Finished, at which point they're final. See the Warp (Tana) Beam tab for the full per-beam breakdown.</p>
+    <div class="card"><div class="card-head"><h2>Warp Usage</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Totals across every warp purchase with at least one beam linked to it — Woven comes straight from Production entries. For the purchase-by-purchase breakdown (In Progress / Completed, with each beam's own numbers), see the Warp (Tana) Beam tab.</p>
       ${(()=>{
         const purchaseYield = computePurchaseYield();
         if(!purchaseYield.length) return `<div class="empty">No warp beams linked to a purchase yet.</div>`;
-        return `<div class="log-scroll">${table(
-          ['Purchase Date','Warp Type','Length','Woven','Remaining','Yield %','Status'],
-          purchaseYield.map(r=>[
-            fmtDate(r.purchase.date), escHtml(r.purchase.type||'—'), fmtNum(r.totalLength), fmtNum(r.totalWoven),
-            fmtNum(r.totalLength-r.totalWoven), r.yieldPct!=null?r.yieldPct.toFixed(1)+'%':'—',
-            r.complete ? 'Complete' : '<b>In Progress</b>'
-          ])
-        )}</div>`;
+        const totalPurchases = purchaseYield.length;
+        const inProgress = purchaseYield.filter(r=>!r.complete).length;
+        const totalLength = purchaseYield.reduce((s,r)=>s+r.totalLength,0);
+        const totalWoven = purchaseYield.reduce((s,r)=>s+r.totalWoven,0);
+        const totalRemaining = totalLength - totalWoven;
+        const overallYieldPct = totalLength > 0 ? (totalWoven/totalLength*100) : null;
+        return `
+          <div class="grid cols-3">
+            ${card('Purchased', totalLength, fmtNum(totalLength)+'m', 'compact')}
+            ${card('Woven', totalWoven, fmtNum(totalWoven)+'m', 'compact')}
+            ${card('Remaining', totalRemaining, fmtNum(totalRemaining)+'m', 'compact')}
+          </div>
+          <div class="grid cols-2" style="margin-top:10px">
+            ${card('Overall Yield', overallYieldPct, overallYieldPct!=null?overallYieldPct.toFixed(1)+'%':'—', 'compact')}
+            ${card('Purchases', totalPurchases, `${totalPurchases} (${inProgress} in progress)`, 'compact')}
+          </div>
+          <button type="button" class="ghost" style="margin-top:12px" onclick="switchTab('warpbeams')">View by Purchase</button>
+        `;
       })()}
     </div>
     <div class="card"><div class="card-head"><h2>Receivables Aging</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
