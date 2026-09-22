@@ -484,7 +484,7 @@ function weftPanel(){
     <div class="grid cols-3">
       ${field('Date','wf_date','date',`value="${todayStr()}" autofocus`)}
       ${field('Time','wf_time','time',`value="${nowStr()}"`)}
-      ${field('Yarn Count/Type','wf_type','text')}
+      ${selectField('Yarn Count/Type','wf_type',DATA.weftTypes)}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
       ${field('Supplier','wf_sup','text')}

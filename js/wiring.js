@@ -1272,7 +1272,7 @@ function wirePanel(id){
       disablePin();
       switchTab('settings');
     };
-    ['qualities','clients','employees','looms','warpTypes','banks'].forEach(key=>{
+    ['qualities','clients','employees','looms','warpTypes','weftTypes','banks'].forEach(key=>{
       document.querySelector(`[data-add="${key}"]`).onclick = async ()=>{
         const name = normalizeMasterName(v(`new_${key}`));
         if(!name) return;
@@ -1297,7 +1297,7 @@ function wirePanel(id){
       });
       wireEditGeneric(key, `add_${key}`, `cancel_${key}`, {[`new_${key}`]:'name'});
     });
-    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('banks');
+    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{
       btn.onclick = async ()=>{
         const [key, idxStr, dir] = btn.dataset.move.split(':');
@@ -1431,7 +1431,7 @@ function wireEnterSubmit(fieldIds, buttonId){
   });
 }
 function tabForKey(key){
-  if(key==='qualities'||key==='clients'||key==='employees'||key==='looms'||key==='warpTypes'||key==='banks') return 'settings';
+  if(key==='qualities'||key==='clients'||key==='employees'||key==='looms'||key==='warpTypes'||key==='weftTypes'||key==='banks') return 'settings';
   if(key==='rateCalcs') return 'ratecalc';
   if(key==='warpBeams'||key==='warpBeamsFinished') return 'warpbeams';
   if(key==='wageBonuses'||key==='wagePayments'||key==='wageSettlements') return 'wages';

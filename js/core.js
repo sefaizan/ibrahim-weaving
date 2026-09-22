@@ -49,6 +49,7 @@ let DATA = {
   "employees": [],
   "looms": [],
   "warpTypes": [],
+  "weftTypes": [],
   "banks": [],
   "warpBeams": [],
   "wageBonuses": [],
@@ -669,6 +670,7 @@ async function ensureDataDefaults(){
   let migrated = false;
   if(!DATA.looms) DATA.looms = [];
   if(!DATA.warpTypes) DATA.warpTypes = [];
+  if(!DATA.weftTypes) DATA.weftTypes = [];
   if(!DATA.banks) DATA.banks = [];
   if(!DATA.warpBeams) DATA.warpBeams = [];
   if(!DATA.wageBonuses) DATA.wageBonuses = [];
@@ -716,6 +718,11 @@ async function ensureDataDefaults(){
   if(!DATA.warpTypes.length && DATA.warp.some(r=>r.type)){
     const names = [...new Set(DATA.warp.map(r=>r.type).filter(Boolean))];
     DATA.warpTypes = names.map(name=>({id:uid(), name}));
+    migrated = true;
+  }
+  if(!DATA.weftTypes.length && DATA.weft.some(r=>r.type)){
+    const names = [...new Set(DATA.weft.map(r=>r.type).filter(Boolean))];
+    DATA.weftTypes = names.map(name=>({id:uid(), name}));
     migrated = true;
   }
   return migrated;
