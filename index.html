@@ -17,7 +17,7 @@
           (e.g. 3.11.8 -> 3.11.9 for the next fix).
        4. CACHE_VERSION in service-worker.js (e.g. 'v50' -> 'v51') — bump on every release,
           not just ones that add/remove files, so phones actually fetch the new set. -->
-<meta name="app-build" content="2026-09-23-7-weft-types">
+<meta name="app-build" content="2026-09-23-8-wages">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -558,7 +558,14 @@
     font-size:22px; line-height:1; cursor:pointer;
     box-shadow:var(--elev-3);
     display:flex; align-items:center; justify-content:center;
+    transition:opacity .15s ease, transform .15s ease;
   }
+  /* While a page is actively scrolling, a table's pagination or Export CSV button can end up
+     sitting right under this fixed shortcut (worst on pages with several long lists, like
+     Wages) — a pile of buttons fighting for the same tap. Tucking the fab away while the page is
+     moving, and only while it's moving, keeps it out of the way exactly when it would otherwise
+     block a tap, without hiding it the rest of the time. See wireScrollAwareFab (lock-init.js). */
+  .fab-backup.fab-scroll-hide{ opacity:0; transform:scale(0.8); pointer-events:none; }
   .fab-backup .icon{ font-size:24px; }
   .fab-backup:hover{ background:#D98A4B; }
   .fab-backup:active{ transform:scale(0.94); }
@@ -653,7 +660,7 @@
   </div>
 
   <header class="appbar">
-    <span class="app-version" id="appVersionTag">v3.11.12</span>
+    <span class="app-version" id="appVersionTag">v3.11.13</span>
     <button id="menuBtn" class="icon-btn" type="button" aria-label="Open menu">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
