@@ -229,3 +229,89 @@ describe('employee loans', () => {
     assert.deepEqual(app.loanRelevantEmployees().map(e => e.name).sort(), ['Active', 'Owes']);
   });
 });
+
+describe('net wages for a specific Wage Period (Employee Wage Balances page)', () => {
+  // Paying exactly what a period earned should zero it out, and a later rate change on a date
+  // inside that period should surface only the extra amount now due — not the full new total,
+  // and not 0 — because the payment (already made, already dated) doesn't move.
+  const setup = (rate) => app.setData({
+    qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+    wageRateHistory: { Q: [{ date: '2026-01-01', rate }] },
+    production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })], // 100 m
+  });
+
+  test('nothing paid yet: Paid is 0 and Net equals the full amount earned', () => {
+    setup(10);
+    const n = app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31');
+    closeTo(n.earned, 1000, 'earned'); closeTo(n.paid, 0, 'paid'); closeTo(n.net, 1000, 'net');
+  });
+
+  test('paid in full, dated inside the period: Net is exactly 0', () => {
+    setup(10);
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] },
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [{ id: 'w1', employee: 'Riaz', date: '2026-08-31', amount: 1000 }],
+    });
+    const n = app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31');
+    closeTo(n.paid, 1000, 'paid'); closeTo(n.net, 0, 'net — fully paid for this period');
+  });
+
+  test('a payment dated OUTSIDE the period does not count towards it', () => {
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] },
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [{ id: 'w1', employee: 'Riaz', date: '2026-09-05', amount: 1000 }], // next month
+    });
+    const n = app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31');
+    closeTo(n.paid, 0, 'paid — the payment is outside this period'); closeTo(n.net, 1000, 'net');
+  });
+
+  test('raising a past rate after paying in full leaves exactly the extra amount as Net (not 0, not the full new total)', () => {
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] }, // 100 m @ 10 = 1000, paid in full below
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [{ id: 'w1', employee: 'Riaz', date: '2026-08-31', amount: 1000 }],
+    });
+    closeTo(app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31').net, 0, 'settled at the old rate');
+    // Now raise the rate for August itself (effective from before the production date).
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 15 }] }, // 100 m @ 15 = 1500
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [{ id: 'w1', employee: 'Riaz', date: '2026-08-31', amount: 1000 }], // unchanged
+    });
+    const n = app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31');
+    closeTo(n.earned, 1500, 'earned recomputes at the new rate');
+    closeTo(n.paid, 1000, 'paid is unchanged — the old payment doesn\'t move');
+    closeTo(n.net, 500, 'net is exactly the extra 500 now due, not 1500 and not 0');
+  });
+
+  test('overpaying for a period shows as a negative net (a credit), not a floored 0', () => {
+    setup(10);
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] },
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [{ id: 'w1', employee: 'Riaz', date: '2026-08-31', amount: 1200 }],
+    });
+    closeTo(app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31').net, -200, 'net (negative = paid ahead)');
+  });
+
+  test('two payments in the same period add up', () => {
+    app.setData({
+      qualities: [{ name: 'Q' }], employees: [{ id: 'r', name: 'Riaz' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] },
+      production: [prod({ date: '2026-08-10', qty: 100, e1: 'Riaz', e1m: 100 })],
+      wagePayments: [
+        { id: 'w1', employee: 'Riaz', date: '2026-08-15', amount: 400 },
+        { id: 'w2', employee: 'Riaz', date: '2026-08-31', amount: 300 },
+      ],
+    });
+    const n = app.computeEmployeeWageNetForPeriod('Riaz', '2026-08-01', '2026-08-31');
+    closeTo(n.paid, 700, 'paid'); closeTo(n.net, 300, 'net');
+  });
+});
