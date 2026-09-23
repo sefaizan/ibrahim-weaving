@@ -189,23 +189,6 @@ function renderWages(){
   const grandDiffWages = rows.reduce((s,r)=>s+r.totalDiffWages,0);
   const grandWagesNoBonus = totalWages.reduce((a,b)=>a+b,0);
   const grandWages = grandWagesNoBonus + grandBonus;
-  // A signed amount rendered the same way everywhere on this page: positive still owed
-  // (rust), negative paid ahead / a credit (green), exactly zero in plain bold.
-  const signedCell = (amount, owedWord, creditWord)=> amount > 0.004
-    ? `<span style="color:var(--rust)"><b>${fmtRs(amount)}</b>${owedWord?' '+owedWord:''}</span>`
-    : amount < -0.004
-      ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(amount))}</b>${creditWord?' '+creditWord:''}</span>`
-      : `<b>${fmtRs(0)}</b>`;
-  const balanceRows = wageRelevantEmployees().map(emp=>{
-    const b = computeEmployeeWageBalance(emp.name);
-    const n = computeEmployeeWageNetForPeriod(emp.name, from, to);
-    const carryCell = b.carryForward
-      ? (b.carryForward > 0 ? `${fmtRs2(b.carryForward)} owed` : `${fmtRs2(Math.abs(b.carryForward))} credit`)
-      : '—';
-    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${carryCell}</td>`
-      + `<td>${fmtRs2(n.earned)}</td><td>${n.paid?fmtRs2(n.paid):'—'}</td><td>${signedCell(n.net,'still due','paid ahead')}</td>`
-      + `<td>${signedCell(b.balance,'owed','credit')}</td><td>${b.lastSettled?fmtDate(b.lastSettled):'Never'}</td></tr>`;
-  }).join('');
   wrap.innerHTML = `
     <div class="card"><div class="card-head"><h2>Meters by Quality (${fmtDate(from)} to ${fmtDate(to)})</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Diff = each employee's share of unassigned loom output (Qty − logged employee meters) on that quality's entries, already folded into their totals — shown per quality here so you can verify it, and so it carries that quality's own rate in the wages table below.</p>
@@ -219,12 +202,6 @@ function renderWages(){
       <tbody>${wageRows || '<tr><td class="empty" colspan="99">No employees yet</td></tr>'}</tbody>
       <tfoot><tr><td><b>Total</b></td>${wageIdx.map(i=>`<td><b>${showRs2(totalWages[i])}</b></td>`).join('')}${wageIdx.map(i=>`<td><b>${showRs2(diffWagesByQ[i])}</b></td>`).join('')}<td><b>${showRs2(grandWagesNoBonus - grandDiffWages)}</b></td><td><b>${showRs2(grandWagesNoBonus)}</b></td><td><b>${showRs2(grandBonus)}</b></td><td><b>${showRs2(grandWages)}</b></td></tr></tfoot>
       </table>
-    </div>
-    <div class="card"><div class="card-head"><h2>Employee Wage Balances</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>"Earned" and "Paid" are scoped to the Wage Period selected above only — "Paid (This Period)" is payments dated inside that same range, so "Net (This Period)" reaches exactly 0 once you've paid what was earned there. If you later change a rate for a date inside that period, Earned (and Net) recompute — Paid does not, so Net shows exactly what's newly due. "Balance" is the separate running total since the employee's last settlement (or all-time if never settled), regardless of which period is selected — use that one to see everything currently owed. "Credit" means paid ahead of wages earned. Employee loans are tracked separately in the Loans tab.</p>
-      <div class="log-scroll"><table><thead><tr><th>Employee</th><th>Carried Forward</th><th>Earned (This Period)</th><th>Paid (This Period)</th><th>Net (This Period)</th><th>Balance</th><th>Last Settled</th></tr></thead>
-      <tbody>${balanceRows || '<tr><td class="empty" colspan="7">No employees yet</td></tr>'}</tbody>
-      </table></div>
     </div>
   `;
 }
