@@ -998,3 +998,25 @@ function beamAlertSummary(list){
   return `⚠ ${list.length} beams ending soon: ` + list.map(f =>
     `Loom ${f.loom} (${f.state === 'full' ? 'fully woven' : beamWhenText(f).replace('in about ', '~')})`).join(', ');
 }
+
+// Wage payments recorded for one employee with a date inside [fromDate, toDate] (inclusive on
+// both ends; either end can be left null to leave that side open). Used to work out how much of
+// a specific Wage Period's earnings have already been paid — independent of the Settle Employee
+// feature, which tracks a single running balance rather than per-period amounts.
+function sumWagePaymentsInRange(empName, fromDate, toDate){
+  return DATA.wagePayments
+    .filter(p=>p.employee===empName && (!fromDate||p.date>=fromDate) && (!toDate||p.date<=toDate))
+    .reduce((s,p)=>s+(Number(p.amount)||0),0);
+}
+
+// Net amount still owed for one Wage Period: what was earned in it (wages + bonus) minus
+// whatever has already been paid for that same period. Paying the suggested amount in Log Wage
+// Payment (see fillWageAmount) brings this to exactly 0. If a rate is later changed for a date
+// inside this period, the earned figure recomputes with the new rate while the paid figure is
+// untouched (payments don't move when rates change), so this correctly comes out to just the
+// extra amount now due — not the full new total, and not 0.
+function computeEmployeeWageNetForPeriod(empName, fromDate, toDate){
+  const earned = computeEmployeeWagesForPeriod(empName, fromDate, toDate);
+  const paid = sumWagePaymentsInRange(empName, fromDate, toDate);
+  return {earned, paid, net: earned - paid};
+}

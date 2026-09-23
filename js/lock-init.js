@@ -420,9 +420,24 @@ if(window.visualViewport) window.visualViewport.addEventListener('resize', scrol
 
 /* ---------------- Init ---------------- */
 const SEARCH_DEBOUNCE_TIMERS = {};
+// Hides the floating Backup & Restore button while the page is actively scrolling, and brings it
+// back a moment after scrolling stops — see the .fab-scroll-hide rule in index.html for why.
+// Listens on document with capture:true, not on #panels: scroll events don't bubble, but a
+// capture-phase listener on an ancestor still fires for them, so this one listener covers both
+// how the app actually scrolls on a phone (the whole page/body scrolls) and how it scrolls in the
+// desktop preview frame (only #panels scrolls, inside a fixed-size shell) without caring which.
+function wireScrollAwareFab(fabBackup){
+  let hideTimer = null;
+  document.addEventListener('scroll', ()=>{
+    fabBackup.classList.add('fab-scroll-hide');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=> fabBackup.classList.remove('fab-scroll-hide'), 500);
+  }, {passive:true, capture:true});
+}
+
 (async function init(){
   const fabBackup = document.getElementById('fabBackup');
-  if(fabBackup) fabBackup.onclick = ()=> switchTab('backup');
+  if(fabBackup){ fabBackup.onclick = ()=> switchTab('backup'); wireScrollAwareFab(fabBackup); }
   const menuBtn = document.getElementById('menuBtn');
   if(menuBtn) menuBtn.onclick = openDrawer;
   const scrim = document.getElementById('scrim');
