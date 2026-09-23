@@ -18,7 +18,7 @@ function selectField(label, id, arr, extra=''){
 function meterFracField(label, idWhole, idSixteenth, extra=''){
   return `<div class="field"><label>${label}</label>
     <div style="display:flex;gap:8px">
-      <input id="${idWhole}" type="number" placeholder="Meters" ${extra} style="flex:2;min-width:0">
+      <input id="${idWhole}" type="number" placeholder="Whole" ${extra} style="flex:2;min-width:0">
       <input id="${idSixteenth}" type="number" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
     </div>
   </div>`;
@@ -99,20 +99,20 @@ function productionPanel(){
       ${selectField('Loom','p_loom',DATA.looms)}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
-      ${field('Quantity Produced (mtr)','p_qty','number')}
+      ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16')}
     </div>
     <div id="p_beamToggleWrap"></div>
     <input type="hidden" id="p_beam" value="">
     <div class="group-label">Employees & Their Meters</div>
     <div class="grid cols-2">
       ${employeeSelectField('Employee 1','p_e1')}
-      ${meterFracField('Employee 1 Meters','p_e1m_w','p_e1m_16')}
+      ${field('Employee 1 Meters','p_e1m','number')}
       ${employeeSelectField('Employee 2 (optional)','p_e2')}
-      ${meterFracField('Employee 2 Meters','p_e2m_w','p_e2m_16')}
+      ${field('Employee 2 Meters','p_e2m','number')}
     </div>
     <div id="p_e3wrap" class="grid cols-2" style="display:none;margin-top:12px">
       ${employeeSelectField('Employee 3','p_e3')}
-      ${meterFracField('Employee 3 Meters','p_e3m_w','p_e3m_16')}
+      ${field('Employee 3 Meters','p_e3m','number')}
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
     <button class="primary" id="addProductionNext">Add &amp; next loom →</button>
