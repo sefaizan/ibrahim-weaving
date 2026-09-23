@@ -202,6 +202,10 @@ function salePanel(){
       ${field('Rate per mtr (Rs)','s_rate','number')}
       ${field('Invoice No (optional)','s_inv','text')}
     </div>
+    <div class="grid cols-2" style="margin-top:12px">
+      ${selectField('Dyeing (optional)','s_dyeing',DATA.dyeingUnits)}
+      <div></div>
+    </div>
     <div class="note" id="s_qtyHint" hidden style="margin:6px 0 0"></div>
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Description (optional)','s_desc')}
@@ -216,9 +220,9 @@ function salePanel(){
       </div>
       ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtNum(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
       ${logTable('sale',
-      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Description',''],
+      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','Description',''],
       filteredSale.slice().reverse(),
-      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtNum(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
+      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtNum(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
     )}</div>`;
 }
 function daysSince(dateStr){ return Math.max(0, Math.round((new Date(todayStr()+'T00:00:00Z') - new Date(dateStr+'T00:00:00Z')) / 86400000)); }

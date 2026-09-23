@@ -284,7 +284,7 @@ function wirePanel(id){
         [qty > 0, 'Enter the quantity (mtr) first.', 's_qty'],
         [keepAmount || rate > 0, rateMsg, 's_rate'],
       ])) return;
-      const rec = {date:v('s_date'), invoice:v('s_inv'), client:v('s_client'), quality:v('s_quality'), qty, rate, amount: keepAmount ? Number(existing.amount) : Math.floor(qty*rate + 1e-6), desc:v('s_desc')};
+      const rec = {date:v('s_date'), invoice:v('s_inv'), client:v('s_client'), quality:v('s_quality'), qty, rate, amount: keepAmount ? Number(existing.amount) : Math.floor(qty*rate + 1e-6), dyeing:v('s_dyeing'), desc:v('s_desc')};
       if(EDITING && EDITING.key==='sale'){
         const idx = DATA.sale.findIndex(r=>r.id===EDITING.id);
         if(idx>-1) DATA.sale[idx] = {...DATA.sale[idx], ...rec};
@@ -298,7 +298,7 @@ function wirePanel(id){
     wireEnterSubmit(['s_date','s_client','s_quality','s_qty','s_rate','s_inv'],'addSale');
     wireDelete('sale');
     wireEditGeneric('sale','addSale','cancelSale',
-      {s_date:'date',s_client:'client',s_quality:'quality',s_qty:'qty',s_rate:'rate',s_inv:'invoice',s_desc:'desc'},
+      {s_date:'date',s_client:'client',s_quality:'quality',s_qty:'qty',s_rate:'rate',s_inv:'invoice',s_dyeing:'dyeing',s_desc:'desc'},
       ()=>{ const el=document.getElementById('s_qty'); if(el) el.dispatchEvent(new Event('input')); });
     const sfClient = document.getElementById('sf_client');
     const sfQuality = document.getElementById('sf_quality');
@@ -660,6 +660,8 @@ function wirePanel(id){
       DATA.wageFrom = v('wg_from'); DATA.wageTo = v('wg_to');
       if(persist) await save();
       renderWages();
+      const rateBody = document.getElementById('wg_rateRowsBody');
+      if(rateBody) rateBody.innerHTML = qualityRateRowsHtml(v('wg_from'), v('wg_to')) || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>';
     };
     document.getElementById('wg_from').addEventListener('change', ()=>{ recalc(true); fillWageAmount(); updateWagePaymentHelper(); });
     document.getElementById('wg_to').addEventListener('change', ()=>{ recalc(true); fillWageAmount(); updateWagePaymentHelper(); });
@@ -681,6 +683,15 @@ function wirePanel(id){
       else DATA.wageRateHistory[quality].push({date, rate});
       await save();
       renderWages();
+      const rateBody = document.getElementById('wg_rateRowsBody');
+      if(rateBody) rateBody.innerHTML = qualityRateRowsHtml(v('wg_from'), v('wg_to')) || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>';
+      const histWrap = document.getElementById('wg_rateHistoryWrap');
+      if(histWrap){
+        const rows = rateHistoryRowsHtml();
+        histWrap.innerHTML = rows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
+      <table style="margin-top:6px"><thead><tr><th>Quality</th><th>Effective From</th><th>Rate (Rs/m)</th></tr></thead>
+      <tbody>${rows}</tbody></table>` : '';
+      }
     };
     renderWages();
 
@@ -1283,7 +1294,7 @@ function wirePanel(id){
       disablePin();
       switchTab('settings');
     };
-    ['qualities','clients','employees','looms','warpTypes','weftTypes','banks'].forEach(key=>{
+    ['qualities','clients','employees','looms','warpTypes','weftTypes','dyeingUnits','banks'].forEach(key=>{
       document.querySelector(`[data-add="${key}"]`).onclick = async ()=>{
         const name = normalizeMasterName(v(`new_${key}`));
         if(!name) return;
@@ -1308,7 +1319,7 @@ function wirePanel(id){
       });
       wireEditGeneric(key, `add_${key}`, `cancel_${key}`, {[`new_${key}`]:'name'});
     });
-    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('banks');
+    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{
       btn.onclick = async ()=>{
         const [key, idxStr, dir] = btn.dataset.move.split(':');
@@ -1442,7 +1453,7 @@ function wireEnterSubmit(fieldIds, buttonId){
   });
 }
 function tabForKey(key){
-  if(key==='qualities'||key==='clients'||key==='employees'||key==='looms'||key==='warpTypes'||key==='weftTypes'||key==='banks') return 'settings';
+  if(key==='qualities'||key==='clients'||key==='employees'||key==='looms'||key==='warpTypes'||key==='weftTypes'||key==='dyeingUnits'||key==='banks') return 'settings';
   if(key==='rateCalcs') return 'ratecalc';
   if(key==='warpBeams'||key==='warpBeamsFinished') return 'warpbeams';
   if(key==='wageBonuses'||key==='wagePayments'||key==='wageSettlements') return 'wages';

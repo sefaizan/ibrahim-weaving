@@ -107,8 +107,7 @@ function wagesPanel(){
       <tbody>${rateHistoryRows}</tbody></table>` : ''}</div>
       </div>
     </div>
-    ${openingBalanceCard}
-    ${settleAllCard}
+    <div id="wagesWrap"></div>
     <div class="card"><div class="card-head"><h2>Log Wage Payment</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wagepayment" title="Info">i</button></div>
       ${formToggleBtn('wagePayments','Form')}
       <div ${formBodyOpen('wagePayments')}>
@@ -128,6 +127,11 @@ function wagesPanel(){
       <button class="ghost" id="cancelWagePayments" style="display:none">Cancel Edit</button>
       </div>
     </div>
+    <div class="card"><h2>Wage Payments Log</h2>${logTable('wagePayments',
+        ['Date','Employee','Amount','Remarks',''],
+        DATA.wagePayments.slice().reverse(),
+        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
+      )}</div>
     <div class="card"><h2>Log Bonus</h2>
       ${formToggleBtn('wageBonuses','Form')}
       <div ${formBodyOpen('wageBonuses')}>
@@ -143,6 +147,13 @@ function wagesPanel(){
       <button class="ghost" id="cancelWageBonuses" style="display:none">Cancel Edit</button>
       </div>
     </div>
+    <div class="card"><h2>Bonus Log</h2>${logTable('wageBonuses',
+        ['Date','Employee','Amount','Remarks',''],
+        DATA.wageBonuses.slice().reverse(),
+        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wageBonuses',r.id)]
+      )}</div>
+    ${openingBalanceCard}
+    ${settleAllCard}
     <div class="card"><div class="card-head"><h2>Settle Employee</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-settlement" title="Info">i</button></div>
       ${formToggleBtn('wageSettlements','Form')}
       <div ${formBodyOpen('wageSettlements')}>
@@ -162,17 +173,6 @@ function wagesPanel(){
       <button class="ghost" id="cancelWageSettlements" style="display:none">Cancel Edit</button>
       </div>
     </div>
-    <div id="wagesWrap"></div>
-    <div class="card"><h2>Wage Payments Log</h2>${logTable('wagePayments',
-        ['Date','Employee','Amount','Remarks',''],
-        DATA.wagePayments.slice().reverse(),
-        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
-      )}</div>
-    <div class="card"><h2>Bonus Log</h2>${logTable('wageBonuses',
-        ['Date','Employee','Amount','Remarks',''],
-        DATA.wageBonuses.slice().reverse(),
-        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wageBonuses',r.id)]
-      )}</div>
     <div class="card"><h2>Settlements Log</h2>${logTable('wageSettlements',
         ['Date','Employee','Carried Forward','Remarks',''],
         DATA.wageSettlements.slice().reverse(),
@@ -645,7 +645,8 @@ function printSaleReceipt(saleId, opts){
       <tfoot><tr><td colspan="3">Total</td><td class="num">${fmtRs(r.amount)}</td></tr></tfoot>
     </table>
     ${balanceHtml}
-    ${r.desc ? `<div class="meta-row" style="margin-top:14px"><span>Description</span><b>${escHtml(r.desc)}</b></div>` : ''}
+    ${r.dyeing ? `<div class="meta-row" style="margin-top:14px"><span>Dyeing</span><b>${escHtml(r.dyeing)}</b></div>` : ''}
+    ${r.desc ? `<div class="meta-row" style="margin-top:${r.dyeing?'6':'14'}px"><span>Description</span><b>${escHtml(r.desc)}</b></div>` : ''}
     <div class="footer-note">Thank you for your business.</div>
   </div>`;
   if(opts && opts.htmlOnly) return html;
@@ -746,6 +747,11 @@ async function shareSaleReceiptAsPdf(saleId){
     doc.setFont('helvetica','bold'); doc.setTextColor(20);
     doc.text('Current Balance', margin+10, y); doc.text(fmtRs(currentBalance), pageW-margin-10, y, {align:'right'});
     y = boxTop + 66 + 24;
+    if(r.dyeing){
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
+      doc.text(`Dyeing: ${r.dyeing}`, margin, y);
+      y += 16;
+    }
     if(r.desc){
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
       doc.text(`Description: ${r.desc}`, margin, y);

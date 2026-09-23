@@ -197,6 +197,7 @@ function settingsPanel(){
     + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Looms','looms','e.g. 9',false)
     + loomAssignmentsSection()
     + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)
+    + section('Dyeing Units','dyeingUnits','e.g. Al-Karam Dyeing',false)
     + section('Banks','banks','e.g. Meezan Bank',false);
 }
 // Settings card for the PIN Lock feature — two states: not set up yet (just pick a PIN) vs.
@@ -333,6 +334,7 @@ const MASTER_REF_FIELDS = {
   looms:     [['production','loom'], ['warpBeams','loom'], ['loomAssignments','loom']],
   warpTypes: [['warp','type'], ['warpBeams','warpType']],
   weftTypes: [['weft','type']],
+  dyeingUnits: [['sale','dyeing']],
   banks:     [] // bank names live inside each recovery's cheques — handled below
 };
 // Rewrites every reference to oldName with newName; returns how many records/fields changed.
@@ -672,7 +674,7 @@ const UNDO_STACK = [];                       // newest last: {id, label, kind, o
 const UNDO_MAX = 25, UNDO_MAX_CHARS = 12000000;
 let _undoSeq = 0;
 const UNDO_KEY_LABEL = {sale:'Sale', recovery:'Recovery', production:'Production', expense:'Expense', family:'Family expense', warp:'Warp purchase',
-  weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', banks:'Bank',
+  weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', dyeingUnits:'Dyeing unit', banks:'Bank',
   wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', warpBeams:'Warp beam',
   checkpoints:'Checkpoint', rateCalcs:'Rate calculation', loomAssignments:'Loom assignment', wageRateHistory:'Wage rates', businessInfo:'Business info'};
 const undoKeyLabel = k => UNDO_KEY_LABEL[k] || k;

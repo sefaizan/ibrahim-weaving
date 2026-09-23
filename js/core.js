@@ -50,6 +50,7 @@ let DATA = {
   "looms": [],
   "warpTypes": [],
   "weftTypes": [],
+  "dyeingUnits": [],
   "banks": [],
   "warpBeams": [],
   "wageBonuses": [],
@@ -671,6 +672,7 @@ async function ensureDataDefaults(){
   if(!DATA.looms) DATA.looms = [];
   if(!DATA.warpTypes) DATA.warpTypes = [];
   if(!DATA.weftTypes) DATA.weftTypes = [];
+  if(!DATA.dyeingUnits) DATA.dyeingUnits = [];
   if(!DATA.banks) DATA.banks = [];
   if(!DATA.warpBeams) DATA.warpBeams = [];
   if(!DATA.wageBonuses) DATA.wageBonuses = [];
