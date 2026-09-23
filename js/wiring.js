@@ -112,6 +112,9 @@ function wirePanel(id){
       beamAlertToast(takeBeamAlert(rec.loom)); // the loom's beam may now be about to end
     };
     document.getElementById('p_loom').addEventListener('change', ()=> renderBeamToggle(true));
+    // Date drives which beam(s) are even relevant (see renderBeamToggle) — recompute on
+    // every date change, but preserve an existing valid choice rather than resetting it.
+    document.getElementById('p_date').addEventListener('change', ()=> renderBeamToggle(false));
     // Coming back from "Add & next loom": restore date + quality, select the next loom with its
     // usual employees, and put the cursor on Quantity. Values are set here, before the custom
     // dropdowns are built, so they show the right labels.
@@ -739,38 +742,46 @@ function wirePanel(id){
       }
       await save(); switchTab('wages');
     };
-    // Suggests the raw wages+bonus earned within the selected Wage Period (the From/To
-    // dates at the top of the page) — nothing else. Deliberately ignores carryForward and
-    // any prior payment already logged, since whether (and how much) to pay against it is
-    // entirely your call, not an auto-calculation. Also skipped while editing an existing
-    // payment, so its saved amount stays untouched.
+    // Suggests what's actually still due for the selected Wage Period (the From/To dates at
+    // the top of the page): wages+bonus earned in that range, MINUS whatever's already been
+    // paid with a date inside that same range (computeEmployeeWageNetForPeriod). So once an
+    // employee has been paid in full for a period, this shows 0 — and if a rate is later
+    // changed for a date inside that period, Earned recomputes with the new rate while what
+    // was already paid stays put, so this correctly re-shows just the extra amount now due,
+    // never the full new total and never a blank/negative figure. Ignores carryForward from
+    // Settle Employee on purpose — that's a separate running balance, not this period's own
+    // figure. Also skipped while editing an existing payment, so its saved amount stays
+    // untouched, and recalculates automatically whenever the Wage Period dates change.
     const fillWageAmount = ()=>{
       if(EDITING) return;
       const emp = v('wp_emp');
       const amtEl = document.getElementById('wp_amt');
       if(!amtEl) return;
       if(!emp){ amtEl.value = ''; return; }
-      const suggestion = computeEmployeeWagesForPeriod(emp, v('wg_from')||null, v('wg_to')||null);
-      amtEl.value = suggestion > 0 ? (Math.round(suggestion*100)/100) : '';
+      const {net} = computeEmployeeWageNetForPeriod(emp, v('wg_from')||null, v('wg_to')||null);
+      amtEl.value = net > 0.004 ? (Math.round(net*100)/100) : '';
     };
-    // Live helper text: compares the typed amount against wages+bonus earned in the
-    // selected Wage Period, plus a note if the employee currently has a credit (paid
-    // ahead) balance, so nothing is hidden.
+    // Live helper text: compares the typed amount against what's still due for the selected
+    // Wage Period (earned minus already paid in that same range), plus a note if the employee
+    // currently has a credit (paid ahead) balance, so nothing is hidden.
     const updateWagePaymentHelper = ()=>{
       const emp = v('wp_emp');
       const helperEl = document.getElementById('wp_helper');
       if(!helperEl) return;
       if(!emp){ helperEl.textContent = ''; return; }
-      const wagesRemaining = computeEmployeeWagesForPeriod(emp, v('wg_from')||null, v('wg_to')||null);
+      const {earned, paid, net: stillDue} = computeEmployeeWageNetForPeriod(emp, v('wg_from')||null, v('wg_to')||null);
       const amt = Number(v('wp_amt')||0);
-      const diff = wagesRemaining - amt;
+      const diff = stillDue - amt;
+      const paidNote = paid > 0.004 ? ` (${fmtRs2(paid)} already paid for this period)` : '';
       let msg;
       if(diff > 0.004){
-        msg = `${fmtRs2(diff)} of the ${fmtRs2(wagesRemaining)} wages+bonus earned in the selected period won't be paid this time.`;
+        msg = `${fmtRs2(diff)} of the ${fmtRs2(stillDue)} still due for the selected period won't be paid this time. Earned in period: ${fmtRs2(earned)}${paidNote}.`;
       } else if(diff < -0.004){
-        msg = `This pays ${fmtRs2(Math.abs(diff))} more than the ${fmtRs2(wagesRemaining)} wages+bonus earned in the selected period.`;
-      } else if(wagesRemaining > 0){
-        msg = `This pays the full ${fmtRs2(wagesRemaining)} wages+bonus earned in the selected period.`;
+        msg = `This pays ${fmtRs2(Math.abs(diff))} more than the ${fmtRs2(stillDue)} still due for the selected period. Earned in period: ${fmtRs2(earned)}${paidNote}.`;
+      } else if(stillDue > 0){
+        msg = `This pays the full ${fmtRs2(stillDue)} still due for the selected period.${paidNote}`;
+      } else if(paid > 0.004){
+        msg = `Nothing left due for this period — ${fmtRs2(paid)} already paid against ${fmtRs2(earned)} earned.`;
       } else {
         msg = '';
       }

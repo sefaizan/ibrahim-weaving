@@ -512,41 +512,67 @@ function weftPanel(){
 function beamsForLoom(loomName){
   return DATA.warpBeams.filter(b=>b.loom===loomName).slice().sort((a,b)=> dtOf(b)-dtOf(a));
 }
-// Builds the "This entry is from: Current beam / Previous beam" toggle on the Production
-// form. Only shown when a loom has 2+ beams logged — otherwise there's nothing to choose
-// between, so the hidden p_beam value is just set (or cleared) silently.
-// forceCurrent=true resets the choice to the current beam (used when the Loom dropdown
+// Builds the "This entry is from: New beam / Previous beam" toggle on the Production form,
+// scoped to the entry's own Date (p_date) rather than just "whichever beam was logged most
+// recently overall" — a backdated entry shouldn't be asked to choose between two beams that
+// were both installed after it. Logic, given this loom's beams (newest-install-first):
+//   - No beam on this loom has a date on/before the entry date (entry predates every beam
+//     logged, e.g. backfilling before beam-tracking started) → nothing to choose; p_beam
+//     cleared silently, no toggle shown.
+//   - The most recent beam on/before the entry date is unambiguous UNLESS the entry date is
+//     exactly that beam's own install date — the one real changeover day, where meters from
+//     the outgoing beam and the new one can both legitimately get logged. Only then is the
+//     toggle shown, between that beam and the one installed just before it.
+//   - Otherwise (entry date falls inside one beam's window, not on a changeover day) that
+//     beam is auto-assigned silently — nothing to ask.
+// forceCurrent=true resets the choice to the newer of the two (used when the Loom dropdown
 // changes); forceCurrent=false preserves whatever's already in #p_beam (used when an
-// existing entry is loaded for editing, so its saved choice is restored, not overwritten).
+// existing entry is loaded for editing, so its saved choice is restored, not overwritten —
+// and when only the Date field changed, so an already-correct choice isn't reset under you).
 function renderBeamToggle(forceCurrent){
   const loom = v('p_loom');
+  const date = v('p_date');
   const wrap = document.getElementById('p_beamToggleWrap');
   const hidden = document.getElementById('p_beam');
   if(!wrap || !hidden) return;
-  const beams = beamsForLoom(loom);
+  const beams = beamsForLoom(loom); // newest-install-first
   const existing = hidden.value;
-  if(beams.length === 0){
+  const clear = ()=>{ wrap.innerHTML = ''; hidden.value = ''; };
+  if(beams.length === 0 || !date){ clear(); return; }
+  if(beams.length === 1){
+    // Still nothing to choose, but only applies once the entry date reaches that one beam —
+    // an entry dated before it was ever installed gets no beam, same as the multi-beam case.
     wrap.innerHTML = '';
-    hidden.value = '';
-  } else if(beams.length === 1){
-    wrap.innerHTML = '';
-    hidden.value = beams[0].id;
-  } else {
-    const current = beams[0], previous = beams[1];
-    const selected = (!forceCurrent && (existing===current.id || existing===previous.id)) ? existing : current.id;
+    hidden.value = beams[0].date <= date ? beams[0].id : '';
+    return;
+  }
+  // Beams installed on/before this entry's date — beams is already newest-first, so the
+  // first match is the most recent one that applies as of that date.
+  const onOrBefore = beams.filter(b=> b.date <= date);
+  if(onOrBefore.length === 0){ clear(); return; } // entry predates every beam on this loom
+  const active = onOrBefore[0];
+  const activeIdx = beams.indexOf(active);
+  const prior = beams[activeIdx + 1]; // installed just before `active`, if any
+  if(active.date === date && prior){
+    // The changeover day: both beams are legitimately possible, so ask.
+    const selected = (!forceCurrent && (existing===active.id || existing===prior.id)) ? existing : active.id;
     hidden.value = selected;
     wrap.innerHTML = `<div class="field"><label>This entry is from</label>
       <div style="display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
-          <input type="radio" name="p_beam_choice" value="${current.id}" ${selected===current.id?'checked':''}> Current beam (${fmtDate(current.date)}, ${escHtml(current.warpType||'')})
+          <input type="radio" name="p_beam_choice" value="${active.id}" ${selected===active.id?'checked':''}> New beam (${fmtDate(active.date)}, ${escHtml(active.warpType||'')})
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
-          <input type="radio" name="p_beam_choice" value="${previous.id}" ${selected===previous.id?'checked':''}> Previous beam (${fmtDate(previous.date)}, ${escHtml(previous.warpType||'')})
+          <input type="radio" name="p_beam_choice" value="${prior.id}" ${selected===prior.id?'checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})
         </label>
       </div></div>`;
     wrap.querySelectorAll('input[name="p_beam_choice"]').forEach(radio=>{
       radio.addEventListener('change', ()=>{ hidden.value = radio.value; });
     });
+  } else {
+    // Entry date falls cleanly inside one beam's window — no ambiguity, no toggle.
+    wrap.innerHTML = '';
+    hidden.value = active.id;
   }
 }
 // Rolls up beams into the specific Warp purchase they were chained from (via each beam's
