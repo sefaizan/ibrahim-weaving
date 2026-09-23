@@ -431,51 +431,6 @@ function renderStats(monthVal){
         ${card('Receivable (Outstanding)', s.receivable, fmtRs(s.receivable), 'balance compact')}
       </div>
     </div>
-    <div class="card"><div class="card-head"><h2>Employee Wage Balances</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wagebalances" title="Info">i</button></div>
-      <p class="note info-note" id="info-wagebalances" hidden>"Earned" and "Paid" are scoped to the period selected above (the same Period control at the top of this page) — "Paid" is payments dated inside that same range, so "Net" reaches exactly 0 once you've paid what was earned in it. If you later change a wage rate for a date inside that period, Earned (and Net) recompute — Paid does not, so Net shows exactly what's newly due, not the full new total and not 0. "Balance" is a separate running total since each employee's last settlement (or all-time if never settled), regardless of which period is selected above — it's the figure to check for everything currently owed. "Credit" means paid ahead of wages earned. Employee loans are tracked separately in the Loans tab; rates and per-quality detail live on the Wages tab.</p>
-      ${(()=>{
-        const emps = wageRelevantEmployees();
-        if(!emps.length) return `<div class="empty">Add employees in the settings tab to see wage balances.</div>`;
-        // Same signed-amount styling used for Bounced/Receivable above: positive still owed
-        // (rust), negative paid ahead / a credit (green), exactly zero in plain bold.
-        const signedCell = (amount, owedWord, creditWord)=> amount > 0.004
-          ? `<span style="color:var(--rust)"><b>${fmtRs(amount)}</b>${owedWord?' '+owedWord:''}</span>`
-          : amount < -0.004
-            ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(amount))}</b>${creditWord?' '+creditWord:''}</span>`
-            : `<b>${fmtRs(0)}</b>`;
-        const wageBounds = periodBounds(monthVal);
-        const wageFrom = wageBounds.start ? wageBounds.start.toISOString().slice(0,10) : null;
-        const wageTo = wageBounds.end ? wageBounds.end.toISOString().slice(0,10) : null;
-        const wageRows = emps.map(emp=>{
-          const b = computeEmployeeWageBalance(emp.name);
-          const n = computeEmployeeWageNetForPeriod(emp.name, wageFrom, wageTo);
-          const carryCell = b.carryForward
-            ? (b.carryForward > 0 ? `${fmtRs2(b.carryForward)} owed` : `${fmtRs2(Math.abs(b.carryForward))} credit`)
-            : '—';
-          return {emp, b, n, carryCell};
-        });
-        const grandEarned = wageRows.reduce((s,r)=>s+r.n.earned,0);
-        const grandPaid = wageRows.reduce((s,r)=>s+r.n.paid,0);
-        const grandNet = wageRows.reduce((s,r)=>s+r.n.net,0);
-        const grandBalance = wageRows.reduce((s,r)=>s+r.b.balance,0);
-        return `
-      <div class="table-lg log-scroll">${table(
-        ['Employee','Carried Forward','Earned (This Period)','Paid (This Period)','Net (This Period)','Balance','Last Settled'],
-        wageRows.map(r=>[
-          `<span class="name">${escHtml(r.emp.name)}</span>`, r.carryCell,
-          fmtRs2(r.n.earned), r.n.paid?fmtRs2(r.n.paid):'—', signedCell(r.n.net,'still due','paid ahead'),
-          signedCell(r.b.balance,'owed','credit'), r.b.lastSettled?fmtDate(r.b.lastSettled):'Never'
-        ])
-      )}</div>
-      <div class="group-label">Overall</div>
-      <div class="grid cols-4">
-        ${card('Earned (This Period)', grandEarned, fmtRs(grandEarned), 'compact')}
-        ${card('Paid (This Period)', grandPaid, fmtRs(grandPaid), 'compact')}
-        ${card('Net (This Period)', grandNet, fmtRs(grandNet), 'balance compact')}
-        ${card('Balance (All Owed)', grandBalance, fmtRs(grandBalance), 'balance compact')}
-      </div>`;
-      })()}
-    </div>
     <div class="card"><div class="card-head"><h2>Warp Usage (Last 2 Months)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Warp purchases from the last 2 months — same cutoff used when logging a new beam. Woven comes straight from Production entries. For older purchases and the full per-beam breakdown, see the Warp (Tana) Beam tab.</p>
       ${(()=>{
@@ -490,8 +445,8 @@ function renderStats(monthVal){
         return `<div class="log-scroll">${table(
           ['Purchase Date','Warp Type','Length','Woven','Remaining','Yield %','Status'],
           purchaseYield.map(r=>[
-            fmtDate(r.purchase.date), escHtml(r.purchase.type||'—'), fmtNum(r.totalLength), fmtNum(r.totalWoven),
-            fmtNum(r.totalLength-r.totalWoven), r.yieldPct!=null?r.yieldPct.toFixed(1)+'%':'—',
+            fmtDate(r.purchase.date), escHtml(r.purchase.type||'—'), fmtQtyMtr(r.totalLength), fmtQtyMtr(r.totalWoven),
+            fmtQtyMtr(r.totalLength-r.totalWoven), r.yieldPct!=null?r.yieldPct.toFixed(1)+'%':'—',
             r.complete ? 'Complete' : '<b>In Progress</b>'
           ])
         )}</div>`;

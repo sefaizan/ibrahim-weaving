@@ -687,7 +687,7 @@ function undoParts(){
 function undoDescribeRec(rec){
   if(!rec || typeof rec !== 'object') return '';
   const who = rec.client || rec.name || rec.employee || rec.loom || rec.quality || rec.category || rec.type || rec.supplier || '';
-  const amt = (rec.amount != null && rec.amount !== '') ? fmtRs(rec.amount) : (rec.qty ? fmtNum(rec.qty) + ' mtr' : '');
+  const amt = (rec.amount != null && rec.amount !== '') ? fmtRs(rec.amount) : (rec.qty ? fmtQtyMtr(rec.qty) + ' mtr' : '');
   return [rec.date ? fmtDate(rec.date) : '', who, amt].filter(Boolean).join(' · ');
 }
 // Works out what changed between two save-states and files an Undo entry if it was a removal or an edit.

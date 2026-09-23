@@ -189,7 +189,7 @@ function renderWages(){
     wrap.innerHTML = `<div class="card"><div class="empty">Add employees and qualities in the settings tab to see wages.</div></div>`;
     return;
   }
-  const showNum = n => n ? fmtNum(n) : '';
+  const showNum = n => n ? fmtQtyMtr(n) : '';
   const showRs2 = n => n ? fmtRs2(n) : '';
   const totalMeters = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].meters,0));
   const totalWages = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].wages,0));

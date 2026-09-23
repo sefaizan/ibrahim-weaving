@@ -151,14 +151,14 @@ function productionPanel(){
           <div class="field"><label>To</label><input type="date" id="pf_to" value="${toVal}"></div>
         </div>
       </div>
-      ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtNum(filterQty)} mtr.</p>` : ''}
+      ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
       ['Date','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],
       filteredProduction.slice().reverse(),
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtNum(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtNum(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtNum(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtNum(r.e3m)})`:'—', fmtNum(diff), actionBtns('production',r.id)];
+        return [fmtDate(r.date), `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—', fmtQtyMtr(diff), actionBtns('production',r.id)];
       }
     )}</div>`;
 }
@@ -230,11 +230,11 @@ function salePanel(){
         <div class="field"><label>Filter by Client</label><select id="sf_client"><option value="">All Clients</option>${groupedClientOpts()}</select></div>
         <div class="field"><label>Filter by Quality</label><select id="sf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
       </div>
-      ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtNum(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
+      ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtQtyMtr(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
       ${logTable('sale',
       ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','Description',''],
       filteredSale.slice().reverse(),
-      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtNum(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
+      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
     )}</div>`;
 }
 function daysSince(dateStr){ return Math.max(0, Math.round((new Date(todayStr()+'T00:00:00Z') - new Date(dateStr+'T00:00:00Z')) / 86400000)); }
@@ -632,20 +632,20 @@ function finishedOnCell(d){
 }
 function renderYieldPanel(r, beamDetails){
   const shrinkStat = r.complete
-    ? `${fmtNum(r.totalShrinkage)}m${r.shrinkagePct!=null?` (${fmtNum(Math.round(r.shrinkagePct*100)/100)}%)`:''}`
+    ? `${fmtQtyMtr(r.totalShrinkage)}m${r.shrinkagePct!=null?` (${fmtNum(Math.round(r.shrinkagePct*100)/100)}%)`:''}`
     : '— (pending)';
   const yieldStat = r.complete && r.yieldPct!=null ? fmtNum(Math.round(r.yieldPct*100)/100)+'%' : '— (pending)';
   const costStat = r.complete && r.costPerMeter!=null ? fmtRs2(r.costPerMeter)+'/m' : '— (pending)';
   const beamRows = r.beams.map(b=>{
     const d = beamDetails[b.id] || {woven:0, isActive:true, daysTaken:0, shrinkage:Number(b.length)||0, shrinkagePct:null};
     const shrinkCell = d.isActive ? '—' : (d.shrinkage < 0
-      ? `<span style="color:var(--rust)">${fmtNum(d.shrinkage)} (over)</span>`
-      : fmtNum(d.shrinkage));
+      ? `<span style="color:var(--rust)">${fmtQtyMtr(d.shrinkage)} (over)</span>`
+      : fmtQtyMtr(d.shrinkage));
     const shrinkPctCell = d.isActive ? '—' : (d.shrinkagePct!=null ? fmtNum(Math.round(d.shrinkagePct*100)/100)+'%' : '—');
     const daysCell = fmtNum(Math.round(d.daysTaken*10)/10) + (d.isActive ? ' (so far)' : '');
     return [
       fmtDate(b.date), escHtml(b.warpType||'—'), `<span class="loom-no">${escHtml(b.loom)}</span>`,
-      fmtNum(b.length), fmtNum(d.woven), shrinkCell, shrinkPctCell, daysCell,
+      fmtQtyMtr(b.length), fmtQtyMtr(d.woven), shrinkCell, shrinkPctCell, daysCell,
       finishedOnCell(d), d.isActive ? '<b>Active</b>' : 'Finished'
     ];
   });
@@ -791,8 +791,8 @@ function warpBeamsPanel(){
       const mapFn = r=>{
         const u = usage[r.id] || {woven:0, remaining:Number(r.length)||0, isActive:false, hasNext:false};
         const remainingCell = u.remaining < 0
-          ? `<span style="color:var(--rust)">${fmtNum(u.remaining)} (over)</span>`
-          : fmtNum(u.remaining);
+          ? `<span style="color:var(--rust)">${fmtQtyMtr(u.remaining)} (over)</span>`
+          : fmtQtyMtr(u.remaining);
         let statusCell;
         if(r.finished){
           statusCell = `<span class="badge month">Finished</span><br><button class="ghost" data-finish="${r.id}:reopen" style="padding:3px 8px;font-size:12px;margin-top:4px">Reopen</button>`;
@@ -803,11 +803,11 @@ function warpBeamsPanel(){
         }
         const d = beamDetails[r.id] || {isActive:true, shrinkage:0, shrinkagePct:null};
         const shrinkCell = d.isActive ? '—' : (d.shrinkage < 0
-          ? `<span style="color:var(--rust)">${fmtNum(d.shrinkage)} (over)</span>`
-          : fmtNum(d.shrinkage));
+          ? `<span style="color:var(--rust)">${fmtQtyMtr(d.shrinkage)} (over)</span>`
+          : fmtQtyMtr(d.shrinkage));
         const cells = [
           fmtDate(r.date), r.time||'—', escHtml(r.warpType||'—'), `<span class="loom-no">${escHtml(r.loom)}</span>`,
-          fmtNum(r.length), fmtNum(u.woven), remainingCell, shrinkCell,
+          fmtQtyMtr(r.length), fmtQtyMtr(u.woven), remainingCell, shrinkCell,
           purchaseLabel(r.purchaseId), statusCell, actionBtns('warpBeams',r.id)
         ];
         // Flags a beam that's running low on warp so it stands out at a glance in the log —
