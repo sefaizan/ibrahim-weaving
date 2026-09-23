@@ -11,6 +11,18 @@ function textareaField(label, id, extra=''){
 function selectField(label, id, arr, extra=''){
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${opts(arr)}</select></div>`;
 }
+// Two boxes in a single row: whole meters + sixteenths (the same fraction convention used
+// for Stock Position on the Overview page). Kept as two plain number inputs for now — the two
+// values are combined into one decimal number when the form is read (see combineMtr16 in
+// core.js); the stored record itself is unchanged.
+function meterFracField(label, idWhole, idSixteenth, extra=''){
+  return `<div class="field"><label>${label}</label>
+    <div style="display:flex;gap:8px">
+      <input id="${idWhole}" type="number" placeholder="Meters" ${extra} style="flex:2;min-width:0">
+      <input id="${idSixteenth}" type="number" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
+    </div>
+  </div>`;
+}
 // Which employees usually run a given loom, set up once in Settings > Loom Assignments and
 // used to auto-fill the Log Production form when that loom is picked — a convenience default,
 // never a constraint, so the auto-filled dropdowns stay fully editable per entry.
@@ -94,13 +106,13 @@ function productionPanel(){
     <div class="group-label">Employees & Their Meters</div>
     <div class="grid cols-2">
       ${employeeSelectField('Employee 1','p_e1')}
-      ${field('Employee 1 Meters','p_e1m','number')}
+      ${meterFracField('Employee 1 Meters','p_e1m_w','p_e1m_16')}
       ${employeeSelectField('Employee 2 (optional)','p_e2')}
-      ${field('Employee 2 Meters','p_e2m','number')}
+      ${meterFracField('Employee 2 Meters','p_e2m_w','p_e2m_16')}
     </div>
     <div id="p_e3wrap" class="grid cols-2" style="display:none;margin-top:12px">
       ${employeeSelectField('Employee 3','p_e3')}
-      ${field('Employee 3 Meters','p_e3m','number')}
+      ${meterFracField('Employee 3 Meters','p_e3m_w','p_e3m_16')}
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
     <button class="primary" id="addProductionNext">Add &amp; next loom →</button>

@@ -68,8 +68,8 @@ function wirePanel(id){
   }
   if(id==='production'){
     const readProductionForm = ()=>({date:v('p_date'), loom:v('p_loom'), quality:v('p_quality'), qty:Number(v('p_qty')), beam:v('p_beam'),
-      e1:v('p_e1'), e1m:Number(v('p_e1m')||0), e2:v('p_e2'), e2m:Number(v('p_e2m')||0),
-      e3:v('p_e3'), e3m:Number(v('p_e3m')||0)});
+      e1:v('p_e1'), e1m:combineMtr16(v('p_e1m_w'), v('p_e1m_16')), e2:v('p_e2'), e2m:combineMtr16(v('p_e2m_w'), v('p_e2m_16')),
+      e3:v('p_e3'), e3m:combineMtr16(v('p_e3m_w'), v('p_e3m_16'))});
     // Both Add buttons need a date, loom, quality and quantity, so a stray tap can't save a blank
     // entry (which would also count towards wages).
     const productionChecks = rec => [
@@ -136,7 +136,8 @@ function wirePanel(id){
     const showE3 = ()=>{ e3wrap.style.display = 'grid'; e3btn.textContent = '− Remove third employee'; };
     const hideE3 = ()=>{
       e3wrap.style.display = 'none'; e3btn.textContent = '+ Add a third employee';
-      document.getElementById('p_e3').value = ''; document.getElementById('p_e3m').value = '';
+      document.getElementById('p_e3').value = '';
+      document.getElementById('p_e3m_w').value = ''; document.getElementById('p_e3m_16').value = '';
     };
     e3btn.addEventListener('click', ()=>{ e3wrap.style.display === 'none' ? showE3() : hideE3(); });
     // Auto-fill Employee 1/2 from this loom's usual assignment (set in Settings > Loom
@@ -152,11 +153,26 @@ function wirePanel(id){
       document.getElementById('p_e1').value = a?.e1 || '';
       document.getElementById('p_e2').value = a?.e2 || '';
     });
-    wireEnterSubmit(['p_date','p_quality','p_loom','p_qty','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m'],'addProduction');
+    wireEnterSubmit(['p_date','p_quality','p_loom','p_qty','p_e1','p_e1m_w','p_e1m_16','p_e2','p_e2m_w','p_e2m_16','p_e3','p_e3m_w','p_e3m_16'],'addProduction');
     wireDelete('production');
+    // Meters are stored as one decimal number per employee, same as before — only the fieldMap
+    // entries for the plain select/date/etc fields go through the generic value=rec[field] fill.
+    // The Meters/16ths boxes are split out from that decimal by hand in afterFill below.
     wireEditGeneric('production','addProduction','cancelProduction',
-      {p_date:'date',p_quality:'quality',p_loom:'loom',p_qty:'qty',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
-      ()=>{ renderBeamToggle(false); if(v('p_e3')) showE3(); nextBtn.style.display = 'none'; });
+      {p_date:'date',p_quality:'quality',p_loom:'loom',p_qty:'qty',p_beam:'beam',p_e1:'e1',p_e2:'e2',p_e3:'e3'},
+      (rec)=>{
+        renderBeamToggle(false); if(v('p_e3')) showE3(); nextBtn.style.display = 'none';
+        const fillFrac = (idWhole, idSixteenth, val)=>{
+          const wEl = document.getElementById(idWhole), sEl = document.getElementById(idSixteenth);
+          if(!wEl || !sEl) return;
+          if(val===undefined || val===null){ wEl.value = ''; sEl.value = ''; return; }
+          const s = splitMtr16(val);
+          wEl.value = s.whole; sEl.value = s.sixteenths;
+        };
+        fillFrac('p_e1m_w','p_e1m_16', rec.e1m);
+        fillFrac('p_e2m_w','p_e2m_16', rec.e2m);
+        fillFrac('p_e3m_w','p_e3m_16', rec.e3m);
+      });
     const pfQuality = document.getElementById('pf_quality');
     pfQuality.value = FILTER.production || '';
     pfQuality.addEventListener('change', ()=>{ FILTER.production = pfQuality.value; PAGE.production = 1; switchTab('production'); });
@@ -1540,7 +1556,7 @@ function wireEditGeneric(key, addBtnId, cancelBtnId, fieldMap, afterFill){
         const el = document.getElementById(inputId);
         if(el) el.value = rec[fieldMap[inputId]] ?? '';
       });
-      if(afterFill) afterFill();
+      if(afterFill) afterFill(rec);
       const addBtn = document.getElementById(addBtnId);
       if(addBtn) addBtn.textContent = 'Update Entry';
       const cancelBtn = document.getElementById(cancelBtnId);

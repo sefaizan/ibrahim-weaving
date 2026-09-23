@@ -125,6 +125,23 @@ const fmtQtyMtr = n => {
   const t = sixteenths ? `${whole}-${sixteenths}` : `${whole}`;
   return neg && (whole || sixteenths) ? '-' + t : t;
 };
+// Same whole/sixteenths split as fmtQtyMtr above, but returned as numbers rather than a
+// formatted string — used to populate the two-box (Meters / 16ths) production entry fields
+// when editing an existing entry.
+function splitMtr16(n){
+  n = Number(n) || 0;
+  const neg = n < 0; n = Math.abs(n);
+  let whole = Math.trunc(n);
+  let sixteenths = Math.round((n - whole) * 16);
+  if (sixteenths >= 16) { whole += 1; sixteenths -= 16; }
+  return { whole: neg ? -whole : whole, sixteenths };
+}
+// Inverse of splitMtr16 — combines the Meters box and the 16ths box back into one decimal
+// value for storage (the record itself still holds a single decimal number, same as before).
+function combineMtr16(whole, sixteenths){
+  const w = Number(whole) || 0, s = Number(sixteenths) || 0;
+  return w + (w < 0 ? -s : s) / 16;
+}
 // Dates are always STORED as YYYY-MM-DD internally (required for <input type="date"> and
 // for chronological string comparisons throughout the app) — this only reformats a date
 // for on-screen display, as DD-MM-YYYY. Anything that isn't a clean YYYY-MM-DD string
