@@ -3,20 +3,45 @@
 
 /* ---------------- Wages (mirrors the Wages sheet logic exactly) ---------------- */
 
+// The Quality Rates table on the Wages card, scoped to the selected Wage Period: shows the
+// rate in effect as of the period's own To date (falling back to today if To is blank) rather
+// than always "today's current rate" — so picking a past period shows what actually applied
+// back then. "Effective" reflects THAT specific rate entry's own effective-from date, with a
+// note when the rate changed partway through the selected period (production earlier in the
+// period still used the earlier rate — see rateForQualityOn/computeWageMeters for the actual
+// per-entry math; this row is just a summary, not a claim that one flat rate covered the
+// whole range). Re-run on every Wage Period date change (see recalc in wiring.js) as well as
+// on initial panel render.
+function qualityRateRowsHtml(from, to){
+  if(!DATA.qualities.length) return '';
+  const asOf = to || todayStr();
+  return DATA.qualities.map(q=>{
+    const hist = sortedRateHistory(q.name);
+    if(!hist.length) return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(0)}</b></td><td class="note" style="margin:0">—</td></tr>`;
+    const rate = rateForQualityOn(q.name, asOf);
+    let applicable = hist[0];
+    for(const entry of hist){ if(entry.date <= asOf) applicable = entry; else break; }
+    const changedWithin = from && applicable.date > from && applicable.date <= asOf;
+    const since = `since ${fmtDate(applicable.date)}${changedWithin ? ' · changed during this period' : ''}`;
+    return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(rate)}</b></td><td class="note" style="margin:0">${since}</td></tr>`;
+  }).join('');
+}
+// The Rate History list under "Change a Rate" — every effective-from/rate pair ever entered,
+// newest first per quality. Not period-scoped (it's a log, not a period summary), but does
+// need to be regenerated after adding a new rate change (see saveRateChange in wiring.js),
+// since that card lives outside the auto-refreshing #wagesWrap.
+function rateHistoryRowsHtml(){
+  return DATA.qualities.flatMap(q=>
+    sortedRateHistory(q.name).slice().reverse().map(entry=>
+      `<tr><td>${escHtml(q.name)}</td><td>${fmtDate(entry.date)}</td><td class="mono">${fmtRs2(entry.rate)}</td></tr>`)
+  ).join('');
+}
 function wagesPanel(){
   const dates = DATA.production.map(r=>r.date).filter(Boolean).sort();
   const from = DATA.wageFrom || dates[0] || todayStr();
   const to = DATA.wageTo || dates[dates.length-1] || todayStr();
-  const rateRows = DATA.qualities.map(q=>{
-    const hist = sortedRateHistory(q.name);
-    const latest = hist[hist.length-1];
-    const since = latest ? `since ${fmtDate(latest.date)}` : '—';
-    return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(currentRateForQuality(q.name))}</b></td><td class="note" style="margin:0">${since}</td></tr>`;
-  }).join('');
-  const rateHistoryRows = DATA.qualities.flatMap(q=>
-    sortedRateHistory(q.name).slice().reverse().map(entry=>
-      `<tr><td>${escHtml(q.name)}</td><td>${fmtDate(entry.date)}</td><td class="mono">${fmtRs2(entry.rate)}</td></tr>`)
-  ).join('');
+  const rateRows = qualityRateRowsHtml(from, to);
+  const rateHistoryRows = rateHistoryRowsHtml();
   // Inactive employees drop off every table on this page once fully settled (balance and
   // carry-forward both zero) — but stay visible as long as something's still unresolved,
   // so a real outstanding balance never quietly disappears just because someone left.
@@ -66,7 +91,7 @@ function wagesPanel(){
       </div>
       <table style="margin-top:14px">
         <thead><tr><th>Quality</th><th>Current Rate (Rs/m)</th><th>Effective</th></tr></thead>
-        <tbody>${rateRows || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>'}</tbody>
+        <tbody id="wg_rateRowsBody">${rateRows || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>'}</tbody>
       </table>
       <div class="note">Wages = meters produced (own logged meters + their share of any unassigned Difference) × the rate in effect on that production's own date — so changing a rate below only affects entries from its effective date onward; already-settled wages stay locked in. Bonuses are logged per employee below instead of a flat period amount.</div>
       ${formToggleBtn('rateChange','Change a Rate')}
@@ -77,9 +102,9 @@ function wagesPanel(){
         <div class="field"><label>Effective From</label><input type="date" id="rc_date" value="${todayStr()}"></div>
       </div>
       <button class="primary" id="saveRateChange" style="margin-top:12px">Save New Rate</button>
-      ${rateHistoryRows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
+      <div id="wg_rateHistoryWrap">${rateHistoryRows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
       <table style="margin-top:6px"><thead><tr><th>Quality</th><th>Effective From</th><th>Rate (Rs/m)</th></tr></thead>
-      <tbody>${rateHistoryRows}</tbody></table>` : ''}
+      <tbody>${rateHistoryRows}</tbody></table>` : ''}</div>
       </div>
     </div>
     ${openingBalanceCard}
@@ -189,6 +214,23 @@ function renderWages(){
   const grandDiffWages = rows.reduce((s,r)=>s+r.totalDiffWages,0);
   const grandWagesNoBonus = totalWages.reduce((a,b)=>a+b,0);
   const grandWages = grandWagesNoBonus + grandBonus;
+  // A signed amount rendered the same way everywhere on this page: positive still owed
+  // (rust), negative paid ahead / a credit (green), exactly zero in plain bold.
+  const signedCell = (amount, owedWord, creditWord)=> amount > 0.004
+    ? `<span style="color:var(--rust)"><b>${fmtRs(amount)}</b>${owedWord?' '+owedWord:''}</span>`
+    : amount < -0.004
+      ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(amount))}</b>${creditWord?' '+creditWord:''}</span>`
+      : `<b>${fmtRs(0)}</b>`;
+  const balanceRows = wageRelevantEmployees().map(emp=>{
+    const b = computeEmployeeWageBalance(emp.name);
+    const n = computeEmployeeWageNetForPeriod(emp.name, from, to);
+    const carryCell = b.carryForward
+      ? (b.carryForward > 0 ? `${fmtRs2(b.carryForward)} owed` : `${fmtRs2(Math.abs(b.carryForward))} credit`)
+      : '—';
+    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${carryCell}</td>`
+      + `<td>${fmtRs2(n.earned)}</td><td>${n.paid?fmtRs2(n.paid):'—'}</td><td>${signedCell(n.net,'still due','paid ahead')}</td>`
+      + `<td>${signedCell(b.balance,'owed','credit')}</td><td>${b.lastSettled?fmtDate(b.lastSettled):'Never'}</td></tr>`;
+  }).join('');
   wrap.innerHTML = `
     <div class="card"><div class="card-head"><h2>Meters by Quality (${fmtDate(from)} to ${fmtDate(to)})</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Diff = each employee's share of unassigned loom output (Qty − logged employee meters) on that quality's entries, already folded into their totals — shown per quality here so you can verify it, and so it carries that quality's own rate in the wages table below.</p>
@@ -202,6 +244,12 @@ function renderWages(){
       <tbody>${wageRows || '<tr><td class="empty" colspan="99">No employees yet</td></tr>'}</tbody>
       <tfoot><tr><td><b>Total</b></td>${wageIdx.map(i=>`<td><b>${showRs2(totalWages[i])}</b></td>`).join('')}${wageIdx.map(i=>`<td><b>${showRs2(diffWagesByQ[i])}</b></td>`).join('')}<td><b>${showRs2(grandWagesNoBonus - grandDiffWages)}</b></td><td><b>${showRs2(grandWagesNoBonus)}</b></td><td><b>${showRs2(grandBonus)}</b></td><td><b>${showRs2(grandWages)}</b></td></tr></tfoot>
       </table>
+    </div>
+    <div class="card"><div class="card-head"><h2>Employee Wage Balances</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>"Earned" and "Paid" are scoped to the Wage Period selected above only — "Paid (This Period)" is payments dated inside that same range, so "Net (This Period)" reaches exactly 0 once you've paid what was earned there. If you later change a rate for a date inside that period, Earned (and Net) recompute — Paid does not, so Net shows exactly what's newly due. "Balance" is the separate running total since the employee's last settlement (or all-time if never settled), regardless of which period is selected — use that one to see everything currently owed. "Credit" means paid ahead of wages earned. Employee loans are tracked separately in the Loans tab.</p>
+      <div class="log-scroll"><table><thead><tr><th>Employee</th><th>Carried Forward</th><th>Earned (This Period)</th><th>Paid (This Period)</th><th>Net (This Period)</th><th>Balance</th><th>Last Settled</th></tr></thead>
+      <tbody>${balanceRows || '<tr><td class="empty" colspan="7">No employees yet</td></tr>'}</tbody>
+      </table></div>
     </div>
   `;
 }
