@@ -38,6 +38,86 @@ function currentRateForQuality(qualityName){
   return sorted.length ? Number(sorted[sorted.length-1].rate)||0 : 0;
 }
 
+// The wage week the workers are paid by: Friday through Thursday. Returns the Friday-to-Thursday
+// range (YYYY-MM-DD, both ends included) that contains the given date — so on a Friday it is that
+// day through next Thursday, and on a Thursday it is last Friday through that same day.
+function currentWageWeek(dateStr){
+  const WEEK_START_DAY = 5; // Friday (0 = Sunday)
+  const d = new Date(dateStr+'T00:00:00Z');
+  const back = (d.getUTCDay() - WEEK_START_DAY + 7) % 7;
+  const start = new Date(d.getTime() - back*86400000);
+  const end = new Date(start.getTime() + 6*86400000);
+  return {from: start.toISOString().slice(0,10), to: end.toISOString().slice(0,10)};
+}
+
+// This wage week's production and wages per employee, split by quality, for the Overview card.
+// Uses exactly the Wages page's own figures (computeWages: own meters + Difference share, each
+// entry paid at the rate in effect on ITS date), without bonuses. Only employees / qualities with
+// meters that week are listed. rate = the quality's current rate; rateChanged = true when the
+// week's wages weren't all at that rate (a rate change fell inside the week).
+function weeklyWageSummary(dateStr){
+  const week = currentWageWeek(dateStr);
+  const rows = [];
+  computeWages(week.from, week.to).forEach(e=>{
+    const byQuality = e.byQuality.filter(x=>Math.abs(x.meters) > 1e-9).map(x=>{
+      const rate = rateForQualityOn(x.quality, dateStr);
+      return {quality:x.quality, meters:x.meters, wages:x.wages, rate,
+              rateChanged: Math.abs(x.wages - x.meters*rate) > 0.005};
+    });
+    if(!byQuality.length) return;
+    rows.push({employee:e.employee, byQuality,
+      totalMeters: byQuality.reduce((t,x)=>t+x.meters,0),
+      totalWages: byQuality.reduce((t,x)=>t+x.wages,0)});
+  });
+  return {from:week.from, to:week.to, rows,
+    totalMeters: rows.reduce((t,r)=>t+r.totalMeters,0),
+    totalWages: rows.reduce((t,r)=>t+r.totalWages,0)};
+}
+
+// Adds, or (when replaceDate is given) edits, one Rate History entry. A quality holds one entry per
+// effective-from date, so saving a date that already exists overwrites that entry's rate — also when
+// an edit moves an entry onto another entry's date (the edited one replaces it, no duplicate left).
+// Editing an entry that no longer exists just adds it. This CHANGES the ledger (like
+// settleReplacementLinks below); the page code saves afterwards.
+function saveRateHistoryEntry(quality, rate, date, replaceDate){
+  if(!DATA.wageRateHistory) DATA.wageRateHistory = {};
+  const list = DATA.wageRateHistory[quality] = DATA.wageRateHistory[quality] || [];
+  if(replaceDate){
+    const i = list.findIndex(e=>e.date===replaceDate);
+    if(i >= 0) list.splice(i, 1);
+  }
+  const existing = list.find(e=>e.date===date);
+  if(existing) existing.rate = rate; else list.push({date, rate});
+}
+// Which production days a Rate History entry decides, for the "this will change past records" notes
+// on the Wages page: from = its own effective date (null for a quality's earliest entry, which also
+// pays every earlier day), to = the next entry's date (null = no later entry, so it runs onward),
+// and rateAfterRemoval = the rate those days would get if the entry were deleted. null if not found.
+function rateHistorySpan(quality, date){
+  const sorted = sortedRateHistory(quality);
+  const i = sorted.findIndex(e=>e.date===date);
+  if(i < 0) return null;
+  const rest = sorted.filter((_, k)=>k !== i);
+  let after = rest.length ? rest[0] : null;
+  for(const e of rest){ if(e.date <= date) after = e; else break; }
+  return {
+    from: i === 0 ? null : date,
+    to: i < sorted.length - 1 ? sorted[i+1].date : null,
+    rate: Number(sorted[i].rate) || 0,
+    rateAfterRemoval: after ? Number(after.rate) || 0 : 0,
+  };
+}
+// Removes one Rate History entry. A quality's ONLY entry is kept (returns 'last'): without any rate
+// its wages would silently drop to 0. Returns 'ok', 'last' or 'missing'.
+function removeRateHistoryEntry(quality, date){
+  const list = (DATA.wageRateHistory && DATA.wageRateHistory[quality]) || [];
+  const i = list.findIndex(e=>e.date===date);
+  if(i < 0) return 'missing';
+  if(list.length < 2) return 'last';
+  list.splice(i, 1);
+  return 'ok';
+}
+
 // For each employee+quality: meters = their own logged meters, plus their equal share of
 // the per-entry Difference (Qty Produced - sum of all logged employee meters on that
 // entry) — split evenly across however many employees (1, 2, or 3) are logged on it.
@@ -216,6 +296,33 @@ function recoveryFaceAmount(r){
   return cashAmount + bankAmount + cheques.filter(c=>c.status!=='Replaced').reduce((s,c)=>s+(Number(c.amount)||0),0);
 }
 
+// A dyeing unit's "L (AIL)" shortage check on a dispatched lot: they measure a few random
+// rolls and, per the settled market-convention formula, treat every 400 meters sold as
+// worth 1 meter of shortage per reported L. Kept as a plain function (not inlined) so the
+// UI preview and the actual apply-on-confirm step can never drift apart.
+function lShortageMeters(qty, lCount){ return (Number(qty)||0) / 400 * (Number(lCount)||0); }
+// PKR value of that shortage at the lot's own rate — matches the flooring addSale already
+// uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
+function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
+// A Sale entry that's been fully superseded by its L (AIL) adjustment, or returned outright
+// after L exceeded the tolerance, no longer represents real outstanding quantity/money —
+// only the adjusted entry (or nothing, if returned) should count anywhere balances, totals,
+// or breakdowns are computed. The original stays in DATA.sale (and the Sales Log) purely as
+// an audit trail — see lSupersededBy / lAdjustedFromId on the records themselves.
+function activeSaleRows(){ return DATA.sale.filter(s=> s.lStatus!=='applied' && s.lStatus!=='returned'); }
+// Short " (...)" suffix noting a Sale's L (AIL) status on the Client Statement — so the
+// client sees the same check result there as on the Sales Log and the receipt, not just a
+// plain figure that quietly differs from what was originally dispatched.
+function saleStatementLNote(s){
+  if(s.lStatus==='awaiting') return ' (L (AIL) pending)';
+  if(s.lStatus==='ok') return ' (L (AIL): OK)';
+  if(s.lAdjustedFromId){
+    const orig = DATA.sale.find(o=>o.id===s.lAdjustedFromId);
+    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount} L`:''})`;
+  }
+  return '';
+}
+
 // A client's receivable balance right before their most recent sale was entered — i.e. sum
 // of all their earlier sales minus everything received from them up to that sale's date.
 // Sale entries don't carry a time (only a date), so this compares by calendar date, not
@@ -227,7 +334,7 @@ function recoveryFaceAmount(r){
 // the overall (live) Receivable total elsewhere, not this snapshot. Cheques marked Replaced are
 // left out (see recoveryFaceAmount), since their replacement payment is counted on its own.
 function receivableBeforeLastSale(clientName){
-  const sales = DATA.sale.filter(s=>s.client===clientName).slice()
+  const sales = activeSaleRows().filter(s=>s.client===clientName).slice()
     .sort((a,b)=> a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
   if(!sales.length) return null;
   const lastSale = sales[sales.length-1];
@@ -248,7 +355,7 @@ function computeReceivablesAging(){
   const todayD = new Date(todayStr()+'T00:00:00Z');
   const clientNames = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client'], [DATA.recovery,'client']);
   const rows = clientNames.map(name=>{
-    const sales = DATA.sale.filter(s=>s.client===name).slice().sort((a,b)=> a.date.localeCompare(b.date));
+    const sales = activeSaleRows().filter(s=>s.client===name).slice().sort((a,b)=> a.date.localeCompare(b.date));
     let pool = DATA.recovery.filter(r=>r.client===name).reduce((s,r)=>s+recoveryReceivableAmount(r),0);
     const outstanding = [];
     sales.forEach(s=>{
@@ -530,9 +637,9 @@ function saleQtyRateText(s){
 function buildClientLedger(clientName, fromDate, toDate){
   if(!clientName) return null;
   const entries = [];
-  DATA.sale.filter(s=>s.client===clientName).forEach(s=> entries.push({
+  activeSaleRows().filter(s=>s.client===clientName).forEach(s=> entries.push({
     date:s.date, id:s.id, debit:Number(s.amount)||0, credit:0,
-    detail:`Sale — ${[s.quality, saleQtyRateText(s)].filter(Boolean).join(', ')}`
+    detail:`Sale — ${[s.quality, saleQtyRateText(s)].filter(Boolean).join(', ')}${saleStatementLNote(s)}`
   }));
   DATA.recovery.filter(r=>r.client===clientName).forEach(r=> entries.push({
     date:r.date, id:r.id, debit:0, credit:recoveryReceivableAmount(r),
@@ -677,11 +784,11 @@ function computeStats(monthVal){
   const producedCum = sumWhere(DATA.production,'qty',null,cumEnd);
   const producedMonth = start ? sumWhere(DATA.production,'qty',start,end) : producedCum;
 
-  const soldCum = sumWhere(DATA.sale,'qty',null,cumEnd);
-  const soldMonth = start ? sumWhere(DATA.sale,'qty',start,end) : soldCum;
+  const soldCum = sumWhere(activeSaleRows(),'qty',null,cumEnd);
+  const soldMonth = start ? sumWhere(activeSaleRows(),'qty',start,end) : soldCum;
 
-  const salesAmtCum = sumWhere(DATA.sale,'amount',null,cumEnd);
-  const salesAmtMonth = start ? sumWhere(DATA.sale,'amount',start,end) : salesAmtCum;
+  const salesAmtCum = sumWhere(activeSaleRows(),'amount',null,cumEnd);
+  const salesAmtMonth = start ? sumWhere(activeSaleRows(),'amount',start,end) : salesAmtCum;
 
   // Cheque handling: a Bounced cheque was never really paid, so it's excluded everywhere.
   // A Pending cheque counts toward what a client has settled (Receivable) since they've
@@ -733,7 +840,7 @@ function computeStats(monthVal){
 
   // Stock breakdown by quality (always cumulative to period end, like overall stock)
   const producedByQ = sumWhereBy(DATA.production,'quality','qty',null,cumEnd);
-  const soldByQ = sumWhereBy(DATA.sale,'quality','qty',null,cumEnd);
+  const soldByQ = sumWhereBy(activeSaleRows(),'quality','qty',null,cumEnd);
   const qualityNames = orderedGroupNames(DATA.qualities.map(q=>q.name), [DATA.production,'quality'], [DATA.sale,'quality']);
   const stockByQuality = qualityNames.map(name=>{
     const produced = producedByQ[name]||0, sold = soldByQ[name]||0;
@@ -741,8 +848,8 @@ function computeStats(monthVal){
   }).filter(r=> r.produced || r.sold);
 
   // Sales & receivables breakdown by client
-  const salesByC = sumWhereBy(DATA.sale,'client','amount',null,cumEnd);
-  const salesByCMonth = start ? sumWhereBy(DATA.sale,'client','amount',start,end) : salesByC;
+  const salesByC = sumWhereBy(activeSaleRows(),'client','amount',null,cumEnd);
+  const salesByCMonth = start ? sumWhereBy(activeSaleRows(),'client','amount',start,end) : salesByC;
   const receivedByC = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, cumEnd);
   const receivedByCMonth = start ? sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, start, end) : receivedByC;
   const bouncedByC = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, cumEnd);
@@ -765,8 +872,8 @@ function computeStats(monthVal){
   }).filter(r=> r.sales || r.received || r.receivable || r.bounced);
 
   // Client x Quality breakdown — quantity (mtr) sold to each client, split by quality
-  const salesByClientQtyCum = sumWhereBy2(DATA.sale,'client','quality','qty',null,cumEnd);
-  const salesByClientQtyMonth = start ? sumWhereBy2(DATA.sale,'client','quality','qty',start,end) : salesByClientQtyCum;
+  const salesByClientQtyCum = sumWhereBy2(activeSaleRows(),'client','quality','qty',null,cumEnd);
+  const salesByClientQtyMonth = start ? sumWhereBy2(activeSaleRows(),'client','quality','qty',start,end) : salesByClientQtyCum;
   const clientQualityBreakdown = clientNames.map(name=>{
     const byQMap = (monthVal ? salesByClientQtyMonth : salesByClientQtyCum)[name] || {};
     const byQuality = qualityNames.map(q=>({quality:q, qty: byQMap[q]||0}));

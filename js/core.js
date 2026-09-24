@@ -125,6 +125,13 @@ const fmtQtyMtr = n => {
   const t = sixteenths ? `${whole}-${sixteenths}` : `${whole}`;
   return neg && (whole || sixteenths) ? '-' + t : t;
 };
+// L (AIL) shortage meters are a computed result, not a physically measured piece of cloth,
+// so they're shown as a plain decimal (up to 2dp, trailing zeros trimmed) rather than run
+// through fmtQtyMtr's sixteenths rounding, which would misrepresent the exact figure.
+const fmtQtyPlain = n => {
+  n = Number(n) || 0;
+  return (Math.round(n*100)/100).toString();
+};
 // Same whole/sixteenths split as fmtQtyMtr above, but returned as numbers rather than a
 // formatted string — used to populate the two-box (Meters / 16ths) production entry fields
 // when editing an existing entry.
@@ -634,6 +641,7 @@ async function save(){
     }
   }
   UNDO_PREV_PARTS = curParts; // baseline for detecting whatever gets saved *next*
+  if(typeof updateWeekBadge === 'function') updateWeekBadge(); // header "Week Rs …" pill follows every change
   if(typeof autoBackupSchedule === 'function') autoBackupSchedule(); // emails a backup shortly after changes (Backup & Restore > Automatic email backup)
 }
 async function load(){

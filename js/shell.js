@@ -128,11 +128,29 @@ function restoredTab(){
     return TABS.some(t=>t.id===id) ? id : 'overview';
   }catch(e){ return 'overview'; }
 }
+// Header pill above the version badge: total wages (no bonuses) for the current wage week,
+// Friday to Thursday, worked out from today's date so it rolls over by itself each Friday. Same
+// figures as the Wages page for that range (see weeklyWageSummary in calc.js). Refreshed on every
+// tab render, after every save, and when the app comes back to the foreground.
+function updateWeekBadge(){
+  const el = document.getElementById('weekBadge');
+  if(!el) return;
+  try{
+    if((typeof encEnabled === 'function' && encEnabled() && !ENC_DEK) || !DATA || !Array.isArray(DATA.production)){ el.hidden = true; return; }
+    const w = weeklyWageSummary(todayStr());
+    el.textContent = 'Week ' + fmtRs(w.totalWages);
+    const tip = `Wages this week, ${fmtDate(w.from)} (Fri) to ${fmtDate(w.to)} (Thu): ${fmtRs(w.totalWages)} for ${fmtQtyMtr(w.totalMeters)} m. Bonuses not included.`;
+    el.title = tip; el.setAttribute('aria-label', tip);
+    el.hidden = false;
+  }catch(e){ el.hidden = true; }
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) updateWeekBadge(); });
 function switchTab(id){
   CURRENT_TAB = id;
   rememberTab(id);
   renderNav(id);
   refreshBackupStrip();
+  updateWeekBadge();
   closeDrawer();
   const scroller = document.getElementById('panels');
   document.getElementById('panels').innerHTML = renderPanel(id);

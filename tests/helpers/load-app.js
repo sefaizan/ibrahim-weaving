@@ -47,6 +47,9 @@ function loadApp(){
     setData(patch){ ctx.DATA = Object.assign(emptyData(), patch || {}); },
     setToday(dateStr){ ctx.__today = dateStr; },
     setNow(hhmm){ ctx.__now = hhmm; },
+    // For tests that change a record in place (like the Save button does) and then ask what follows.
+    getData(){ return ctx.DATA; },
+    replacePayment(id, change){ const p = ctx.DATA.recovery.find(r => r.id === id); change(p); return p; },
   };
   // Every function declared in calc.js becomes app.<name>. Results are copied into ordinary
   // objects/arrays (structuredClone keeps NaN and undefined intact) so tests can compare them

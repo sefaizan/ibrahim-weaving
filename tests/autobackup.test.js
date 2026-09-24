@@ -12,6 +12,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const HOUR = 3600000;
+// Local-time moments, so these tests behave the same in any time zone and at any time of day.
+const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const yesterdayNoon = () => { const d = startOfToday(); d.setHours(-12, 0, 0, 0); return d; };
 
 function load(){
   const store = new Map();
@@ -21,10 +24,13 @@ function load(){
     removeItem: k => { store.delete(k); },
   };
   const calls = [];
+  const timers = [];   // fake setTimeout: nothing fires by itself; tests look at what was scheduled
   const world = { fetchImpl: async () => ({ ok: true, status: 200 }) };
   const ctx = vm.createContext({
     localStorage, crypto: globalThis.crypto, TextEncoder, TextDecoder, Uint8Array, AbortController,
-    console, JSON, Date, Promise, Number, String, Object, Array, Math, setTimeout, clearTimeout,
+    console, JSON, Date, Promise, Number, String, Object, Array, Math,
+    setTimeout: (fn, ms) => { const id = timers.length + 1; timers.push({ id, fn, ms, live: true }); return id; },
+    clearTimeout: id => { const t = timers.find(x => x.id === id); if(t) t.live = false; },
     document: { getElementById: () => null, addEventListener(){} },
     window: { addEventListener(){} },
     fetch: async (url, init) => { calls.push({ url, init, body: JSON.parse(init.body) }); return world.fetchImpl(url, init); },
@@ -56,8 +62,10 @@ function load(){
   const configure = (over) => run(`autoBackupSetConfig(${JSON.stringify(Object.assign(
     { on: true, url: 'https://backup.example.netlify.app/api/backup', key: 'k3y', pw: '' }, over))})`);
   const addEntries = (n) => run(`DATA.sale.push(...Array.from({length:${n}}, (_, i) => ({id:'s'+(DATA.sale.length+i)})))`);
-  const setLastOk = (msAgo, hash) => run(`autoBackupSetState({lastOkAt: new Date(Date.now() - ${msAgo}).toISOString()${hash ? `, lastHash: ${JSON.stringify(hash)}` : ''}})`);
-  return { ctx, store, calls, world, run, configure, addEntries, setLastOk };
+  // Pretend the last daily check / send happened at a given moment (local time), and its ledger fingerprint.
+  const setLastOk = (when, hash) => run(`autoBackupSetState({lastOkAt: ${JSON.stringify(when.toISOString())}, lastCheckDay: autoBackupDayKey(new Date(${when.getTime()}))${hash ? `, lastHash: ${JSON.stringify(hash)}` : ''}})`);
+  const liveTimers = () => timers.filter(x => x.live && x.ms > 1000 && x.ms !== 45000); // ignore the 45 s network time-out
+  return { ctx, store, calls, world, run, configure, addEntries, setLastOk, timers, liveTimers };
 }
 
 describe('when a backup is sent', () => {
@@ -81,26 +89,69 @@ describe('when a backup is sent', () => {
     const r = await t.run('autoBackupSend(true)');
     assert.equal(r.skipped, true); assert.equal(t.calls.length, 0);
   });
-  test('the first backup goes out at once; it is not repeated when nothing changed', async () => {
+  test('the first backup goes out at once; the next day it is not repeated when nothing changed', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);
     assert.equal((await t.run('autoBackupSend(false)')).ok, true);
     assert.equal(t.calls.length, 1);
-    await t.setLastOk(10 * HOUR);   // long enough ago, but the ledger is identical
+    await t.setLastOk(yesterdayNoon());   // a new day has started, but the ledger is identical
     const again = await t.run('autoBackupSend(false)');
     assert.equal(again.skipped, true); assert.equal(t.calls.length, 1);
+    assert.match(again.message, /No changes/);
   });
-  test('a change is held back until AUTO_BACKUP_MIN_HOURS have passed, then sent', async () => {
+  test('at most one automatic backup per day: a change made today waits until after midnight', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);
-    await t.run('autoBackupSend(false)');
-    await t.addEntries(1);
-    await t.setLastOk(1 * HOUR);
-    const soon = await t.run('autoBackupSend(false)');
-    assert.equal(soon.tooSoon, true);
-    assert.ok(soon.waitMs > 1.9 * HOUR && soon.waitMs <= 2 * HOUR, 'tells the caller how long to wait');
-    assert.equal(t.calls.length, 1);
-    await t.setLastOk(4 * HOUR);
+    await t.run('autoBackupSend(false)');            // today's backup
+    await t.addEntries(1);                           // a later entry today
+    const same = await t.run('autoBackupSend(false)');
+    assert.equal(same.tooSoon, true);
+    assert.equal(t.calls.length, 1, 'nothing more is sent the same day');
+    assert.ok(same.waitMs > 0 && same.waitMs <= 25 * HOUR, 'tells the caller how long until midnight');
+    const untilMidnight = new Date(Date.now() + same.waitMs);
+    assert.equal(untilMidnight.getHours(), 0); assert.equal(untilMidnight.getMinutes(), 0);
+    // the next day the change goes out
+    await t.setLastOk(yesterdayNoon(), (await t.run('autoBackupState()')).lastHash);
     assert.equal((await t.run('autoBackupSend(false)')).ok, true);
     assert.equal(t.calls.length, 2);
+  });
+  test('a day with no change is still counted as checked, so opening the app twice does not resend', async () => {
+    const t = load(); await t.configure(); await t.addEntries(3);
+    await t.run('autoBackupSend(false)');
+    await t.setLastOk(yesterdayNoon());
+    await t.run('autoBackupSend(false)');            // new day, nothing changed: skipped, day marked checked
+    await t.addEntries(1);                           // entry later the same day
+    const r = await t.run('autoBackupSend(false)');
+    assert.equal(r.tooSoon, true); assert.equal(t.calls.length, 1);
+  });
+  test('a failed send does not use up the day, so the next wake-up tries again', async () => {
+    const t = load(); await t.configure(); await t.addEntries(3);
+    t.world.fetchImpl = async () => { throw new TypeError('Failed to fetch'); };
+    assert.equal((await t.run('autoBackupSend(false)')).ok, false);
+    t.world.fetchImpl = async () => ({ ok: true, status: 200 });
+    assert.equal((await t.run('autoBackupSend(false)')).ok, true);
+    assert.equal(t.calls.length, 2);
+  });
+  test('saving an entry sends nothing by itself; a single check is set for just after midnight', async () => {
+    const t = load(); await t.configure(); await t.addEntries(3);
+    await t.run('autoBackupSchedule()');
+    await t.run('autoBackupSchedule()');             // every save calls this: still only one timer
+    assert.equal(t.calls.length, 0);
+    const live = t.liveTimers();
+    assert.equal(live.length, 1);
+    const at = new Date(Date.now() + live[0].ms);
+    assert.equal(at.getHours(), 0); assert.equal(at.getMinutes(), 0);
+    assert.ok(live[0].ms > 1000 && live[0].ms <= 25 * HOUR);
+  });
+  test('when the midnight check runs it sends, and sets up the next midnight', async () => {
+    const t = load(); await t.configure(); await t.addEntries(3);
+    await t.setLastOk(yesterdayNoon(), 'old-fingerprint');
+    const r = await t.run('autoBackupRun()');
+    assert.equal(r.ok, true); assert.equal(t.calls.length, 1);
+    assert.equal(t.liveTimers().length, 1);
+  });
+  test('nothing is scheduled when automatic backup is off', async () => {
+    const t = load(); await t.configure({ on: false });
+    await t.run('autoBackupSchedule()');
+    assert.equal(t.liveTimers().length, 0);
   });
   test('"Send now" ignores both the wait and the unchanged check', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);

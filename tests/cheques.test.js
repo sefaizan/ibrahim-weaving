@@ -28,11 +28,11 @@ describe('one payment record, split by cheque status', () => {
   test('Bounced bucket = Bounced cheques only (not Replaced)', () => {
     closeTo(app.recoveryBouncedAmount(rec), 100);
   });
-  test('face value counts every cheque, whatever became of it', () => {
-    closeTo(app.recoveryFaceAmount(rec), 2150);
+  test('face value counts every cheque, even one that bounced, but not a Replaced one (its replacement is a separate payment)', () => {
+    closeTo(app.recoveryFaceAmount(rec), 2100);
   });
-  test('nothing is lost: face value = received + bounced + replaced', () => {
-    closeTo(app.recoveryFaceAmount(rec), app.recoveryReceivableAmount(rec) + app.recoveryBouncedAmount(rec) + 50);
+  test('face value = received + bounced (a Replaced cheque is never counted twice)', () => {
+    closeTo(app.recoveryFaceAmount(rec), app.recoveryReceivableAmount(rec) + app.recoveryBouncedAmount(rec));
   });
   test('cheque amounts saved as text still add up', () => {
     const r = payment({ cheques: [cheque('300', 'Pending'), cheque('200', 'Bounced')] });

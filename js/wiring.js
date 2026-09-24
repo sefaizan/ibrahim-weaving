@@ -294,11 +294,38 @@ function wirePanel(id){
         [keepAmount || rate > 0, rateMsg, 's_rate'],
       ])) return;
       const rec = {date:v('s_date'), invoice:v('s_inv'), client:v('s_client'), quality:v('s_quality'), qty, rate, amount: keepAmount ? Number(existing.amount) : Math.floor(qty*rate + 1e-6), dyeing:v('s_dyeing'), desc:v('s_desc')};
+      // An L (AIL)-applied original, a returned lot, or an adjustment entry itself (lAdjustedFromId)
+      // has its qty/rate/amount tied to a linked record via that exact math (shortage/deduction
+      // computed from THIS qty, or the adjustment's qty/amount computed as original-minus-shortage).
+      // Letting a plain edit silently change those numbers would desync the pair — the deduction
+      // and the adjusted entry would keep reflecting the old, now-wrong figures. So for these three
+      // cases, qty/rate/amount are kept as they were; only the other fields (date, invoice, client,
+      // quality, dyeing, description) are editable. To actually change qty/rate on an L-tracked sale,
+      // fix it via Return Lot / a fresh Confirm L, not a plain edit.
+      const isLLocked = !!(existing && (existing.lStatus==='applied' || existing.lStatus==='returned' || existing.lAdjustedFromId));
+      if(isLLocked){
+        rec.qty = Number(existing.qty); rec.rate = Number(existing.rate)||rate; rec.amount = Number(existing.amount);
+      }
       if(EDITING && EDITING.key==='sale'){
         const idx = DATA.sale.findIndex(r=>r.id===EDITING.id);
-        if(idx>-1) DATA.sale[idx] = {...DATA.sale[idx], ...rec};
+        if(idx>-1){
+          DATA.sale[idx] = {...DATA.sale[idx], ...rec};
+          // Same rule as a brand-new Sale: naming a Dyeing unit starts L (AIL) tracking — this
+          // covers a Sale entered before this feature existed, or one where Dyeing is only
+          // added after the fact. Only if it was never tracked before (don't re-arm one that's
+          // already Awaiting/OK/Applied/Returned just because it was edited again) — and never
+          // for an adjustment entry (lAdjustedFromId), which has no lStatus of its own but is
+          // already the resolved outcome of a completed L check, not a fresh untracked sale.
+          if(DATA.sale[idx].dyeing && !DATA.sale[idx].lStatus && !DATA.sale[idx].lAdjustedFromId) DATA.sale[idx].lStatus = 'awaiting';
+        }
         EDITING = null;
+        if(isLLocked) showToast('Qty/Rate/Amount are locked on this entry (linked to an L (AIL) shortage record) — only the other fields were updated.');
       } else {
+        // A lot going out to a dyeing unit is the one that comes back with an "L (AIL)"
+        // shortage call — see lShortageMeters/lDeductionAmount in calc.js — so a fresh Sale
+        // naming a dyeing unit starts life "Awaiting L (AIL)" until that call is logged via
+        // the Awaiting L (AIL) card. A sale with no dyeing unit skips L tracking entirely.
+        if(rec.dyeing) rec.lStatus = 'awaiting';
         DATA.sale.push({id:uid(), ...rec}); PAGE.sale = 1;
       }
       await save(); switchTab('sale');
@@ -315,6 +342,7 @@ function wirePanel(id){
     sfQuality.value = FILTER.saleQuality || '';
     sfClient.addEventListener('change', ()=>{ FILTER.saleClient = sfClient.value; PAGE.sale = 1; switchTab('sale'); });
     sfQuality.addEventListener('change', ()=>{ FILTER.saleQuality = sfQuality.value; PAGE.sale = 1; switchTab('sale'); });
+    wireLConfirm();
   }
   if(id==='recovery'){
     // Cheque rows are managed as in-memory state and rebuilt into the DOM on every change —
@@ -674,34 +702,122 @@ function wirePanel(id){
     };
     document.getElementById('wg_from').addEventListener('change', ()=>{ recalc(true); fillWageAmount(); updateWagePaymentHelper(); });
     document.getElementById('wg_to').addEventListener('change', ()=>{ recalc(true); fillWageAmount(); updateWagePaymentHelper(); });
-    const saveRateBtn = document.getElementById('saveRateChange');
-    if(saveRateBtn) saveRateBtn.onclick = async ()=>{
-      const quality = v('rc_quality');
+    // Rate History edit / delete. While an entry is being edited RATE_EDITING holds its quality +
+    // date, and the "Change a Rate" form is filled with it (the quality is locked).
+    RATE_EDITING = null;
+    const rateBtn = document.getElementById('saveRateChange');
+    const rateCancel = document.getElementById('cancelRateChange');
+    const resetRateForm = ()=>{
+      RATE_EDITING = null;
+      const q = document.getElementById('rc_quality'); if(q) q.disabled = false;
+      if(rateBtn) rateBtn.textContent = 'Save New Rate';
+      if(rateCancel) rateCancel.style.display = 'none';
+      const en = document.getElementById('rc_editNote'); if(en) en.hidden = true;
+    };
+    // The "removing this will change past wages" note (one at a time, owned by the armed button).
+    const hideDelNote = (owner)=>{
+      const n = document.getElementById('rh_delNote');
+      if(n && (!owner || n.dataset.owner === owner)){ n.hidden = true; n.dataset.owner = ''; }
+    };
+    const refreshRateViews = ()=>{
+      const rateBody = document.getElementById('wg_rateRowsBody');
+      if(rateBody) rateBody.innerHTML = qualityRateRowsHtml(v('wg_from'), v('wg_to')) || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>';
+      const histWrap = document.getElementById('wg_rateHistoryWrap');
+      if(histWrap){ histWrap.innerHTML = rateHistoryBlockHtml(); wireRateHistory(); }
+      hideDelNote();
+    };
+    const wireRateHistory = ()=>{
+      document.querySelectorAll('[data-rh-edit]').forEach(btn=>{
+        btn.onclick = ()=>{
+          const quality = btn.dataset.rhQ, date = btn.dataset.rhD;
+          const entry = ((DATA.wageRateHistory||{})[quality]||[]).find(e=>e.date===date);
+          if(!entry) return;
+          RATE_EDITING = {quality, date};
+          OPEN_FORMS.add('rateChange');
+          const body = document.querySelector('[data-form-body="rateChange"]'); if(body) body.style.display = 'block';
+          const tog = document.querySelector('[data-toggle-form="rateChange"]'); if(tog) tog.textContent = 'Hide Change a Rate';
+          const q = document.getElementById('rc_quality'); q.value = quality; q.disabled = true;
+          document.getElementById('rc_rate').value = entry.rate;
+          document.getElementById('rc_date').value = entry.date;
+          rateBtn.textContent = 'Update Rate';
+          rateCancel.style.display = 'inline-block';
+          const span = rateHistorySpan(quality, date);
+          const en = document.getElementById('rc_editNote');
+          if(en && span){
+            en.textContent = `Heads-up: editing this ${quality} rate changes the wages of production ${rateSpanText(span)}, including past periods that are already done. Earned and Net will recalculate for those days; payments already logged do not change, so Net will show the difference.`;
+            en.hidden = false;
+          }
+          q.scrollIntoView({behavior:'smooth', block:'center'});
+        };
+      });
+      document.querySelectorAll('[data-rh-del]').forEach(btn=>{
+        // Same two-tap "arm, then Confirm" pattern as every other Remove button (native confirm() is blocked).
+        btn.onclick = async ()=>{
+          const quality = btn.dataset.rhQ, date = btn.dataset.rhD, owner = quality + '|' + date;
+          if(!btn.dataset.armed){
+            btn.dataset.armed = '1';
+            btn.dataset.originalHtml = btn.innerHTML;
+            btn.classList.add('armed');
+            const lbl = btn.querySelector('.lbl'); if(lbl) lbl.textContent = 'Confirm';
+            btn.style.color = 'var(--red)'; btn.style.borderColor = 'var(--red)'; btn.style.background = '#fff';
+            const span = rateHistorySpan(quality, date);
+            const dn = document.getElementById('rh_delNote');
+            if(dn && span){
+              const only = (DATA.wageRateHistory[quality]||[]).length < 2;
+              dn.textContent = only
+                ? `${quality} has only this one rate, so it can't be removed. Use Edit to change it (that also changes past wages from its date onward), or add another rate first.`
+                : span.rateAfterRemoval === span.rate
+                ? `Heads-up: removing this ${quality} rate changes the wages of production ${rateSpanText(span)}, including past periods that are already done. Earned and Net will recalculate; payments already logged do not change. Tap Confirm to remove it.`
+                : `Heads-up: removing this ${quality} rate changes the wages of production ${rateSpanText(span)}: those days will use ${fmtRs2(span.rateAfterRemoval)}/m instead of ${fmtRs2(span.rate)}/m, including past periods that are already done. Earned and Net will recalculate; payments already logged do not change, so Net will show the difference. Tap Confirm to remove it.`;
+              dn.dataset.owner = owner; dn.hidden = false;
+            }
+            // Longer than the plain Remove buttons (3s) so the note above can actually be read.
+            btn._disarmTimer = setTimeout(()=>{
+              if(btn.dataset.armed){
+                delete btn.dataset.armed; btn.classList.remove('armed');
+                btn.innerHTML = btn.dataset.originalHtml;
+                btn.style.color = ''; btn.style.borderColor = ''; btn.style.background = '';
+                hideDelNote(owner);
+              }
+            }, 8000);
+            return;
+          }
+          clearTimeout(btn._disarmTimer);
+          haptic(25);
+          hideDelNote(owner);
+          const result = removeRateHistoryEntry(quality, date);
+          if(result === 'last'){
+            showToast(`${quality} needs at least one rate. Edit this one, or add a new rate first.`);
+            refreshRateViews();
+            return;
+          }
+          if(RATE_EDITING && RATE_EDITING.quality===quality && RATE_EDITING.date===date) resetRateForm();
+          await save();
+          renderWages();
+          refreshRateViews();
+        };
+      });
+    };
+    if(rateCancel) rateCancel.onclick = ()=>{ resetRateForm(); switchTab('wages'); };
+    if(rateBtn) rateBtn.onclick = async ()=>{
+      const quality = RATE_EDITING ? RATE_EDITING.quality : v('rc_quality');
       const rate = Number(v('rc_rate'));
       const date = v('rc_date') || todayStr();
       if(!requireFields([
         [quality, 'Pick a quality first.', 'rc_quality'],
         [v('rc_rate') !== '' && rate >= 0, 'Enter the new rate first (0 or more).', 'rc_rate'],
       ])) return;
-      DATA.wageRateHistory = DATA.wageRateHistory || {};
-      DATA.wageRateHistory[quality] = DATA.wageRateHistory[quality] || [];
-      // Same effective date entered twice just overwrites that date's rate rather than
-      // stacking duplicate history entries.
-      const existing = DATA.wageRateHistory[quality].find(e=>e.date===date);
-      if(existing) existing.rate = rate;
-      else DATA.wageRateHistory[quality].push({date, rate});
+      // Same effective date entered twice just overwrites that date's rate rather than stacking
+      // duplicate history entries; an edit replaces the entry it started from.
+      saveRateHistoryEntry(quality, rate, date, RATE_EDITING ? RATE_EDITING.date : null);
+      const wasEditing = !!RATE_EDITING;
+      resetRateForm();
       await save();
       renderWages();
-      const rateBody = document.getElementById('wg_rateRowsBody');
-      if(rateBody) rateBody.innerHTML = qualityRateRowsHtml(v('wg_from'), v('wg_to')) || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>';
-      const histWrap = document.getElementById('wg_rateHistoryWrap');
-      if(histWrap){
-        const rows = rateHistoryRowsHtml();
-        histWrap.innerHTML = rows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
-      <table style="margin-top:6px"><thead><tr><th>Quality</th><th>Effective From</th><th>Rate (Rs/m)</th></tr></thead>
-      <tbody>${rows}</tbody></table>` : '';
-      }
+      refreshRateViews();
+      if(wasEditing){ document.getElementById('rc_rate').value = ''; document.getElementById('rc_date').value = todayStr(); }
     };
+    wireRateHistory();
     renderWages();
 
     const obBtn = document.getElementById('saveOpeningBalances');
@@ -1469,6 +1585,7 @@ function tabForKey(key){
   if(key==='loanPayments') return 'loans';
   return key;
 }
+let RATE_EDITING = null; // {quality, date} of the Rate History entry being edited on the Wages page
 function wireDelete(key){
   document.querySelectorAll(`[data-del^="${key}:"]`).forEach(btn=>{
     // Native confirm()/alert() dialogs are blocked in the sandboxed preview this
@@ -1478,13 +1595,20 @@ function wireDelete(key){
       if(!btn.dataset.armed){
         btn.dataset.armed = '1';
         btn.dataset.originalHtml = btn.innerHTML;
-        btn.textContent = 'Confirm?';
+        // Keep the icon+label structure (rather than replacing it with plain text) and add
+        // .armed so the CSS can widen the button and reveal the label on phones, where a
+        // rowbtn is normally a fixed-width icon-only square — plain text there just gets
+        // clipped by the button's own overflow:hidden.
+        btn.classList.add('armed');
+        const lbl = btn.querySelector('.lbl');
+        if(lbl) lbl.textContent = 'Confirm'; else btn.textContent = 'Confirm';
         btn.style.color = 'var(--red)';
         btn.style.borderColor = 'var(--red)';
         btn.style.background = '#fff';
         btn._disarmTimer = setTimeout(()=>{
           if(btn.dataset.armed){
             delete btn.dataset.armed;
+            btn.classList.remove('armed');
             btn.innerHTML = btn.dataset.originalHtml;
             btn.style.color = '';
             btn.style.borderColor = '';
@@ -1527,6 +1651,70 @@ function wireBeamFinishToggle(){
         delete rec.finishedTime;
       }
       await save(); switchTab('warpbeams');
+    };
+  });
+}
+// Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): a live shortage/
+// deduction preview as the L count is typed, "No Shortage" to clear the wait, "Confirm L" to
+// apply the confirmed market formula (lShortageMeters/lDeductionAmount in calc.js) by creating
+// a linked adjustment entry — the original stays in the Sales Log as an audit trail but is
+// excluded from every balance/total via activeSaleRows() — and "Return Lot" to record the lot
+// as rejected outright. L above 5 isn't calculated yet, so Confirm is refused past that
+// tolerance; Return Lot is the only option until the double-L formula is settled.
+function wireLConfirm(){
+  const rateOf = rec => rec.rate || (rec.qty ? (Number(rec.amount)||0)/rec.qty : 0);
+  document.querySelectorAll('[data-lcount-input]').forEach(input=>{
+    const saleId = input.dataset.lcountInput;
+    const rec = DATA.sale.find(r=>r.id===saleId);
+    const preview = document.querySelector(`[data-l-preview="${saleId}"]`);
+    if(!rec || !preview) return;
+    input.addEventListener('input', ()=>{
+      const n = Number(input.value);
+      if(!(n > 0)){ preview.textContent = ''; return; }
+      if(n > 5){ preview.textContent = "L > 5 needs the double-L formula — not set up yet. Use Return Lot instead."; return; }
+      const shortage = lShortageMeters(rec.qty, n);
+      const deduction = lDeductionAmount(shortage, rateOf(rec));
+      preview.textContent = `Shortage: ${fmtQtyPlain(shortage)} mtr → Deduction: ${fmtRs(deduction)}`;
+    });
+  });
+  document.querySelectorAll('[data-l-ok]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const rec = DATA.sale.find(r=>r.id===btn.dataset.lOk);
+      if(!rec) return;
+      rec.lStatus = 'ok'; rec.lCount = 0;
+      await save(); switchTab('sale');
+    };
+  });
+  document.querySelectorAll('[data-l-return]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const rec = DATA.sale.find(r=>r.id===btn.dataset.lReturn);
+      if(!rec) return;
+      const input = document.querySelector(`[data-lcount-input="${rec.id}"]`);
+      rec.lStatus = 'returned'; rec.lCount = Number(input && input.value) || 0;
+      await save(); switchTab('sale');
+    };
+  });
+  document.querySelectorAll('[data-l-confirm]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const rec = DATA.sale.find(r=>r.id===btn.dataset.lConfirm);
+      if(!rec) return;
+      const input = document.querySelector(`[data-lcount-input="${rec.id}"]`);
+      const n = Number(input && input.value);
+      if(!(n > 0)){ showToast('Enter the L (AIL) count first.'); return; }
+      if(n > 5){ showToast("L > 5 isn't calculated yet — use Return Lot for now."); return; }
+      const rate = rateOf(rec);
+      const shortage = lShortageMeters(rec.qty, n);
+      const deduction = lDeductionAmount(shortage, rate);
+      const adjusted = {
+        id: uid(), date: rec.date, invoice: rec.invoice, client: rec.client, quality: rec.quality,
+        qty: Number(rec.qty) - shortage, rate, amount: (Number(rec.amount)||0) - deduction,
+        dyeing: rec.dyeing,
+        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr, ${n} L (AIL)`].filter(Boolean).join(' — '),
+        lAdjustedFromId: rec.id,
+      };
+      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = shortage; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
+      DATA.sale.push(adjusted);
+      await save(); switchTab('sale');
     };
   });
 }

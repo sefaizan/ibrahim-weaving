@@ -9,7 +9,7 @@
      meta tag below, the header's visible version badge, package.json, and the service worker's
      CACHE_VERSION will disagree with each other:
        1. This app-build content (any short unique label works, e.g. a date + fix name).
-       2. The #appVersionTag text — a small pill in the bottom-right corner of the header,
+       2. The #appVersionTag text — a small pill at the right end of the header (under the "Week Rs …" pill),
           <header class="appbar"> below — plain "vX.Y.Z", so opening the app confirms which
           build is actually running, even if the "app updated" toast doesn't fire (e.g. after
           a fresh install/reinstall, which starts with no prior build to compare against).
@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-23-20-16ths-format-everywhere">
+<meta name="app-build" content="2026-09-25-header-week-wages">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -169,12 +169,20 @@
   .appbar-titles{ flex:1 1 auto; min-width:0; padding-left:6px; }
   .appbar-titles h1{ font-size:19px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .appbar-titles .sub{ color:rgba(255,255,255,0.8); font-size:11px; font-weight:500; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .app-version{
-    position:absolute; right:8px; bottom:4px; z-index:1; pointer-events:none;
-    display:inline-block; padding:2px 8px; border-radius:20px;
-    background:rgba(255,255,255,0.16); color:rgba(255,255,255,0.85);
-    font-size:9px; font-weight:600; white-space:nowrap; letter-spacing:0.2px;
+  /* Right end of the header: this wage week's wages pill stacked right above the version pill. */
+  .appbar-meta{ flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; gap:3px; margin:0 2px 0 4px; pointer-events:none; }
+  .app-version, .week-badge{
+    display:inline-block; padding:2px 8px; border-radius:20px; white-space:nowrap; letter-spacing:0.2px;
   }
+  .app-version{
+    background:rgba(255,255,255,0.16); color:rgba(255,255,255,0.85);
+    font-size:9px; font-weight:600;
+  }
+  .week-badge{
+    background:rgba(255,255,255,0.24); color:#fff;
+    font-size:10.5px; font-weight:700;
+  }
+  .week-badge[hidden]{ display:none; }
   /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
      restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
      replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
@@ -407,6 +415,10 @@
     button.rowbtn.move{ padding:0; }
     button.rowbtn .lbl{ display:none; }
     button.rowbtn.toggle .lbl{ display:inline; }
+    /* A delete button that's been armed ("Confirm") needs its label visible and the
+       fixed 40px icon-square relaxed, or the confirm text just gets clipped. */
+    button.rowbtn.armed{ width:auto; min-width:76px; padding:0 12px; }
+    button.rowbtn.armed .lbl{ display:inline; }
     .row-actions{ gap:10px; }
     .row-actions button.rowbtn.del{ margin-left:4px; }
   }
@@ -461,6 +473,9 @@
   .chip:hover{ background:var(--line); }
   .chip.active{ background:var(--rust); border-color:var(--rust); color:#fff; }
   .note{ font-size:12px; color:var(--ink-soft); font-style:normal; margin-top:8px; }
+  /* Heads-up shown while a Rate History entry is being edited / about to be removed (wages of past days change). */
+  .rate-warn{ margin-top:10px; padding:10px 12px; font-size:13px; line-height:1.4; color:var(--ink); background:var(--tonal-del); border:1px solid var(--red); border-left-width:4px; border-radius:10px; }
+  .rate-warn[hidden]{ display:none; }
   .group-label{ font-size:11px; font-weight:700; text-transform:none; letter-spacing:0.2px; color:var(--rust-deep); margin:16px 0 8px; padding-top:10px; border-top:1px dashed var(--line); }
   /* min(420px,100%): on a phone narrower than 420px a fixed minimum made every panel wider than the screen (cards cut off at the right edge) */
   .purchase-panels{ display:grid; grid-template-columns:repeat(auto-fit, minmax(min(420px,100%),1fr)); gap:18px; align-items:start; }
@@ -664,7 +679,6 @@
   </div>
 
   <header class="appbar">
-    <span class="app-version" id="appVersionTag">v3.11.20</span>
     <button id="menuBtn" class="icon-btn" type="button" aria-label="Open menu">
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
@@ -676,6 +690,10 @@
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="1em" height="1em"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span>
       <span id="undoBadge" class="undo-badge"></span>
     </button>
+    <div class="appbar-meta">
+      <span class="week-badge" id="weekBadge" hidden></span>
+      <span class="app-version" id="appVersionTag">v3.11.31</span>
+    </div>
   </header>
 
   <div class="scrim" id="scrim"></div>

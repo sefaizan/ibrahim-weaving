@@ -93,6 +93,22 @@ describe('receivable just before a client\'s latest sale', () => {
     assert.equal(r.lastSaleDate, '2026-09-10');
   });
 
+  test('a Replaced cheque is not counted, so the payment that replaced it is not credited twice', () => {
+    app.setData({
+      sale: [sale({ id: 's1', date: '2026-08-01', amount: 1000 }), sale({ id: 's2', date: '2026-09-10', amount: 500 })],
+      recovery: [
+        payment({ date: '2026-08-15', cashAmount: 100, cheques: [cheque(200, 'Replaced')] }),  // bounced, then re-paid below
+        payment({ date: '2026-09-01', cashAmount: 200 }),                                     // the payment that replaced it
+        payment({ date: '2026-09-05', cheques: [cheque(300, 'Pending')] }),                   // still counts, once
+      ],
+    });
+    closeTo(app.receivableBeforeLastSale('A').amount, 1000 - (100 + 200 + 300), 'amount');
+    // and it agrees with the running balance on the client statement just before that sale
+    const l = app.buildClientLedger('A');
+    const i = l.rows.findIndex(r => r.id === 's2');
+    closeTo(app.receivableBeforeLastSale('A').amount, l.rows[i - 1].balance, 'statement');
+  });
+
   test('two sales on the same day: the one with the higher id is "last"', () => {
     app.setData({ sale: [sale({ id: 'a', date: '2026-09-01', amount: 100 }), sale({ id: 'b', date: '2026-09-01', amount: 40 })] });
     closeTo(app.receivableBeforeLastSale('A').amount, 100, 'amount');

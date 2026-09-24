@@ -162,22 +162,36 @@ function productionPanel(){
       }
     )}</div>`;
 }
+// Small status badge for a Sale row's L (AIL) tracking — shown in the Sales Log so a lot's
+// shortage history is visible at a glance without opening its receipt.
+function lBadge(r){
+  if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
+  if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
+  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount} L (AIL) — ${fmtQtyPlain(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
+  if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${r.lCount} L)`:''}</span>`;
+  if(r.lAdjustedFromId){
+    const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
+    return `<span class="note" style="margin:0">L (AIL) adj.${orig?` — was ${fmtQtyMtr(orig.qty)}, now ${fmtQtyMtr(r.qty)} mtr`:''}</span>`;
+  }
+  return '—';
+}
 function salePanel(){
   const clientVal = FILTER.saleClient || '';
   const qualityVal = FILTER.saleQuality || '';
   let filteredSale = DATA.sale;
   if(clientVal) filteredSale = filteredSale.filter(r=>r.client===clientVal);
   if(qualityVal) filteredSale = filteredSale.filter(r=>r.quality===qualityVal);
-  const filterQty = filteredSale.reduce((s,r)=>s+(Number(r.qty)||0),0);
-  const filterAmt = filteredSale.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  const saleTotals = sumAllAndMonth(DATA.sale, 'amount');
-  const qtyTotals = sumAllAndMonth(DATA.sale, 'qty');
+  const filteredSaleActive = filteredSale.filter(r=> r.lStatus!=='applied' && r.lStatus!=='returned');
+  const filterQty = filteredSaleActive.reduce((s,r)=>s+(Number(r.qty)||0),0);
+  const filterAmt = filteredSaleActive.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const saleTotals = sumAllAndMonth(activeSaleRows(), 'amount');
+  const qtyTotals = sumAllAndMonth(activeSaleRows(), 'qty');
   const salesAmtAll = saleTotals.all;
   // Client-wise breakdown: for each client, Qty + Amount sold, Received, and Receivable
   // outstanding — everything you'd otherwise need Overview for, but scoped to Sale/clients.
   const saleClientNames = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client']);
-  const qtyByClient = sumWhereBy(DATA.sale, 'client', 'qty', null, null);
-  const amtByClient = sumWhereBy(DATA.sale, 'client', 'amount', null, null);
+  const qtyByClient = sumWhereBy(activeSaleRows(), 'client', 'qty', null, null);
+  const amtByClient = sumWhereBy(activeSaleRows(), 'client', 'amount', null, null);
   const receivedByClient = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, null);
   const bouncedByClient = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, null);
   const clientRows = saleClientNames
@@ -203,7 +217,7 @@ function salePanel(){
     </div>
     ${clientTable}
   ${sumCardClose()}`;
-  return `${summary}<div class="card"><h2>Log Sale</h2>
+  return `${summary}${pendingLCardHtml()}<div class="card"><h2>Log Sale</h2>
     <div class="grid cols-3">
       ${field('Date','s_date','date',`value="${todayStr()}" autofocus`)}
       ${clientSelectField('Client','s_client')}
@@ -232,9 +246,16 @@ function salePanel(){
       </div>
       ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtQtyMtr(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
       ${logTable('sale',
-      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','Description',''],
+      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','L (AIL)','Description',''],
       filteredSale.slice().reverse(),
-      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
+      r=>{
+        const cells = [fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), lBadge(r), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`];
+        // Superseded (L applied) or returned entries no longer count anywhere money is
+        // totaled (see activeSaleRows in calc.js) — greyed out here so that's visible at a
+        // glance in the log itself, not just implied by the badge text.
+        if(r.lStatus==='applied' || r.lStatus==='returned') cells.rowStyle = 'opacity:0.55';
+        return cells;
+      }
     )}</div>`;
 }
 function daysSince(dateStr){ return Math.max(0, Math.round((new Date(todayStr()+'T00:00:00Z') - new Date(dateStr+'T00:00:00Z')) / 86400000)); }
@@ -302,6 +323,36 @@ function unlinkedReplacedCardHtml(){
       ${logTable('unlinkedReplaced', headers, list, mapFn)}
     </div>`;
 }
+// Sales sent to a dyeing unit that haven't had their "L (AIL)" shortage call logged yet
+// (see lStatus:'awaiting' set in wiring.js's addSale). Each row lets that call be settled on
+// the spot: "No Shortage" clears it with nothing else changing, a typed L count previews the
+// shortage/deduction via the confirmed market formula (lShortageMeters/lDeductionAmount in
+// calc.js) before it's applied, and "Return Lot" records the lot as rejected outright. The
+// double-L (L > 5) formula isn't settled yet, so anything past the 5 L tolerance can only be
+// recorded as a return here until that formula is confirmed.
+function pendingLCardHtml(){
+  const awaiting = DATA.sale.filter(r=>r.lStatus==='awaiting');
+  if(!awaiting.length) return '';
+  const headers = ['Date','Client','Quality','Qty','Rate','Dyeing','L (AIL)',''];
+  const mapFn = r=>{
+    const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
+    return [
+      fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
+      `<input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:64px" placeholder="0">`,
+      `<div class="chq-actions">
+        <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
+        <button class="ghost" data-l-confirm="${r.id}">Confirm L</button>
+        <button class="ghost" data-l-return="${r.id}">Return Lot</button>
+      </div>
+      <p class="note" data-l-preview="${r.id}" style="margin:4px 0 0"></p>`
+    ];
+  };
+  return `
+    <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Awaiting L (AIL) — ${awaiting.length}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, type the L (AIL) count and tap Confirm L to apply the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright. L above 5 isn't calculated here yet — use Return Lot for those until that formula is confirmed.</p>
+      ${logTable('pendingL', headers, awaiting, mapFn)}
+    </div>`;
+}
 function recoveryPanel(){
   const filterVal = FILTER.recovery || '';
   const filteredRecovery = filterVal ? DATA.recovery.filter(r=>r.client===filterVal) : DATA.recovery;
@@ -311,7 +362,7 @@ function recoveryPanel(){
   // Client-wise breakdown: how much each client owed (Sales), how much they've paid
   // (Received), and what's still outstanding (Receivable) — scoped to this page.
   const recClientNames = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client'], [DATA.recovery,'client']);
-  const salesByClient = sumWhereBy(DATA.sale, 'client', 'amount', null, null);
+  const salesByClient = sumWhereBy(activeSaleRows(), 'client', 'amount', null, null);
   const receivedByClient = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, null);
   const bouncedByClient = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, null);
   const clientRows = recClientNames

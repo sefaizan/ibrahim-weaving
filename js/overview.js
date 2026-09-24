@@ -69,7 +69,7 @@ function dateAddDays(dateStr, days){
 function overdueClients(thresholdDays){
   const today = todayStr();
   const names = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client']);
-  const amtByClient = sumWhereBy(DATA.sale, 'client', 'amount', null, null);
+  const amtByClient = sumWhereBy(activeSaleRows(), 'client', 'amount', null, null);
   const receivedByClient = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, null);
   const bouncedByClient = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, null);
   return names.map(name=>{

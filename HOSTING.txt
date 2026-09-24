@@ -27,8 +27,10 @@ GOOD TO KNOW
   service-worker.js (e.g. 'v27'), since the app is now several files that phones should fetch together. The app opens the old copy once (instantly)
   while it downloads the new one; the launch after that (or tapping Reload) uses the new copy.
 - Automatic email backup (Backup & Restore > Automatic email backup): once set up, the app emails a full
-  backup to your own address a couple of minutes after you save an entry and when you open it (only if
-  something changed, at most every 3 hours). It goes through your own backup service (backup-service/ on
+  backup to your own address once a day: at midnight if the app happens to be open, otherwise the first
+  time you open it after midnight (only if something changed; never more than once per calendar day, by
+  the phone's own clock). Entries made today go out after midnight; use "Send a backup now" for anything
+  you can't lose sooner. It goes through your own backup service (backup-service/ on
   Netlify, with Resend for the email) - the app files on the host still never see your data. The service
   address and key are typed into the app on the phone and kept in its own storage, not in these files.
   It can only send while the app is open and online. Set a password there to lock the emailed file.

@@ -315,3 +315,172 @@ describe('net wages for a specific Wage Period (Employee Wage Balances page)', (
     closeTo(n.paid, 700, 'paid'); closeTo(n.net, 300, 'net');
   });
 });
+
+describe('rate history — edit and delete an entry', () => {
+  const hist = () => ({ Q: [
+    { date: '2026-01-01', rate: 10 },
+    { date: '2026-06-01', rate: 12 },
+    { date: '2026-09-01', rate: 15 },
+  ] });
+  const q = () => app.getData().wageRateHistory.Q;
+
+  test('editing changes that entry\'s rate and moves the rate that applies on each day', () => {
+    app.setData({ wageRateHistory: hist() });
+    app.saveRateHistoryEntry('Q', 13, '2026-06-01', '2026-06-01');
+    assert.equal(q().length, 3);
+    assert.equal(app.rateForQualityOn('Q', '2026-07-01'), 13);
+    assert.equal(app.rateForQualityOn('Q', '2026-05-31'), 10);
+  });
+
+  test('editing the effective date moves the entry (no copy left on the old date)', () => {
+    app.setData({ wageRateHistory: hist() });
+    app.saveRateHistoryEntry('Q', 12, '2026-07-15', '2026-06-01');
+    assert.deepEqual(q().map(e => e.date).sort(), ['2026-01-01', '2026-07-15', '2026-09-01']);
+    assert.equal(app.rateForQualityOn('Q', '2026-07-01'), 10);
+    assert.equal(app.rateForQualityOn('Q', '2026-07-15'), 12);
+  });
+
+  test('editing onto another entry\'s date overwrites that one instead of duplicating it', () => {
+    app.setData({ wageRateHistory: hist() });
+    app.saveRateHistoryEntry('Q', 14, '2026-09-01', '2026-06-01');
+    assert.deepEqual(q().map(e => [e.date, e.rate]).sort(), [['2026-01-01', 10], ['2026-09-01', 14]]);
+  });
+
+  test('saving without an entry to replace adds a new one (and a repeated date overwrites)', () => {
+    app.setData({ wageRateHistory: hist() });
+    app.saveRateHistoryEntry('Q', 20, '2026-10-01');
+    assert.equal(q().length, 4);
+    app.saveRateHistoryEntry('Q', 21, '2026-10-01');
+    assert.equal(q().length, 4);
+    assert.equal(app.currentRateForQuality('Q'), 21);
+  });
+
+  test('deleting an entry hands its days back to the rate before it', () => {
+    app.setData({ wageRateHistory: hist() });
+    assert.equal(app.removeRateHistoryEntry('Q', '2026-09-01'), 'ok');
+    assert.equal(app.currentRateForQuality('Q'), 12);
+    assert.equal(app.rateForQualityOn('Q', '2026-10-01'), 12);
+  });
+
+  test('a quality\'s only rate cannot be deleted; a missing entry is reported', () => {
+    app.setData({ wageRateHistory: { Q: [{ date: '2026-01-01', rate: 10 }] } });
+    assert.equal(app.removeRateHistoryEntry('Q', '2026-01-01'), 'last');
+    assert.equal(q().length, 1);
+    assert.equal(app.removeRateHistoryEntry('Q', '2030-01-01'), 'missing');
+    assert.equal(app.removeRateHistoryEntry('Nope', '2026-01-01'), 'missing');
+  });
+
+  test('wages follow an edited rate', () => {
+    app.setData({
+      employees: [emp('A')], qualities: [{ id: 'q1', name: 'Q' }],
+      wageRateHistory: { Q: [{ date: '2026-01-01', rate: 2 }] },
+      production: [prod({ date: '2026-03-01', quality: 'Q', qty: 100, e1: 'A', e1m: 100 })],
+    });
+    const before = app.computeWageMeters('A', 'Q', '2026-03-01', '2026-03-01');
+    app.saveRateHistoryEntry('Q', 3, '2026-01-01', '2026-01-01');
+    const after = app.computeWageMeters('A', 'Q', '2026-03-01', '2026-03-01');
+    assert.equal(before.wages, 200);
+    assert.equal(after.wages, 300);
+  });
+});
+
+describe('rate history — which days an entry decides (shown in the edit / remove notes)', () => {
+  const H = { Q: [
+    { date: '2026-06-01', rate: 12 },
+    { date: '2026-01-01', rate: 10 },
+    { date: '2026-09-01', rate: 15 },
+  ] };
+
+  test('a middle entry covers from its own date up to the next entry; removal falls back to the rate before it', () => {
+    app.setData({ wageRateHistory: H });
+    assert.deepEqual(app.rateHistorySpan('Q', '2026-06-01'),
+      { from: '2026-06-01', to: '2026-09-01', rate: 12, rateAfterRemoval: 10 });
+  });
+
+  test('the newest entry runs onward', () => {
+    app.setData({ wageRateHistory: H });
+    assert.deepEqual(app.rateHistorySpan('Q', '2026-09-01'),
+      { from: '2026-09-01', to: null, rate: 15, rateAfterRemoval: 12 });
+  });
+
+  test('the earliest entry also pays every earlier day; removal hands them to the next rate', () => {
+    app.setData({ wageRateHistory: H });
+    assert.deepEqual(app.rateHistorySpan('Q', '2026-01-01'),
+      { from: null, to: '2026-06-01', rate: 10, rateAfterRemoval: 12 });
+  });
+
+  test('an unknown entry gives null', () => {
+    app.setData({ wageRateHistory: H });
+    assert.equal(app.rateHistorySpan('Q', '2030-01-01'), null);
+    assert.equal(app.rateHistorySpan('Nope', '2026-01-01'), null);
+  });
+});
+
+describe('wage week (Friday to Thursday) and the Overview weekly summary', () => {
+  test('the week containing any day runs Friday through the next Thursday', () => {
+    // 2026-09-25 is a Friday.
+    assert.deepEqual(app.currentWageWeek('2026-09-25'), { from: '2026-09-25', to: '2026-10-01' }); // Friday
+    assert.deepEqual(app.currentWageWeek('2026-09-28'), { from: '2026-09-25', to: '2026-10-01' }); // Monday
+    assert.deepEqual(app.currentWageWeek('2026-10-01'), { from: '2026-09-25', to: '2026-10-01' }); // Thursday
+    assert.deepEqual(app.currentWageWeek('2026-10-02'), { from: '2026-10-02', to: '2026-10-08' }); // next Friday
+    assert.deepEqual(app.currentWageWeek('2026-09-24'), { from: '2026-09-18', to: '2026-09-24' }); // Thursday before
+  });
+
+  test('week ranges cross month and year ends', () => {
+    assert.deepEqual(app.currentWageWeek('2027-01-01'), { from: '2027-01-01', to: '2027-01-07' }); // Friday
+    assert.deepEqual(app.currentWageWeek('2026-12-31'), { from: '2026-12-25', to: '2026-12-31' });
+  });
+
+  const setup = (extra) => app.setData({
+    employees: [emp('A'), emp('B'), emp('C')],
+    qualities: [{ id: 'q1', name: 'Q1' }, { id: 'q2', name: 'Q2' }],
+    wageRateHistory: { Q1: [{ date: '2026-01-01', rate: 2 }], Q2: [{ date: '2026-01-01', rate: 3 }] },
+    production: [
+      prod({ date: '2026-09-24', quality: 'Q1', qty: 100, e1: 'A', e1m: 100 }),                 // Thursday before: not this week
+      prod({ date: '2026-09-25', quality: 'Q1', qty: 100, e1: 'A', e1m: 100 }),                 // Friday
+      prod({ date: '2026-09-28', quality: 'Q2', qty: 50, e1: 'A', e1m: 50 }),
+      prod({ date: '2026-09-29', quality: 'Q1', qty: 80, e1: 'B', e1m: 80 }),
+      prod({ date: '2026-10-01', quality: 'Q1', qty: 10, e1: 'B', e1m: 10 }),                   // Thursday: last day
+      prod({ date: '2026-10-02', quality: 'Q1', qty: 500, e1: 'B', e1m: 500 }),                 // next Friday: not this week
+    ],
+    ...extra,
+  });
+
+  test('lists each employee\'s meters and wages per quality for the current week only', () => {
+    setup();
+    const w = app.weeklyWageSummary('2026-09-28');
+    assert.equal(w.from, '2026-09-25'); assert.equal(w.to, '2026-10-01');
+    assert.deepEqual(w.rows.map(r => r.employee), ['A', 'B']); // C has nothing this week
+    const a = w.rows[0];
+    assert.deepEqual(a.byQuality.map(q => [q.quality, q.meters, q.wages, q.rate]), [['Q1', 100, 200, 2], ['Q2', 50, 150, 3]]);
+    assert.equal(a.totalMeters, 150); assert.equal(a.totalWages, 350);
+    const b = w.rows[1];
+    assert.deepEqual(b.byQuality.map(q => [q.quality, q.meters, q.wages]), [['Q1', 90, 180]]);
+    assert.equal(w.totalMeters, 240); assert.equal(w.totalWages, 530);
+  });
+
+  test('bonuses are not part of the weekly wages', () => {
+    setup({ wageBonuses: [{ id: 'b1', date: '2026-09-26', employee: 'A', amount: 1000 }] });
+    assert.equal(app.weeklyWageSummary('2026-09-28').totalWages, 530);
+  });
+
+  test('a rate change inside the week is flagged, and each day still uses its own rate', () => {
+    setup({ wageRateHistory: { Q1: [{ date: '2026-01-01', rate: 2 }, { date: '2026-09-29', rate: 4 }], Q2: [{ date: '2026-01-01', rate: 3 }] } });
+    const w = app.weeklyWageSummary('2026-09-30');
+    const aQ1 = w.rows[0].byQuality[0];                       // A: 100 m on Friday, before the change, paid at 2 (current rate is now 4)
+    assert.equal(aQ1.wages, 200); assert.equal(aQ1.rate, 4); assert.equal(aQ1.rateChanged, true);
+    const bQ1 = w.rows[1].byQuality[0];                       // B: 90 m, all on/after the change, at 4
+    assert.equal(bQ1.wages, 360); assert.equal(bQ1.rateChanged, false);
+  });
+
+  test('an empty week lists nobody', () => {
+    setup();
+    const w = app.weeklyWageSummary('2026-12-03');
+    assert.deepEqual(w.rows, []); assert.equal(w.totalWages, 0);
+  });
+
+  test('a fully settled, inactive employee with no production that week is left out', () => {
+    setup({ employees: [emp('A'), emp('B'), emp('C', { active: false })] });
+    assert.deepEqual(app.weeklyWageSummary('2026-09-28').rows.map(r => r.employee), ['A', 'B']);
+  });
+});
