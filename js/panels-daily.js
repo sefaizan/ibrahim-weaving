@@ -11,6 +11,18 @@ function textareaField(label, id, extra=''){
 function selectField(label, id, arr, extra=''){
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${opts(arr)}</select></div>`;
 }
+// Two boxes in a single row: whole meters + sixteenths (the same fraction convention used
+// for Stock Position on the Overview page). Kept as two plain number inputs for now — the two
+// values are combined into one decimal number when the form is read (see combineMtr16 in
+// core.js); the stored record itself is unchanged.
+function meterFracField(label, idWhole, idSixteenth, extra=''){
+  return `<div class="field"><label>${label}</label>
+    <div style="display:flex;gap:8px">
+      <input id="${idWhole}" type="number" placeholder="Whole" ${extra} style="flex:2;min-width:0">
+      <input id="${idSixteenth}" type="number" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
+    </div>
+  </div>`;
+}
 // Which employees usually run a given loom, set up once in Settings > Loom Assignments and
 // used to auto-fill the Log Production form when that loom is picked — a convenience default,
 // never a constraint, so the auto-filled dropdowns stay fully editable per entry.
@@ -87,7 +99,7 @@ function productionPanel(){
       ${selectField('Loom','p_loom',DATA.looms)}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
-      ${field('Quantity Produced (mtr)','p_qty','number')}
+      ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16')}
     </div>
     <div id="p_beamToggleWrap"></div>
     <input type="hidden" id="p_beam" value="">
@@ -104,7 +116,7 @@ function productionPanel(){
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
     <button class="primary" id="addProductionNext">Add &amp; next loom →</button>
-    <button class="primary" id="addProduction">Add Entry</button>
+    <button class="ghost" id="addProduction">Add Entry</button>
     <button class="ghost" id="cancelProduction" style="display:none">Cancel Edit</button></div>
     <div class="card"><div class="card-head"><h2>Bulk Import</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-bulkimport" title="Info">i</button></div>
       ${formToggleBtn('bulkImport','Form')}
@@ -139,16 +151,29 @@ function productionPanel(){
           <div class="field"><label>To</label><input type="date" id="pf_to" value="${toVal}"></div>
         </div>
       </div>
-      ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtNum(filterQty)} mtr.</p>` : ''}
+      ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
       ['Date','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],
       filteredProduction.slice().reverse(),
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), escHtml(r.loom), escHtml(r.quality), fmtNum(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtNum(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtNum(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtNum(r.e3m)})`:'—', fmtNum(diff), actionBtns('production',r.id)];
+        return [fmtDate(r.date), `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—', fmtQtyMtr(diff), actionBtns('production',r.id)];
       }
     )}</div>`;
+}
+// Small status badge for a Sale row's L (AIL) tracking — shown in the Sales Log so a lot's
+// shortage history is visible at a glance without opening its receipt.
+function lBadge(r){
+  if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
+  if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
+  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount} L (AIL) — ${fmtQtyPlain(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
+  if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${r.lCount} L)`:''}</span>`;
+  if(r.lAdjustedFromId){
+    const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
+    return `<span class="note" style="margin:0">L (AIL) adj.${orig?` — was ${fmtQtyMtr(orig.qty)}, now ${fmtQtyMtr(r.qty)} mtr`:''}</span>`;
+  }
+  return '—';
 }
 function salePanel(){
   const clientVal = FILTER.saleClient || '';
@@ -156,16 +181,17 @@ function salePanel(){
   let filteredSale = DATA.sale;
   if(clientVal) filteredSale = filteredSale.filter(r=>r.client===clientVal);
   if(qualityVal) filteredSale = filteredSale.filter(r=>r.quality===qualityVal);
-  const filterQty = filteredSale.reduce((s,r)=>s+(Number(r.qty)||0),0);
-  const filterAmt = filteredSale.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  const saleTotals = sumAllAndMonth(DATA.sale, 'amount');
-  const qtyTotals = sumAllAndMonth(DATA.sale, 'qty');
+  const filteredSaleActive = filteredSale.filter(r=> r.lStatus!=='applied' && r.lStatus!=='returned');
+  const filterQty = filteredSaleActive.reduce((s,r)=>s+(Number(r.qty)||0),0);
+  const filterAmt = filteredSaleActive.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const saleTotals = sumAllAndMonth(activeSaleRows(), 'amount');
+  const qtyTotals = sumAllAndMonth(activeSaleRows(), 'qty');
   const salesAmtAll = saleTotals.all;
   // Client-wise breakdown: for each client, Qty + Amount sold, Received, and Receivable
   // outstanding — everything you'd otherwise need Overview for, but scoped to Sale/clients.
   const saleClientNames = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client']);
-  const qtyByClient = sumWhereBy(DATA.sale, 'client', 'qty', null, null);
-  const amtByClient = sumWhereBy(DATA.sale, 'client', 'amount', null, null);
+  const qtyByClient = sumWhereBy(activeSaleRows(), 'client', 'qty', null, null);
+  const amtByClient = sumWhereBy(activeSaleRows(), 'client', 'amount', null, null);
   const receivedByClient = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, null);
   const bouncedByClient = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, null);
   const clientRows = saleClientNames
@@ -191,7 +217,7 @@ function salePanel(){
     </div>
     ${clientTable}
   ${sumCardClose()}`;
-  return `${summary}<div class="card"><h2>Log Sale</h2>
+  return `${summary}${pendingLCardHtml()}<div class="card"><h2>Log Sale</h2>
     <div class="grid cols-3">
       ${field('Date','s_date','date',`value="${todayStr()}" autofocus`)}
       ${clientSelectField('Client','s_client')}
@@ -201,6 +227,10 @@ function salePanel(){
       ${field('Quantity (mtr)','s_qty','number')}
       ${field('Rate per mtr (Rs)','s_rate','number')}
       ${field('Invoice No (optional)','s_inv','text')}
+    </div>
+    <div class="grid cols-2" style="margin-top:12px">
+      ${selectField('Dyeing (optional)','s_dyeing',DATA.dyeingUnits)}
+      <div></div>
     </div>
     <div class="note" id="s_qtyHint" hidden style="margin:6px 0 0"></div>
     <div class="grid cols-1" style="margin-top:12px">
@@ -214,11 +244,18 @@ function salePanel(){
         <div class="field"><label>Filter by Client</label><select id="sf_client"><option value="">All Clients</option>${groupedClientOpts()}</select></div>
         <div class="field"><label>Filter by Quality</label><select id="sf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
       </div>
-      ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtNum(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
+      ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtQtyMtr(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
       ${logTable('sale',
-      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Description',''],
+      ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','L (AIL)','Description',''],
       filteredSale.slice().reverse(),
-      r=>[fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtNum(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`]
+      r=>{
+        const cells = [fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), lBadge(r), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`];
+        // Superseded (L applied) or returned entries no longer count anywhere money is
+        // totaled (see activeSaleRows in calc.js) — greyed out here so that's visible at a
+        // glance in the log itself, not just implied by the badge text.
+        if(r.lStatus==='applied' || r.lStatus==='returned') cells.rowStyle = 'opacity:0.55';
+        return cells;
+      }
     )}</div>`;
 }
 function daysSince(dateStr){ return Math.max(0, Math.round((new Date(todayStr()+'T00:00:00Z') - new Date(dateStr+'T00:00:00Z')) / 86400000)); }
@@ -286,6 +323,36 @@ function unlinkedReplacedCardHtml(){
       ${logTable('unlinkedReplaced', headers, list, mapFn)}
     </div>`;
 }
+// Sales sent to a dyeing unit that haven't had their "L (AIL)" shortage call logged yet
+// (see lStatus:'awaiting' set in wiring.js's addSale). Each row lets that call be settled on
+// the spot: "No Shortage" clears it with nothing else changing, a typed L count previews the
+// shortage/deduction via the confirmed market formula (lShortageMeters/lDeductionAmount in
+// calc.js) before it's applied, and "Return Lot" records the lot as rejected outright. The
+// double-L (L > 5) formula isn't settled yet, so anything past the 5 L tolerance can only be
+// recorded as a return here until that formula is confirmed.
+function pendingLCardHtml(){
+  const awaiting = DATA.sale.filter(r=>r.lStatus==='awaiting');
+  if(!awaiting.length) return '';
+  const headers = ['Date','Client','Quality','Qty','Rate','Dyeing','L (AIL)',''];
+  const mapFn = r=>{
+    const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
+    return [
+      fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
+      `<input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:64px" placeholder="0">`,
+      `<div class="chq-actions">
+        <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
+        <button class="ghost" data-l-confirm="${r.id}">Confirm L</button>
+        <button class="ghost" data-l-return="${r.id}">Return Lot</button>
+      </div>
+      <p class="note" data-l-preview="${r.id}" style="margin:4px 0 0"></p>`
+    ];
+  };
+  return `
+    <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Awaiting L (AIL) — ${awaiting.length}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, type the L (AIL) count and tap Confirm L to apply the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright. L above 5 isn't calculated here yet — use Return Lot for those until that formula is confirmed.</p>
+      ${logTable('pendingL', headers, awaiting, mapFn)}
+    </div>`;
+}
 function recoveryPanel(){
   const filterVal = FILTER.recovery || '';
   const filteredRecovery = filterVal ? DATA.recovery.filter(r=>r.client===filterVal) : DATA.recovery;
@@ -295,7 +362,7 @@ function recoveryPanel(){
   // Client-wise breakdown: how much each client owed (Sales), how much they've paid
   // (Received), and what's still outstanding (Receivable) — scoped to this page.
   const recClientNames = orderedGroupNames(DATA.clients.map(c=>c.name), [DATA.sale,'client'], [DATA.recovery,'client']);
-  const salesByClient = sumWhereBy(DATA.sale, 'client', 'amount', null, null);
+  const salesByClient = sumWhereBy(activeSaleRows(), 'client', 'amount', null, null);
   const receivedByClient = sumRecoveryByClient(DATA.recovery, recoveryReceivableAmount, null, null);
   const bouncedByClient = sumRecoveryByClient(DATA.recovery, recoveryBouncedAmount, null, null);
   const clientRows = recClientNames
@@ -484,7 +551,7 @@ function weftPanel(){
     <div class="grid cols-3">
       ${field('Date','wf_date','date',`value="${todayStr()}" autofocus`)}
       ${field('Time','wf_time','time',`value="${nowStr()}"`)}
-      ${field('Yarn Count/Type','wf_type','text')}
+      ${selectField('Yarn Count/Type','wf_type',DATA.weftTypes)}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
       ${field('Supplier','wf_sup','text')}
@@ -512,41 +579,67 @@ function weftPanel(){
 function beamsForLoom(loomName){
   return DATA.warpBeams.filter(b=>b.loom===loomName).slice().sort((a,b)=> dtOf(b)-dtOf(a));
 }
-// Builds the "This entry is from: Current beam / Previous beam" toggle on the Production
-// form. Only shown when a loom has 2+ beams logged — otherwise there's nothing to choose
-// between, so the hidden p_beam value is just set (or cleared) silently.
-// forceCurrent=true resets the choice to the current beam (used when the Loom dropdown
+// Builds the "This entry is from: New beam / Previous beam" toggle on the Production form,
+// scoped to the entry's own Date (p_date) rather than just "whichever beam was logged most
+// recently overall" — a backdated entry shouldn't be asked to choose between two beams that
+// were both installed after it. Logic, given this loom's beams (newest-install-first):
+//   - No beam on this loom has a date on/before the entry date (entry predates every beam
+//     logged, e.g. backfilling before beam-tracking started) → nothing to choose; p_beam
+//     cleared silently, no toggle shown.
+//   - The most recent beam on/before the entry date is unambiguous UNLESS the entry date is
+//     exactly that beam's own install date — the one real changeover day, where meters from
+//     the outgoing beam and the new one can both legitimately get logged. Only then is the
+//     toggle shown, between that beam and the one installed just before it.
+//   - Otherwise (entry date falls inside one beam's window, not on a changeover day) that
+//     beam is auto-assigned silently — nothing to ask.
+// forceCurrent=true resets the choice to the newer of the two (used when the Loom dropdown
 // changes); forceCurrent=false preserves whatever's already in #p_beam (used when an
-// existing entry is loaded for editing, so its saved choice is restored, not overwritten).
+// existing entry is loaded for editing, so its saved choice is restored, not overwritten —
+// and when only the Date field changed, so an already-correct choice isn't reset under you).
 function renderBeamToggle(forceCurrent){
   const loom = v('p_loom');
+  const date = v('p_date');
   const wrap = document.getElementById('p_beamToggleWrap');
   const hidden = document.getElementById('p_beam');
   if(!wrap || !hidden) return;
-  const beams = beamsForLoom(loom);
+  const beams = beamsForLoom(loom); // newest-install-first
   const existing = hidden.value;
-  if(beams.length === 0){
+  const clear = ()=>{ wrap.innerHTML = ''; hidden.value = ''; };
+  if(beams.length === 0 || !date){ clear(); return; }
+  if(beams.length === 1){
+    // Still nothing to choose, but only applies once the entry date reaches that one beam —
+    // an entry dated before it was ever installed gets no beam, same as the multi-beam case.
     wrap.innerHTML = '';
-    hidden.value = '';
-  } else if(beams.length === 1){
-    wrap.innerHTML = '';
-    hidden.value = beams[0].id;
-  } else {
-    const current = beams[0], previous = beams[1];
-    const selected = (!forceCurrent && (existing===current.id || existing===previous.id)) ? existing : current.id;
+    hidden.value = beams[0].date <= date ? beams[0].id : '';
+    return;
+  }
+  // Beams installed on/before this entry's date — beams is already newest-first, so the
+  // first match is the most recent one that applies as of that date.
+  const onOrBefore = beams.filter(b=> b.date <= date);
+  if(onOrBefore.length === 0){ clear(); return; } // entry predates every beam on this loom
+  const active = onOrBefore[0];
+  const activeIdx = beams.indexOf(active);
+  const prior = beams[activeIdx + 1]; // installed just before `active`, if any
+  if(active.date === date && prior){
+    // The changeover day: both beams are legitimately possible, so ask.
+    const selected = (!forceCurrent && (existing===active.id || existing===prior.id)) ? existing : active.id;
     hidden.value = selected;
     wrap.innerHTML = `<div class="field"><label>This entry is from</label>
       <div style="display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
-          <input type="radio" name="p_beam_choice" value="${current.id}" ${selected===current.id?'checked':''}> Current beam (${fmtDate(current.date)}, ${escHtml(current.warpType||'')})
+          <input type="radio" name="p_beam_choice" value="${active.id}" ${selected===active.id?'checked':''}> New beam (${fmtDate(active.date)}, ${escHtml(active.warpType||'')})
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
-          <input type="radio" name="p_beam_choice" value="${previous.id}" ${selected===previous.id?'checked':''}> Previous beam (${fmtDate(previous.date)}, ${escHtml(previous.warpType||'')})
+          <input type="radio" name="p_beam_choice" value="${prior.id}" ${selected===prior.id?'checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})
         </label>
       </div></div>`;
     wrap.querySelectorAll('input[name="p_beam_choice"]').forEach(radio=>{
       radio.addEventListener('change', ()=>{ hidden.value = radio.value; });
     });
+  } else {
+    // Entry date falls cleanly inside one beam's window — no ambiguity, no toggle.
+    wrap.innerHTML = '';
+    hidden.value = active.id;
   }
 }
 // Rolls up beams into the specific Warp purchase they were chained from (via each beam's
@@ -590,20 +683,20 @@ function finishedOnCell(d){
 }
 function renderYieldPanel(r, beamDetails){
   const shrinkStat = r.complete
-    ? `${fmtNum(r.totalShrinkage)}m${r.shrinkagePct!=null?` (${fmtNum(Math.round(r.shrinkagePct*100)/100)}%)`:''}`
+    ? `${fmtQtyMtr(r.totalShrinkage)}m${r.shrinkagePct!=null?` (${fmtNum(Math.round(r.shrinkagePct*100)/100)}%)`:''}`
     : '— (pending)';
   const yieldStat = r.complete && r.yieldPct!=null ? fmtNum(Math.round(r.yieldPct*100)/100)+'%' : '— (pending)';
   const costStat = r.complete && r.costPerMeter!=null ? fmtRs2(r.costPerMeter)+'/m' : '— (pending)';
   const beamRows = r.beams.map(b=>{
     const d = beamDetails[b.id] || {woven:0, isActive:true, daysTaken:0, shrinkage:Number(b.length)||0, shrinkagePct:null};
     const shrinkCell = d.isActive ? '—' : (d.shrinkage < 0
-      ? `<span style="color:var(--rust)">${fmtNum(d.shrinkage)} (over)</span>`
-      : fmtNum(d.shrinkage));
+      ? `<span style="color:var(--rust)">${fmtQtyMtr(d.shrinkage)} (over)</span>`
+      : fmtQtyMtr(d.shrinkage));
     const shrinkPctCell = d.isActive ? '—' : (d.shrinkagePct!=null ? fmtNum(Math.round(d.shrinkagePct*100)/100)+'%' : '—');
     const daysCell = fmtNum(Math.round(d.daysTaken*10)/10) + (d.isActive ? ' (so far)' : '');
     return [
-      fmtDate(b.date), escHtml(b.warpType||'—'), `<span class="name">${escHtml(b.loom)}</span>`,
-      fmtNum(b.length), fmtNum(d.woven), shrinkCell, shrinkPctCell, daysCell,
+      fmtDate(b.date), escHtml(b.warpType||'—'), `<span class="loom-no">${escHtml(b.loom)}</span>`,
+      fmtQtyMtr(b.length), fmtQtyMtr(d.woven), shrinkCell, shrinkPctCell, daysCell,
       finishedOnCell(d), d.isActive ? '<b>Active</b>' : 'Finished'
     ];
   });
@@ -749,8 +842,8 @@ function warpBeamsPanel(){
       const mapFn = r=>{
         const u = usage[r.id] || {woven:0, remaining:Number(r.length)||0, isActive:false, hasNext:false};
         const remainingCell = u.remaining < 0
-          ? `<span style="color:var(--rust)">${fmtNum(u.remaining)} (over)</span>`
-          : fmtNum(u.remaining);
+          ? `<span style="color:var(--rust)">${fmtQtyMtr(u.remaining)} (over)</span>`
+          : fmtQtyMtr(u.remaining);
         let statusCell;
         if(r.finished){
           statusCell = `<span class="badge month">Finished</span><br><button class="ghost" data-finish="${r.id}:reopen" style="padding:3px 8px;font-size:12px;margin-top:4px">Reopen</button>`;
@@ -761,11 +854,11 @@ function warpBeamsPanel(){
         }
         const d = beamDetails[r.id] || {isActive:true, shrinkage:0, shrinkagePct:null};
         const shrinkCell = d.isActive ? '—' : (d.shrinkage < 0
-          ? `<span style="color:var(--rust)">${fmtNum(d.shrinkage)} (over)</span>`
-          : fmtNum(d.shrinkage));
+          ? `<span style="color:var(--rust)">${fmtQtyMtr(d.shrinkage)} (over)</span>`
+          : fmtQtyMtr(d.shrinkage));
         const cells = [
-          fmtDate(r.date), r.time||'—', escHtml(r.warpType||'—'), `<span class="name">${escHtml(r.loom)}</span>`,
-          fmtNum(r.length), fmtNum(u.woven), remainingCell, shrinkCell,
+          fmtDate(r.date), r.time||'—', escHtml(r.warpType||'—'), `<span class="loom-no">${escHtml(r.loom)}</span>`,
+          fmtQtyMtr(r.length), fmtQtyMtr(u.woven), remainingCell, shrinkCell,
           purchaseLabel(r.purchaseId), statusCell, actionBtns('warpBeams',r.id)
         ];
         // Flags a beam that's running low on warp so it stands out at a glance in the log —

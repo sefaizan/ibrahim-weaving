@@ -153,7 +153,15 @@ function wirePanel(id){
       document.getElementById('p_e1').value = a?.e1 || '';
       document.getElementById('p_e2').value = a?.e2 || '';
     });
-    wireEnterSubmit(['p_date','p_quality','p_loom','p_qty','p_qty_16','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m'],'addProduction');
+    // Enter is the form's default action: "Add & next loom" for a new entry, and
+    // Update Entry while a row is being edited (the next-loom button is hidden then).
+    ['p_date','p_quality','p_loom','p_qty','p_qty_16','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m'].forEach(id=>{
+      const inp = document.getElementById(id);
+      if(!inp) return;
+      inp.addEventListener('keydown', e=>{
+        if(e.key === 'Enter'){ e.preventDefault(); document.getElementById(EDITING ? 'addProduction' : 'addProductionNext').click(); }
+      });
+    });
     wireDelete('production');
     // Qty is stored as one decimal number, same as before — only the fieldMap entries for the
     // plain select/date/employee/etc fields go through the generic value=rec[field] fill. The
@@ -162,6 +170,7 @@ function wirePanel(id){
       {p_date:'date',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
       (rec)=>{
         renderBeamToggle(false); if(v('p_e3')) showE3(); nextBtn.style.display = 'none';
+        document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
         document.getElementById('p_qty_16').value = s.sixteenths;
