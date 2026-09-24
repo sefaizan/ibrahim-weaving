@@ -50,6 +50,15 @@ function currentWageWeek(dateStr){
   return {from: start.toISOString().slice(0,10), to: end.toISOString().slice(0,10)};
 }
 
+// Total meters produced in the current wage week (Friday to Thursday), all qualities and looms
+// added together — the plain "Qty Produced" of every Production entry dated in the week.
+function weeklyProductionTotal(dateStr){
+  const week = currentWageWeek(dateStr);
+  const meters = DATA.production.reduce((t, r)=>
+    (r.date && r.date >= week.from && r.date <= week.to) ? t + (Number(r.qty) || 0) : t, 0);
+  return {from: week.from, to: week.to, meters};
+}
+
 // This wage week's production and wages per employee, split by quality, for the Overview card.
 // Uses exactly the Wages page's own figures (computeWages: own meters + Difference share, each
 // entry paid at the rate in effect on ITS date), without bonuses. Only employees / qualities with

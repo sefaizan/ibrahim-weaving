@@ -420,24 +420,9 @@ if(window.visualViewport) window.visualViewport.addEventListener('resize', scrol
 
 /* ---------------- Init ---------------- */
 const SEARCH_DEBOUNCE_TIMERS = {};
-// Hides the floating Backup & Restore button while the page is actively scrolling, and brings it
-// back a moment after scrolling stops — see the .fab-scroll-hide rule in index.html for why.
-// Listens on document with capture:true, not on #panels: scroll events don't bubble, but a
-// capture-phase listener on an ancestor still fires for them, so this one listener covers both
-// how the app actually scrolls on a phone (the whole page/body scrolls) and how it scrolls in the
-// desktop preview frame (only #panels scrolls, inside a fixed-size shell) without caring which.
-function wireScrollAwareFab(fabBackup){
-  let hideTimer = null;
-  document.addEventListener('scroll', ()=>{
-    fabBackup.classList.add('fab-scroll-hide');
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(()=> fabBackup.classList.remove('fab-scroll-hide'), 500);
-  }, {passive:true, capture:true});
-}
-
 (async function init(){
   const fabBackup = document.getElementById('fabBackup');
-  if(fabBackup){ fabBackup.onclick = ()=> switchTab('backup'); wireScrollAwareFab(fabBackup); }
+  if(fabBackup) fabBackup.onclick = ()=> switchTab('backup');
   const menuBtn = document.getElementById('menuBtn');
   if(menuBtn) menuBtn.onclick = openDrawer;
   const scrim = document.getElementById('scrim');
@@ -639,7 +624,7 @@ function wireScrollAwareFab(fabBackup){
   });
   await load();
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort only */ } // Undo baseline for this session
-  switchTab(restoredTab());
+  switchTab('overview');
   try{
     const act = new URLSearchParams(location.search).get('action');
     if(act === 'addsale' || act === 'addrecovery'){ PENDING_QUICK = act === 'addrecovery' ? 'recovery' : 'sale'; history.replaceState(null, '', location.pathname); }
@@ -649,7 +634,6 @@ function wireScrollAwareFab(fabBackup){
   if(isPinEnabled() && (pinIdleTooLong() || (encEnabled() && !ENC_DEK))) mountLockScreen();
   else { markPinActive(); runPendingQuickAdd(); } // within the grace period (or PIN off) — resume unlocked and reset the clock
   setTimeout(runBeamAlerts, 2500);
-  setTimeout(noteIfJustUpdated, 1200);
   setTimeout(()=>{ maybeAutoSnapshot(); checkForNewVersion(); }, 4000);
   setTimeout(autoBackupOnWake, 8000); // emails a backup if one is due (Backup & Restore > Automatic email backup)
   // All data lives in this browser's storage, so ask it not to clear that under storage

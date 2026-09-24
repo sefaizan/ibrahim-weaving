@@ -484,3 +484,23 @@ describe('wage week (Friday to Thursday) and the Overview weekly summary', () =>
     assert.deepEqual(app.weeklyWageSummary('2026-09-28').rows.map(r => r.employee), ['A', 'B']);
   });
 });
+
+describe('weekly production total (header pill)', () => {
+  test('adds up Qty Produced of every entry in the Friday-Thursday week, all qualities and looms', () => {
+    app.setData({ production: [
+      prod({ date: '2026-09-24', quality: 'Q1', qty: 999 }),            // Thursday before: not this week
+      prod({ date: '2026-09-25', quality: 'Q1', qty: 100.5 }),          // Friday
+      prod({ date: '2026-09-28', quality: 'Q2', qty: 50, loom: '2' }),
+      prod({ date: '2026-10-01', quality: 'Q3', qty: 10 }),             // Thursday: last day
+      prod({ date: '2026-10-02', quality: 'Q1', qty: 500 }),            // next Friday: not this week
+    ] });
+    const w = app.weeklyProductionTotal('2026-09-29');
+    assert.deepEqual(w, { from: '2026-09-25', to: '2026-10-01', meters: 160.5 });
+  });
+
+  test('counts entries with no employee logged, and is 0 for an empty week', () => {
+    app.setData({ production: [prod({ date: '2026-09-26', qty: 40 })] });
+    assert.equal(app.weeklyProductionTotal('2026-09-30').meters, 40);
+    assert.equal(app.weeklyProductionTotal('2026-12-03').meters, 0);
+  });
+});

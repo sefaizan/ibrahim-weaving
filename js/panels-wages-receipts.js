@@ -3,63 +3,20 @@
 
 /* ---------------- Wages (mirrors the Wages sheet logic exactly) ---------------- */
 
-// The Quality Rates table on the Wages card, scoped to the selected Wage Period: shows the
-// rate in effect as of the period's own To date (falling back to today if To is blank) rather
-// than always "today's current rate" — so picking a past period shows what actually applied
-// back then. "Effective" reflects THAT specific rate entry's own effective-from date, with a
-// note when the rate changed partway through the selected period (production earlier in the
-// period still used the earlier rate — see rateForQualityOn/computeWageMeters for the actual
-// per-entry math; this row is just a summary, not a claim that one flat rate covered the
-// whole range). Re-run on every Wage Period date change (see recalc in wiring.js) as well as
-// on initial panel render.
-function qualityRateRowsHtml(from, to){
-  if(!DATA.qualities.length) return '';
-  const asOf = to || todayStr();
-  return DATA.qualities.map(q=>{
-    const hist = sortedRateHistory(q.name);
-    if(!hist.length) return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(0)}</b></td><td class="note" style="margin:0">—</td></tr>`;
-    const rate = rateForQualityOn(q.name, asOf);
-    let applicable = hist[0];
-    for(const entry of hist){ if(entry.date <= asOf) applicable = entry; else break; }
-    const changedWithin = from && applicable.date > from && applicable.date <= asOf;
-    const since = `since ${fmtDate(applicable.date)}${changedWithin ? ' · changed during this period' : ''}`;
-    return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(rate)}</b></td><td class="note" style="margin:0">${since}</td></tr>`;
-  }).join('');
-}
-// The Rate History list under "Change a Rate" — every effective-from/rate pair ever entered,
-// newest first per quality. Not period-scoped (it's a log, not a period summary), but does
-// need to be regenerated after adding a new rate change (see saveRateChange in wiring.js),
-// since that card lives outside the auto-refreshing #wagesWrap.
-function rateHistoryRowsHtml(){
-  return DATA.qualities.flatMap(q=>
-    sortedRateHistory(q.name).slice().reverse().map(entry=>
-      `<tr><td>${escHtml(q.name)}</td><td>${fmtDate(entry.date)}</td><td class="mono">${fmtRs2(entry.rate)}</td><td>${rateHistoryBtns(q.name, entry.date)}</td></tr>`)
-  ).join('');
-}
-// Rate History entries have no id of their own — a quality can only have one entry per
-// effective-from date (saving the same date again overwrites it), so quality + date identify one.
-// "from 1 Jun 2026 up to the day before 1 Sep 2026" — the production days a rate entry decides.
-function rateSpanText(span){
-  return (span.from ? `from ${fmtDate(span.from)}` : 'from the earliest entries')
-    + (span.to ? ` up to the day before ${fmtDate(span.to)}` : ' onward');
-}
-function rateHistoryBtns(quality, date){
-  const a = `data-rh-q="${escHtml(quality)}" data-rh-d="${escHtml(date)}"`;
-  return `<span class="row-actions"><button class="ghost rowbtn edit" data-rh-edit ${a} aria-label="Edit" title="Edit"><span class="ic">${ICON_EDIT}</span><span class="lbl">Edit</span></button><button class="ghost rowbtn del" data-rh-del ${a} aria-label="Remove" title="Remove"><span class="ic">${ICON_TRASH}</span><span class="lbl">Remove</span></button></span>`;
-}
-// The whole Rate History block (heading + table), or '' when no rate was ever entered. Used for
-// both the first render and the refresh after add / edit / delete.
-function rateHistoryBlockHtml(){
-  const rows = rateHistoryRowsHtml();
-  return rows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
-      <table style="margin-top:6px"><thead><tr><th>Quality</th><th>Effective From</th><th>Rate (Rs/m)</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>` : '';
-}
 function wagesPanel(){
   const dates = DATA.production.map(r=>r.date).filter(Boolean).sort();
   const from = DATA.wageFrom || dates[0] || todayStr();
   const to = DATA.wageTo || dates[dates.length-1] || todayStr();
-  const rateRows = qualityRateRowsHtml(from, to);
+  const rateRows = DATA.qualities.map(q=>{
+    const hist = sortedRateHistory(q.name);
+    const latest = hist[hist.length-1];
+    const since = latest ? `since ${fmtDate(latest.date)}` : '—';
+    return `<tr><td>${escHtml(q.name)}</td><td class="mono"><b>${fmtRs2(currentRateForQuality(q.name))}</b></td><td class="note" style="margin:0">${since}</td></tr>`;
+  }).join('');
+  const rateHistoryRows = DATA.qualities.flatMap(q=>
+    sortedRateHistory(q.name).slice().reverse().map(entry=>
+      `<tr><td>${escHtml(q.name)}</td><td>${fmtDate(entry.date)}</td><td class="mono">${fmtRs2(entry.rate)}</td></tr>`)
+  ).join('');
   // Inactive employees drop off every table on this page once fully settled (balance and
   // carry-forward both zero) — but stay visible as long as something's still unresolved,
   // so a real outstanding balance never quietly disappears just because someone left.
@@ -109,7 +66,7 @@ function wagesPanel(){
       </div>
       <table style="margin-top:14px">
         <thead><tr><th>Quality</th><th>Current Rate (Rs/m)</th><th>Effective</th></tr></thead>
-        <tbody id="wg_rateRowsBody">${rateRows || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>'}</tbody>
+        <tbody>${rateRows || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>'}</tbody>
       </table>
       <div class="note">Wages = meters produced (own logged meters + their share of any unassigned Difference) × the rate in effect on that production's own date — so changing a rate below only affects entries from its effective date onward; already-settled wages stay locked in. Bonuses are logged per employee below instead of a flat period amount.</div>
       ${formToggleBtn('rateChange','Change a Rate')}
@@ -120,13 +77,13 @@ function wagesPanel(){
         <div class="field"><label>Effective From</label><input type="date" id="rc_date" value="${todayStr()}"></div>
       </div>
       <button class="primary" id="saveRateChange" style="margin-top:12px">Save New Rate</button>
-      <button class="ghost" id="cancelRateChange" style="display:none;margin-top:12px">Cancel Edit</button>
-      <div class="rate-warn" id="rc_editNote" role="alert" hidden></div>
-      <div class="rate-warn" id="rh_delNote" role="alert" hidden></div>
-      <div id="wg_rateHistoryWrap">${rateHistoryBlockHtml()}</div>
+      ${rateHistoryRows ? `<div class="group-label" style="margin-top:16px">Rate History</div>
+      <table style="margin-top:6px"><thead><tr><th>Quality</th><th>Effective From</th><th>Rate (Rs/m)</th></tr></thead>
+      <tbody>${rateHistoryRows}</tbody></table>` : ''}
       </div>
     </div>
-    <div id="wagesWrap"></div>
+    ${openingBalanceCard}
+    ${settleAllCard}
     <div class="card"><div class="card-head"><h2>Log Wage Payment</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wagepayment" title="Info">i</button></div>
       ${formToggleBtn('wagePayments','Form')}
       <div ${formBodyOpen('wagePayments')}>
@@ -146,11 +103,6 @@ function wagesPanel(){
       <button class="ghost" id="cancelWagePayments" style="display:none">Cancel Edit</button>
       </div>
     </div>
-    <div class="card"><h2>Wage Payments Log</h2>${logTable('wagePayments',
-        ['Date','Employee','Amount','Remarks',''],
-        DATA.wagePayments.slice().reverse(),
-        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
-      )}</div>
     <div class="card"><h2>Log Bonus</h2>
       ${formToggleBtn('wageBonuses','Form')}
       <div ${formBodyOpen('wageBonuses')}>
@@ -166,13 +118,6 @@ function wagesPanel(){
       <button class="ghost" id="cancelWageBonuses" style="display:none">Cancel Edit</button>
       </div>
     </div>
-    <div class="card"><h2>Bonus Log</h2>${logTable('wageBonuses',
-        ['Date','Employee','Amount','Remarks',''],
-        DATA.wageBonuses.slice().reverse(),
-        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wageBonuses',r.id)]
-      )}</div>
-    ${openingBalanceCard}
-    ${settleAllCard}
     <div class="card"><div class="card-head"><h2>Settle Employee</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-settlement" title="Info">i</button></div>
       ${formToggleBtn('wageSettlements','Form')}
       <div ${formBodyOpen('wageSettlements')}>
@@ -192,6 +137,17 @@ function wagesPanel(){
       <button class="ghost" id="cancelWageSettlements" style="display:none">Cancel Edit</button>
       </div>
     </div>
+    <div id="wagesWrap"></div>
+    <div class="card"><h2>Wage Payments Log</h2>${logTable('wagePayments',
+        ['Date','Employee','Amount','Remarks',''],
+        DATA.wagePayments.slice().reverse(),
+        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
+      )}</div>
+    <div class="card"><h2>Bonus Log</h2>${logTable('wageBonuses',
+        ['Date','Employee','Amount','Remarks',''],
+        DATA.wageBonuses.slice().reverse(),
+        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wageBonuses',r.id)]
+      )}</div>
     <div class="card"><h2>Settlements Log</h2>${logTable('wageSettlements',
         ['Date','Employee','Carried Forward','Remarks',''],
         DATA.wageSettlements.slice().reverse(),
@@ -208,7 +164,7 @@ function renderWages(){
     wrap.innerHTML = `<div class="card"><div class="empty">Add employees and qualities in the settings tab to see wages.</div></div>`;
     return;
   }
-  const showNum = n => n ? fmtQtyMtr(n) : '';
+  const showNum = n => n ? fmtNum(n) : '';
   const showRs2 = n => n ? fmtRs2(n) : '';
   const totalMeters = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].meters,0));
   const totalWages = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].wages,0));
@@ -233,22 +189,18 @@ function renderWages(){
   const grandDiffWages = rows.reduce((s,r)=>s+r.totalDiffWages,0);
   const grandWagesNoBonus = totalWages.reduce((a,b)=>a+b,0);
   const grandWages = grandWagesNoBonus + grandBonus;
-  // A signed amount rendered the same way everywhere on this page: positive still owed
-  // (rust), negative paid ahead / a credit (green), exactly zero in plain bold.
-  const signedCell = (amount, owedWord, creditWord)=> amount > 0.004
-    ? `<span style="color:var(--rust)"><b>${fmtRs(amount)}</b>${owedWord?' '+owedWord:''}</span>`
-    : amount < -0.004
-      ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(amount))}</b>${creditWord?' '+creditWord:''}</span>`
-      : `<b>${fmtRs(0)}</b>`;
   const balanceRows = wageRelevantEmployees().map(emp=>{
     const b = computeEmployeeWageBalance(emp.name);
-    const n = computeEmployeeWageNetForPeriod(emp.name, from, to);
+    const periodWages = computeEmployeeWagesForPeriod(emp.name, from, to);
+    const balCell = b.balance > 0
+      ? `<span style="color:var(--rust)"><b>${fmtRs(b.balance)}</b> owed</span>`
+      : b.balance < 0
+        ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(b.balance))}</b> credit</span>`
+        : `<b>${fmtRs(0)}</b>`;
     const carryCell = b.carryForward
       ? (b.carryForward > 0 ? `${fmtRs2(b.carryForward)} owed` : `${fmtRs2(Math.abs(b.carryForward))} credit`)
       : '—';
-    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${carryCell}</td>`
-      + `<td>${fmtRs2(n.earned)}</td><td>${n.paid?fmtRs2(n.paid):'—'}</td><td>${signedCell(n.net,'still due','paid ahead')}</td>`
-      + `<td>${signedCell(b.balance,'owed','credit')}</td><td>${b.lastSettled?fmtDate(b.lastSettled):'Never'}</td></tr>`;
+    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${carryCell}</td><td>${fmtRs2(periodWages)}</td><td>${balCell}</td><td>${b.lastSettled?fmtDate(b.lastSettled):'Never'}</td></tr>`;
   }).join('');
   wrap.innerHTML = `
     <div class="card"><div class="card-head"><h2>Meters by Quality (${fmtDate(from)} to ${fmtDate(to)})</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
@@ -265,10 +217,10 @@ function renderWages(){
       </table>
     </div>
     <div class="card"><div class="card-head"><h2>Employee Wage Balances</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>"Earned" and "Paid" are scoped to the Wage Period selected above only — "Paid (This Period)" is payments dated inside that same range, so "Net (This Period)" reaches exactly 0 once you've paid what was earned there. If you later change a rate for a date inside that period, Earned (and Net) recompute — Paid does not, so Net shows exactly what's newly due. "Balance" is the separate running total since the employee's last settlement (or all-time if never settled), regardless of which period is selected — use that one to see everything currently owed. "Credit" means paid ahead of wages earned. Employee loans are tracked separately in the Loans tab.</p>
-      <div class="log-scroll"><table><thead><tr><th>Employee</th><th>Carried Forward</th><th>Earned (This Period)</th><th>Paid (This Period)</th><th>Net (This Period)</th><th>Balance</th><th>Last Settled</th></tr></thead>
-      <tbody>${balanceRows || '<tr><td class="empty" colspan="7">No employees yet</td></tr>'}</tbody>
-      </table></div>
+      <p class="note info-note" hidden>Balance runs since each employee's last settlement (or all-time if never settled), so it stays accurate as you log payments no matter which Wage Period is selected above. "This Period" is just wages+bonus for the selected date range, for reference. "Credit" means you've paid ahead of wages earned so far. Employee loans are tracked separately in the Loans tab.</p>
+      <table><thead><tr><th>Employee</th><th>Carried Forward</th><th>This Period</th><th>Balance</th><th>Last Settled</th></tr></thead>
+      <tbody>${balanceRows || '<tr><td class="empty" colspan="5">No employees yet</td></tr>'}</tbody>
+      </table>
     </div>
   `;
 }
@@ -494,7 +446,7 @@ function table(headers, rows, cardable=false){
     if(!cardable) return `<td>${c}</td>`;
     const label = plain(headers[i]);
     const html = String(c==null?'':c);
-    if(!label || /<button|<input|<select|<textarea/.test(html)) return `<td class="act">${html}</td>`;
+    if(!label || html.includes('<button')) return `<td class="act">${html}</td>`;
     const empty = plain(html) === '' || plain(html) === '—';
     return `<td data-label="${escHtml(label)}"${empty?' data-empty':''}>${html}</td>`;
   };
@@ -518,11 +470,7 @@ function paginateRows(pageKey, allRows){
 }
 function paginationControls(pageKey, page, totalPages, totalCount){
   if(totalCount <= PAGE_SIZE) return '';
-  // Plain, evenly centered row — no side padding here. Clearing the fixed Backup & Restore
-  // fab (bottom-right of the screen, see .fab-backup in index.html) is handled by reserving
-  // space below this whole block (see the wrapping margin-bottom in logTable() below)
-  // instead of nudging this row sideways, which used to throw Prev/label/Next off-center.
-  return `<div class="pagination" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 14px;margin-top:12px">
+  return `<div class="pagination" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px">
     <button class="ghost" data-pg="${pageKey}:prev" ${page<=1?'disabled':''} type="button">‹ Prev</button>
     <span class="note" style="margin:0">Page ${page} of ${totalPages} (${totalCount} records)</span>
     <button class="ghost" data-pg="${pageKey}:next" ${page>=totalPages?'disabled':''} type="button">Next ›</button>
@@ -562,11 +510,7 @@ function logTable(pageKey, headers, sortedRecords, mapFn){
   // same as every card's own heading/intro/filters above this. Keeps a 20-row page from
   // pushing the whole card (and page) taller than it needs to be.
   EXPORT_SOURCES[pageKey] = () => ({headers, cells: filtered.map(mapFn)});
-  // Bottom margin here (not side padding on the row above) keeps the pagination/export
-  // buttons clear of the fixed Backup & Restore fab (bottom-right of the screen) when this
-  // block lands at the bottom of the visible page — without shifting either row off-center.
-  const footer = paginationControls(pageKey, page, totalPages, filtered.length) + exportBarHtml(pageKey, filtered.length);
-  return searchBox + (noResults || `<div class="log-scroll log-cards">${table(headers, pageRows.map(mapFn), true)}</div>` + (footer ? `<div style="margin-bottom:80px">${footer}</div>` : ''));
+  return searchBox + (noResults || `<div class="log-scroll log-cards">${table(headers, pageRows.map(mapFn), true)}</div>` + paginationControls(pageKey, page, totalPages, filtered.length) + exportBarHtml(pageKey, filtered.length));
 }
 const ICON_PRINT = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>';
 const ICON_SHARE = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><line x1="8.3" y1="10.7" x2="15.7" y2="6.3"/><line x1="8.3" y1="13.3" x2="15.7" y2="17.7"/></svg>';
@@ -615,42 +559,6 @@ function receiptBtn(id){ return `<button class="ghost rowbtn receipt" data-recei
 function shareReceiptBtn(id){ return `<button class="ghost rowbtn share" data-share-receipt="${id}" aria-label="Share receipt" title="Share receipt"><span class="ic">${ICON_SHARE}</span><span class="lbl">Share</span></button>`; }
 function recoveryReceiptBtn(id){ return `<button class="ghost rowbtn receipt" data-recovery-receipt="${id}" aria-label="Print receipt" title="Print receipt"><span class="ic">${ICON_PRINT}</span><span class="lbl">Receipt</span></button>`; }
 function shareRecoveryReceiptBtn(id){ return `<button class="ghost rowbtn share" data-share-recovery-receipt="${id}" aria-label="Share receipt" title="Share receipt"><span class="ic">${ICON_SHARE}</span><span class="lbl">Share</span></button>`; }
-// Item-table rows for a Sale receipt. A plain sale is one row; an L (AIL) adjusted or
-// superseded entry needs the shortage math spelled out as its own rows in the SAME table a
-// client already knows how to read — a footnote sentence is easy to miss or misread,
-// especially for a client who isn't literate, so "dispatched qty, L count, shortage
-// deducted, final qty" each get their own row instead. Shared by printSaleReceipt (HTML) and
-// the PDF builder so the two can never show different numbers.
-function saleReceiptRows(r, rate){
-  const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
-  if(r.lAdjustedFromId){
-    const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
-    if(orig) return {
-      rows: [
-        {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage (${orig.lCount} L)`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
-      ],
-      totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
-    };
-    return {rows: plainRow(), totalLabel:'Total', totalAmount: fmtRs(r.amount)};
-  }
-  if(r.lStatus==='applied') return {
-    rows: [
-      {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage (${r.lCount} L)`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
-    ],
-    totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
-  };
-  if(r.lStatus==='returned') return {rows: plainRow(), totalLabel:'Total (Lot Returned)', totalAmount: fmtRs(0)};
-  return {rows: plainRow(), totalLabel:'Total', totalAmount: fmtRs(r.amount)};
-}
-// Short status line kept below the table for context (which dyeing unit, cross-reference)
-// once the money/qty breakdown itself has already been shown as table rows above.
-function saleLBlockHtml(r){
-  if(r.lStatus==='returned') return `<div class="meta-row" style="margin-top:6px;color:var(--red)"><span>L (AIL)</span><b>Lot returned${r.lCount?` — ${r.lCount} L`:''}</b></div>`;
-  if(r.lStatus==='ok') return `<div class="meta-row" style="margin-top:6px"><span>L (AIL)</span><b>OK — no shortage</b></div>`;
-  return '';
-}
 // Shared by printSaleReceipt (HTML for window.print()) and shareSaleReceipt (PDF for the
 // native share sheet) so the two never drift apart. Returns null if the sale no longer exists.
 function buildReceiptFields(saleId){
@@ -666,12 +574,7 @@ function buildReceiptFields(saleId){
   // sale, which is what this figure has always represented elsewhere in the app.
   const beforeLastSale = receivableBeforeLastSale(r.client);
   const previousBalance = beforeLastSale ? beforeLastSale.amount : 0;
-  // Matches saleReceiptRows' Net Total exactly: a superseded original nets out its own
-  // deduction, a returned lot counts for nothing, and everything else (including an
-  // adjustment entry, whose stored amount is already net) is its stored amount as-is.
-  const currentSale = r.lStatus==='applied' ? (Number(r.amount)||0) - (Number(r.lDeduction)||0)
-    : r.lStatus==='returned' ? 0
-    : Number(r.amount)||0;
+  const currentSale = Number(r.amount)||0;
   const currentBalance = previousBalance + currentSale;
   const safe = s => String(s||'').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_');
   // Naming convention for every shareable file: <ClientName>_<Date>_<Time> (see dateTimeStamp).
@@ -695,7 +598,6 @@ function printSaleReceipt(saleId, opts){
       <div class="row"><span>Current Sale</span><span>${fmtRs(currentSale)}</span></div>
       <div class="row total"><span>Current Balance</span><span>${fmtRs(currentBalance)}</span></div>
     </div>`;
-  const rowset = saleReceiptRows(r, rate);
   const html = `<div class="receipt">
     ${receiptWatermarkDiv}
     ${bizLines}
@@ -705,13 +607,11 @@ function printSaleReceipt(saleId, opts){
     <div class="meta-row"><span>Client</span><b>${escHtml(r.client||'—')}</b></div>
     <table>
       <thead><tr><th>Quality</th><th class="num">Quantity (mtr)</th><th class="num">Rate (Rs)</th><th class="num">Amount (Rs)</th></tr></thead>
-      <tbody>${rowset.rows.map(row=>`<tr><td>${escHtml(row.label)}</td><td class="num">${escHtml(row.qty)}</td><td class="num">${escHtml(row.rate)}</td><td class="num">${escHtml(row.amount)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="3">${escHtml(rowset.totalLabel)}</td><td class="num">${escHtml(rowset.totalAmount)}</td></tr></tfoot>
+      <tbody><tr><td>${escHtml(r.quality||'—')}</td><td class="num">${fmtQtyMtr(r.qty)}</td><td class="num">${fmtRs2(rate)}</td><td class="num">${fmtRs(r.amount)}</td></tr></tbody>
+      <tfoot><tr><td colspan="3">Total</td><td class="num">${fmtRs(r.amount)}</td></tr></tfoot>
     </table>
     ${balanceHtml}
-    ${r.dyeing ? `<div class="meta-row" style="margin-top:14px"><span>Dyeing</span><b>${escHtml(r.dyeing)}</b></div>` : ''}
-    ${saleLBlockHtml(r)}
-    ${r.desc ? `<div class="meta-row" style="margin-top:${r.dyeing?'6':'14'}px"><span>Description</span><b>${escHtml(r.desc)}</b></div>` : ''}
+    ${r.desc ? `<div class="meta-row" style="margin-top:14px"><span>Description</span><b>${escHtml(r.desc)}</b></div>` : ''}
     <div class="footer-note">Thank you for your business.</div>
   </div>`;
   if(opts && opts.htmlOnly) return html;
@@ -779,15 +679,12 @@ async function shareSaleReceiptAsPdf(saleId){
     metaRow('Invoice No', r.invoice||'—');
     metaRow('Client', r.client||'—');
     y += 6;
-    // Item table — one row per line in saleReceiptRows(): a plain sale is a single row, but
-    // an L (AIL) adjusted/superseded entry gets its shortage math as its own rows here too,
-    // matching the HTML/image receipt exactly (see saleReceiptRows in this file).
-    const rowset = saleReceiptRows(r, rate);
+    // Item table (single row — one sale entry per receipt)
     const cols = [
-      {label:'Quality', w:0.40, align:'left'},
+      {label:'Quality', w:0.34, align:'left'},
       {label:'Qty (mtr)', w:0.22, align:'right'},
-      {label:'Rate', w:0.16, align:'right'},
-      {label:'Amount', w:0.22, align:'right'},
+      {label:'Rate', w:0.20, align:'right'},
+      {label:'Amount', w:0.24, align:'right'},
     ];
     const tableW = pageW - margin*2;
     let x = margin;
@@ -795,19 +692,15 @@ async function shareSaleReceiptAsPdf(saleId){
     doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(20);
     cols.forEach(c=>{ const w=c.w*tableW; doc.text(c.label, c.align==='left'?x+4:x+w-4, y, {align:c.align}); x+=w; });
     y += 22;
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    rowset.rows.forEach(row=>{
-      const rowVals = [row.label, row.qty, row.rate, row.amount];
-      x = margin;
-      cols.forEach((c,i)=>{ const w=c.w*tableW; doc.text(String(rowVals[i]||''), c.align==='left'?x+4:x+w-4, y, {align:c.align}); x+=w; });
-      y += 18;
-    });
-    doc.setFontSize(10);
-    y += 4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    const rowVals = [r.quality||'—', fmtQtyMtr(r.qty), fmtRs2(rate), fmtRs(r.amount)];
+    x = margin;
+    cols.forEach((c,i)=>{ const w=c.w*tableW; doc.text(String(rowVals[i]), c.align==='left'?x+4:x+w-4, y, {align:c.align}); x+=w; });
+    y += 6;
     doc.setDrawColor(200); doc.line(margin, y, pageW-margin, y); y += 18;
     doc.setFont('helvetica','bold');
-    doc.text(rowset.totalLabel, margin+4, y);
-    doc.text(rowset.totalAmount, pageW-margin-4, y, {align:'right'});
+    doc.text('Total', margin+4, y);
+    doc.text(fmtRs(r.amount), pageW-margin-4, y, {align:'right'});
     y += 26;
     // Balance summary box
     const boxTop = y - 14;
@@ -819,20 +712,6 @@ async function shareSaleReceiptAsPdf(saleId){
     doc.setFont('helvetica','bold'); doc.setTextColor(20);
     doc.text('Current Balance', margin+10, y); doc.text(fmtRs(currentBalance), pageW-margin-10, y, {align:'right'});
     y = boxTop + 66 + 24;
-    if(r.dyeing){
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
-      doc.text(`Dyeing: ${r.dyeing}`, margin, y);
-      y += 16;
-    }
-    if(r.lStatus==='returned'){
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(180,40,40);
-      doc.text(`L (AIL): Lot returned${r.lCount?` — ${r.lCount} L`:''}`, margin, y);
-      y += 16; doc.setTextColor(60);
-    } else if(r.lStatus==='ok'){
-      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
-      doc.text('L (AIL): OK — no shortage', margin, y);
-      y += 16;
-    }
     if(r.desc){
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
       doc.text(`Description: ${r.desc}`, margin, y);

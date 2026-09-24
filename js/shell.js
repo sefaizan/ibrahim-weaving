@@ -128,18 +128,18 @@ function restoredTab(){
     return TABS.some(t=>t.id===id) ? id : 'overview';
   }catch(e){ return 'overview'; }
 }
-// Header pill above the version badge: total wages (no bonuses) for the current wage week,
-// Friday to Thursday, worked out from today's date so it rolls over by itself each Friday. Same
-// figures as the Wages page for that range (see weeklyWageSummary in calc.js). Refreshed on every
-// tab render, after every save, and when the app comes back to the foreground.
+// Header pill above the version badge: total meters produced in the current wage week (Friday to
+// Thursday), all qualities and looms together, worked out from today's date so it rolls over by
+// itself each Friday. Refreshed on every tab render, after every save, and when the app comes
+// back to the foreground.
 function updateWeekBadge(){
   const el = document.getElementById('weekBadge');
   if(!el) return;
   try{
     if((typeof encEnabled === 'function' && encEnabled() && !ENC_DEK) || !DATA || !Array.isArray(DATA.production)){ el.hidden = true; return; }
-    const w = weeklyWageSummary(todayStr());
-    el.textContent = 'Week ' + fmtRs(w.totalWages);
-    const tip = `Wages this week, ${fmtDate(w.from)} (Fri) to ${fmtDate(w.to)} (Thu): ${fmtRs(w.totalWages)} for ${fmtQtyMtr(w.totalMeters)} m. Bonuses not included.`;
+    const w = weeklyProductionTotal(todayStr());
+    el.textContent = 'Week ' + fmtQtyMtr(w.meters) + ' m';
+    const tip = `Production this week, ${fmtDate(w.from)} (Fri) to ${fmtDate(w.to)} (Thu): ${fmtQtyMtr(w.meters)} m, all qualities together.`;
     el.title = tip; el.setAttribute('aria-label', tip);
     el.hidden = false;
   }catch(e){ el.hidden = true; }
