@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-25-family-members-master-list">
+<meta name="app-build" content="2026-09-25-block-pulldown-refresh">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -115,11 +115,12 @@
   }
   html[data-theme="dark"]{ background:#0B0D0F; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html{ background:#C7CDD2; }
+  html{ background:#C7CDD2; overscroll-behavior-y:contain; } /* stops a pull-down at the very top of the page from reaching the browser's native pull-to-refresh (which reloads the app and drops you back on Overview) */
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:'Roboto','Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;
     -webkit-font-smoothing:antialiased; font-size:14px;
+    overscroll-behavior-y:contain; /* belt-and-suspenders alongside the html rule above — some browsers key off body instead */
   }
   h1,h2,h3{ font-family:'Roboto',sans-serif; font-weight:700; margin:0; letter-spacing:0; }
   .mono{ font-family: 'Roboto Condensed', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
@@ -140,7 +141,7 @@
     }
     .scrim, nav.tabs{ position:absolute; }
     .fab-backup{ position:absolute; }
-    .app-shell #panels{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .app-shell #panels{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
   }
   /* Status bar — mimics the OS status strip so the app reads as installed/full-screen even
      inside a browser preview. On a real installed PWA the system draws its own on top of
@@ -721,7 +722,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.12.1</span>
+      <span class="app-version" id="appVersionTag">v3.12.2</span>
     </div>
   </header>
 
