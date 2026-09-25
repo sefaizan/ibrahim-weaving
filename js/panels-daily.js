@@ -49,6 +49,16 @@ function employeeSelectField(label, id, extra=''){
   const inactiveHtml = inactive.length ? `<optgroup label="Inactive">${opts(inactive)}</optgroup>` : '';
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${opts(active)}${inactiveHtml}</select></div>`;
 }
+// Same pattern as employeeSelectField, for the Personal Loans (Given) page — picking from a
+// managed Settings > Family Members list (instead of typing a free-text name) keeps balances
+// accurate: a typo or a slightly different spelling used to be able to create a second
+// "person" with their own separate running balance.
+function familyMemberSelectField(label, id, extra=''){
+  const active = DATA.familyMembers.filter(m=>m.active !== false);
+  const inactive = DATA.familyMembers.filter(m=>m.active === false);
+  const inactiveHtml = inactive.length ? `<optgroup label="Inactive">${opts(inactive)}</optgroup>` : '';
+  return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${opts(active)}${inactiveHtml}</select></div>`;
+}
 // Clients can be deactivated (Settings → Clients) just like employees: active ones are listed
 // plainly, inactive ones sit in their own "Inactive" group — still selectable, so old entries
 // and filters/statements for a past client keep working — but out of the way of new entries.
@@ -115,9 +125,12 @@ function productionPanel(){
       ${field('Employee 3 Meters','p_e3m','number')}
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
-    <button class="primary" id="addProductionNext">Add &amp; next loom →</button>
-    <button class="ghost" id="addProduction">Add Entry</button>
-    <button class="ghost" id="cancelProduction" style="display:none">Cancel Edit</button></div>
+    <div class="calc-amount" id="p_remainingPreview">Remaining to assign: —</div>
+    <div class="form-actions">
+      <button class="primary" id="addProductionNext">Add &amp; next loom →</button>
+      <button class="ghost" id="addProduction">Add Entry</button>
+      <button class="ghost" id="cancelProduction" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><div class="card-head"><h2>Bulk Import</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-bulkimport" title="Info">i</button></div>
       ${formToggleBtn('bulkImport','Form')}
       <div ${formBodyOpen('bulkImport')}>
@@ -502,6 +515,42 @@ function familyPanel(){
       ['Date','Time','Category','Description','Amount',''],
       DATA.family.slice().reverse(),
       r=>[fmtDate(r.date), r.time||'—', escHtml(r.category||'—'), escHtml(r.desc||'—'), fmtRs(r.amount), actionBtns('family',r.id)]
+    )}</div>`;
+}
+// Personal Expense: your own spending, kept in its own ledger separate from Family Expense
+// so the two totals never mix — same shape and same treatment (Cash Position / Profit-Loss)
+// as Family Expense, see famExpCum/personalExpCum in calc.js.
+function personalPanel(){
+  const cats = ['Personal Care','Shopping','Entertainment','Travel','Gifts','Health','Subscriptions','Pocket Money','Other'];
+  const totals = sumAllAndMonth(DATA.personal, 'amount');
+  const byCat = sumByGroup(DATA.personal, 'category', 'amount');
+  const catTable = byCat.length ? `<div class="group-label">By Category (All Time)</div>
+    <table><thead><tr><th>Category</th><th>Amount</th></tr></thead>
+    <tbody>${byCat.map(([cat,amt])=>`<tr><td>${escHtml(cat)}</td><td>${fmtRs(amt)}</td></tr>`).join('')}</tbody></table>` : '';
+  const summary = summaryCard('Summary', [
+    {label:'Total Personal Expense (All Time)', value: fmtRs(totals.all)},
+    {label:'This Month', value: fmtRs(totals.month)},
+    {label:'Entries Logged', value: fmtNum(DATA.personal.length)},
+  ], catTable);
+  return `${summary}<div class="card"><h2>Log Personal Expense</h2>
+    <div class="grid cols-3">
+      ${field('Date','pex_date','date',`value="${todayStr()}" autofocus`)}
+      ${field('Time','pex_time','time',`value="${nowStr()}"`)}
+      <div class="field"><label>Category</label><select id="pex_cat"><option value="">—</option>${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:12px">
+      ${field('Amount (Rs)','pex_amt','number')}
+    </div>
+    <div class="grid cols-1" style="margin-top:12px">
+      ${textareaField('Description','pex_desc')}
+    </div>
+    <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
+    <button class="primary" id="addPersonal">Add Entry</button>
+    <button class="ghost" id="cancelPersonal" style="display:none">Cancel Edit</button></div>
+    <div class="card"><h2>Personal Expense Log</h2>${logTable('personal',
+      ['Date','Time','Category','Description','Amount',''],
+      DATA.personal.slice().reverse(),
+      r=>[fmtDate(r.date), r.time||'—', escHtml(r.category||'—'), escHtml(r.desc||'—'), fmtRs(r.amount), actionBtns('personal',r.id)]
     )}</div>`;
 }
 function warpPanel(){

@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-25-enter-adds-next-loom">
+<meta name="app-build" content="2026-09-25-family-members-master-list">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -259,6 +259,11 @@
   nav.tabs button.active{ color:var(--rust-deep); background:var(--rust-tonal); }
   nav.tabs button.active .icon{ color:var(--rust-deep); }
   nav.tabs button:hover:not(.active){ background:var(--paper-dim); }
+  .drawer-group-label{
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px;
+    color:var(--ink-soft); padding:14px 20px 4px;
+  }
+  .drawer-group-label:first-of-type{ padding-top:8px; }
   main{ padding:16px 14px 90px; max-width:1180px; margin:0 auto; }
   .panel{ display:none; }
   .panel.active{ display:block; }
@@ -273,6 +278,10 @@
      flips it open/closed. Keeps the card compact by default; the explanation is one tap away. */
   .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
   .card-head h2{ margin-bottom:0; }
+  .head-actions{ display:flex; align-items:center; gap:8px; }
+  /* A collapsible entry form that sits above its log table inside the same card. */
+  .form-above-log{ margin-bottom:16px; padding-bottom:16px; border-bottom:1px dashed var(--line); }
+  .rate-head{ margin-top:16px; padding-top:10px; border-top:1px dashed var(--line); margin-bottom:8px; }
   .info-btn{
     position:relative; overflow:hidden;
     flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:none;
@@ -568,6 +577,14 @@
     border:1px solid var(--field-border); border-radius:12px;
     font-size:16px; font-weight:800; color:var(--rust-deep); font-style:normal;
   }
+  .calc-amount.over{ color:var(--red); border-color:var(--red); }
+  /* Row of action buttons at the bottom of an entry form (Add / Add & next / Cancel Edit).
+     Buttons used to just flow inline, each with its own margin-top — fine with two, but a
+     third button (e.g. Production's "Add & next loom" + "Add Entry" + "Cancel Edit") could
+     wrap unevenly and looked misaligned. This gives them one shared top margin and a uniform
+     gap instead, and cancels each button's own margin-top so they line up on one baseline. */
+  .form-actions{ display:flex; align-items:center; gap:10px 12px; flex-wrap:wrap; margin-top:14px; }
+  .form-actions button.primary, .form-actions button.ghost{ margin-top:0; }
   /* Floating Backup & Restore shortcut — stays fixed over every tab/screen so a backup is
      always one tap away, instead of having to navigate through the tab bar first. */
   .fab-backup{
@@ -588,6 +605,18 @@
   .fab-backup .icon{ font-size:24px; }
   .fab-backup:hover{ background:#D98A4B; }
   .fab-backup:active{ transform:scale(0.94); }
+  /* "Needs backup" badge (see setFabNeedsBackup, js/autobackup.js): a small dot rather than
+     recoloring the whole button, so it reads as a notification ("something's waiting") rather
+     than a warning ("something's wrong"). Tapping the button while this shows emails a backup
+     directly instead of opening Backup & Restore — see fabBackup.onclick in js/lock-init.js. */
+  .fab-backup.needs-backup::after{
+    content:''; position:absolute; top:4px; right:4px; width:13px; height:13px;
+    border-radius:50%; background:var(--red); border:2px solid var(--gold);
+  }
+  /* While a tap-triggered send is in flight, dim the button and ignore further taps — the same
+     visual treatment as fab-scroll-hide, minus hiding it entirely, so it's clear something is
+     happening without the button vanishing mid-send. */
+  .fab-backup.fab-busy{ opacity:0.55; pointer-events:none; }
   @media (max-width:699px){
     .fab-backup{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:52px; height:52px; }
   }
@@ -692,7 +721,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.11.34</span>
+      <span class="app-version" id="appVersionTag">v3.12.1</span>
     </div>
   </header>
 

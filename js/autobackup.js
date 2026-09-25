@@ -22,6 +22,15 @@ const AUTO_BACKUP_STATE_KEY = 'khata-autobackup-state';
 // The daily check is remembered per calendar day of the phone's own clock (state.lastCheckDay).
 let AUTO_BACKUP_TIMER = null;
 let AUTO_BACKUP_BUSY = false;
+// Whether the ledger has changed since the last *successfully emailed* backup — drives the
+// floating Backup & Restore button's "needs backup" badge (see setFabNeedsBackup below) and
+// what tapping it does. Kept as a plain flag rather than re-hashing on every render; refreshed
+// from the real SHA-256 comparison (autoBackupHash vs state.lastHash) at the moments that
+// matter — app open/unlock, after every save, and after every send attempt — via
+// autoBackupRefreshFabState(). autoBackupSend() itself always re-checks the hash before it
+// actually emails anything, so this flag being briefly stale can never cause a duplicate or a
+// missed-change email — it only affects how the button looks and what a tap does.
+let AUTO_BACKUP_DIRTY = false;
 
 function autoBackupConfig(){
   try{
@@ -170,16 +179,39 @@ async function autoBackupRun(){
   const r = await autoBackupSend(false);
   autoBackupArmMidnight();
   autoBackupRefreshStatus();
+  autoBackupRefreshFabState();
   return r;
 }
 // Called after every save(). Saving no longer sends anything by itself: the daily backup picks the change up.
 function autoBackupSchedule(){
+  autoBackupRefreshFabState(); // the FAB badge should reflect every save, even if auto-email is off
   if(!autoBackupReady()) return;
   autoBackupArmMidnight();
 }
 // Called when the app opens, returns to the screen, or the phone comes back online.
 function autoBackupOnWake(){
   if(autoBackupReady()) autoBackupRun();
+}
+
+/* ---------------- Floating Backup button: "needs backup" indicator ---------------- */
+// Toggles the badge on #fabBackup and what a tap does (see fabBackup.onclick in lock-init.js).
+function setFabNeedsBackup(needs){
+  AUTO_BACKUP_DIRTY = !!needs;
+  const fab = document.getElementById('fabBackup');
+  if(!fab) return;
+  fab.classList.toggle('needs-backup', AUTO_BACKUP_DIRTY);
+  fab.setAttribute('title', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : 'Backup & Restore');
+  fab.setAttribute('aria-label', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : 'Backup & Restore');
+}
+// Recomputes whether the ledger differs from the last emailed backup, and updates the button
+// to match. Best-effort and silent: if hashing fails for some reason, the button just keeps
+// showing whatever it last showed rather than throwing.
+async function autoBackupRefreshFabState(){
+  if(!autoBackupReady()){ setFabNeedsBackup(false); return; }
+  try{
+    const hash = await autoBackupHash(JSON.stringify(DATA));
+    setFabNeedsBackup(hash !== autoBackupState().lastHash);
+  }catch(e){ /* leave the button as it was */ }
 }
 if(typeof document !== 'undefined' && document.addEventListener){
   document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') setTimeout(autoBackupOnWake, 3000); });

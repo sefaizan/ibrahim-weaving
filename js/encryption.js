@@ -94,6 +94,7 @@ async function afterUnlockLoad(){
   if(!ENC_PENDING_LOAD || !ENC_DEK) return;
   ENC_PENDING_LOAD = false;
   await load();
+  autoBackupRefreshFabState(); // sets the FAB's "needs backup" badge to match reality on unlock
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort */ }
   UNDO_STACK.length = 0; updateUndoButton();
   switchTab(CURRENT_TAB || 'overview');

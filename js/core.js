@@ -24,24 +24,30 @@ const ICONS = {
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.8-1L15 3h-4l-.3 2.9a7.6 7.6 0 0 0-1.8 1l-2.3-.9-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 1.8 1l.3 2.9h4l.3-2.9a7.6 7.6 0 0 0 1.8-1l2.3.9 2-3.4Z"/></svg>',
   backup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
 };
+// group: which drawer section this tab is filed under (see NAV_GROUPS below) — purely a
+// display grouping in renderNav; tabForKey/switchTab/every other lookup still works by id alone.
 const TABS = [
-  {id:'overview', label:'Overview', icon:'dashboard'},
-  {id:'production', label:'Production', icon:'precision_manufacturing'},
-  {id:'sale', label:'Sale', icon:'point_of_sale'},
-  {id:'recovery', label:'Recovery', icon:'payments'},
-  {id:'expense', label:'Expense', icon:'receipt_long'},
-  {id:'family', label:'Family Expense', icon:'home'},
-  {id:'warp', label:'Warp (Tana)', icon:'linear_scale'},
-  {id:'weft', label:'Weft (Bana)', icon:'texture'},
-  {id:'wages', label:'Wages', icon:'groups'},
-  {id:'loans', label:'Loans (Employee)', icon:'account_balance_wallet'},
-  {id:'ratecalc', label:'Grey Cloth Rate', icon:'calculate'},
-  {id:'checkpoints', label:'Cash Checkpoints', icon:'savings'},
-  {id:'graphs', label:'Graphs', icon:'monitoring'},
-  {id:'warpbeams', label:'Warp (Tana) Beam', icon:'inventory_2'},
-  {id:'settings', label:'Settings', icon:'settings'},
-  {id:'backup', label:'Backup & Restore', icon:'backup'},
+  {id:'overview', label:'Overview', icon:'dashboard', group:'Daily'},
+  {id:'production', label:'Production', icon:'precision_manufacturing', group:'Daily'},
+  {id:'sale', label:'Sale', icon:'point_of_sale', group:'Money'},
+  {id:'recovery', label:'Recovery', icon:'payments', group:'Money'},
+  {id:'expense', label:'Expense', icon:'receipt_long', group:'Money'},
+  {id:'wages', label:'Wages', icon:'groups', group:'Money'},
+  {id:'loans', label:'Loans (Employee)', icon:'account_balance_wallet', group:'Money'},
+  {id:'ratecalc', label:'Grey Cloth Rate', icon:'calculate', group:'Money'},
+  {id:'family', label:'Family Expense', icon:'home', group:'Family'},
+  {id:'personal', label:'Personal Expense', icon:'receipt_long', group:'Family'},
+  {id:'personalloans', label:'Personal Loans (Given)', icon:'account_balance_wallet', group:'Family'},
+  {id:'warp', label:'Warp (Tana)', icon:'linear_scale', group:'Materials'},
+  {id:'weft', label:'Weft (Bana)', icon:'texture', group:'Materials'},
+  {id:'warpbeams', label:'Warp (Tana) Beam', icon:'inventory_2', group:'Materials'},
+  {id:'checkpoints', label:'Cash Checkpoints', icon:'savings', group:'Tools'},
+  {id:'graphs', label:'Graphs', icon:'monitoring', group:'Tools'},
+  {id:'settings', label:'Settings', icon:'settings', group:'Tools'},
+  {id:'backup', label:'Backup & Restore', icon:'backup', group:'Tools'},
 ];
+// Order the groups appear in the drawer, top to bottom.
+const NAV_GROUPS = ['Daily','Money','Family','Materials','Tools'];
 
 let DATA = {
   "qualities": [],
@@ -57,6 +63,9 @@ let DATA = {
   "wagePayments": [],
   "wageSettlements": [],
   "loanPayments": [],
+  "personal": [],
+  "personalLoans": [],
+  "familyMembers": [],
   "production": [],
   "warp": [],
   "weft": [],
@@ -82,9 +91,10 @@ let PRODUCTION_PREFILL = null; // {date, quality, loom} — set by "Add & next l
 // collapse it again. Using the same key as EDITING.key (e.g. 'wagePayments') lets clicking
 // Edit on a log row auto-open that form even if it was collapsed — see wireEditGeneric.
 let OPEN_FORMS = new Set();
-function formToggleBtn(key, label){
+function formToggleBtn(key, label, inHead){
   const open = OPEN_FORMS.has(key);
-  return `<button class="ghost" type="button" data-toggle-form="${key}" style="margin-bottom:12px">${open?'Hide':'Show'} ${label}</button>`;
+  // inHead: the button sits in a log card's header row (next to the log's title), not above a form.
+  return `<button class="ghost" type="button" data-toggle-form="${key}" style="${inHead?'margin:0;flex:none':'margin-bottom:12px'}">${open?'Hide':'Show'} ${label}</button>`;
 }
 // Collapsible summaries: every page's Summary / Breakdown card starts collapsed and opens on
 // tap. Open state is remembered per page (OPEN_SUMMARIES) so it survives the re-renders that

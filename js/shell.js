@@ -6,7 +6,18 @@
 function renderNav(active){
   const nav = document.getElementById('tabs');
   const head = `<div class="drawer-head"><div class="mark"><img src="${APP_MARK_PNG}" alt=""></div><div class="appname">Ibrahim Weaving</div><div class="appsub">Power Loom Ledger</div></div>`;
-  nav.innerHTML = head + TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===active?'active':''}"><span class="icon">${ICONS[t.icon]||''}</span>${t.label}</button>`).join('');
+  // Grouped into sections (Daily / Money / Materials / Tools — see NAV_GROUPS) so a 16-tab
+  // drawer scans faster than one flat list. A tab with no matching group (shouldn't happen,
+  // but keeps this from silently dropping one if TABS and NAV_GROUPS ever drift) falls back
+  // to a single ungrouped section at the end.
+  const body = NAV_GROUPS.map(g=>{
+    const tabs = TABS.filter(t=>t.group===g);
+    if(!tabs.length) return '';
+    return `<div class="drawer-group-label">${g}</div>` + tabs.map(t=>`<button data-tab="${t.id}" class="${t.id===active?'active':''}"><span class="icon">${ICONS[t.icon]||''}</span>${t.label}</button>`).join('');
+  }).join('');
+  const leftover = TABS.filter(t=>!NAV_GROUPS.includes(t.group));
+  const leftoverHtml = leftover.length ? leftover.map(t=>`<button data-tab="${t.id}" class="${t.id===active?'active':''}"><span class="icon">${ICONS[t.icon]||''}</span>${t.label}</button>`).join('') : '';
+  nav.innerHTML = head + body + leftoverHtml;
   nav.querySelectorAll('button[data-tab]').forEach(b=> b.onclick = ()=> switchTab(b.dataset.tab));
   const current = TABS.find(t=>t.id===active);
   const titleEl = document.getElementById('appbarTitle');
@@ -170,7 +181,7 @@ function settingsPanel(){
   const section = (title, key, placeholder, isName, hasActiveToggle) => `
     <div class="card">
       <div class="card-head"><h2>${title}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Use ↑/↓ to reorder — the order here is the order shown in every dropdown that lists these, so move the ones you use most to the top.${hasActiveToggle?(key==='clients'?' Deactivate a client you no longer deal with so they drop out of new-entry dropdowns and, once nothing is owed, out of the client-wise tables — their history stays intact and they can be reactivated anytime.':' Deactivate anyone no longer working so they drop out of new-entry dropdowns — their history stays intact and they can be reactivated anytime.'):''}</p>
+      <p class="note info-note" hidden>Use ↑/↓ to reorder — the order here is the order shown in every dropdown that lists these, so move the ones you use most to the top.${hasActiveToggle?(key==='clients'?' Deactivate a client you no longer deal with so they drop out of new-entry dropdowns and, once nothing is owed, out of the client-wise tables — their history stays intact and they can be reactivated anytime.':key==='familyMembers'?' Deactivate anyone you no longer lend to so they drop out of the Person dropdown on Personal Loans — their history stays intact and they can be reactivated anytime.':' Deactivate anyone no longer working so they drop out of new-entry dropdowns — their history stays intact and they can be reactivated anytime.'):''}</p>
       <div class="grid cols-2">
         <div class="field"><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
       </div>
@@ -212,7 +223,7 @@ function settingsPanel(){
     </div>
     <button class="primary" id="saveBusinessInfo" style="margin-top:12px">Save</button></div>
   ` + section('Qualities','qualities','e.g. 44 Picks',false) + section('Clients','clients','e.g. Ali Textiles',true,true)
-    + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Looms','looms','e.g. 9',false)
+    + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Family Members','familyMembers','e.g. Uncle Rafiq',true,true) + section('Looms','looms','e.g. 9',false)
     + loomAssignmentsSection()
     + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)
     + section('Dyeing Units','dyeingUnits','e.g. Al-Karam Dyeing',false)
@@ -353,6 +364,7 @@ const MASTER_REF_FIELDS = {
   warpTypes: [['warp','type'], ['warpBeams','warpType']],
   weftTypes: [['weft','type']],
   dyeingUnits: [['sale','dyeing']],
+  familyMembers: [['personalLoans','person']],
   banks:     [] // bank names live inside each recovery's cheques — handled below
 };
 // Rewrites every reference to oldName with newName; returns how many records/fields changed.
@@ -376,8 +388,8 @@ function cascadeMasterRename(key, oldName, newName){
 
 /* ---------------- Backup files: password protection, decoding, validation ---------------- */
 const BACKUP_ENC_PREFIX = 'KHATA-ENC1:'; // marks a password-protected (AES-GCM) backup
-const BACKUP_KNOWN_LISTS = ['sale','recovery','clients','qualities','employees','looms','production','expense','family','warp','weft',
-  'wagePayments','wageBonuses','wageSettlements','loanPayments','warpBeams','checkpoints'];
+const BACKUP_KNOWN_LISTS = ['sale','recovery','clients','qualities','employees','looms','production','expense','family','personal','warp','weft',
+  'wagePayments','wageBonuses','wageSettlements','loanPayments','personalLoans','familyMembers','warpBeams','checkpoints'];
 function b64FromBytes(bytes){
   let s = '';
   for(let i=0; i<bytes.length; i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
@@ -432,7 +444,7 @@ function backupErrorMessage(err){
 function backupCounts(o){
   const n = k => (o && Array.isArray(o[k])) ? o[k].length : 0;
   return {sales:n('sale'), recoveries:n('recovery'), production:n('production'), clients:n('clients'),
-          other:n('expense')+n('family')+n('warp')+n('weft')+n('wagePayments')+n('wageBonuses')+n('wageSettlements')+n('loanPayments')+n('warpBeams')+n('checkpoints')};
+          other:n('expense')+n('family')+n('personal')+n('warp')+n('weft')+n('wagePayments')+n('wageBonuses')+n('wageSettlements')+n('loanPayments')+n('personalLoans')+n('warpBeams')+n('checkpoints')};
 }
 const totalEntries = c => c.sales + c.recoveries + c.production + c.other;
 function countsText(c){
@@ -549,8 +561,8 @@ function ledgerSizeLineHtml(){
 
 /* ---------------- Export a log table to CSV (opens in Excel / Google Sheets) ---------------- */
 const EXPORT_SOURCES = {}; // pageKey -> () => ({headers, cells}) for the log table as last drawn (all filtered rows, not just the page shown)
-const EXPORT_LABELS = {sale:'Sales', recovery:'Recovery', expense:'Expenses', family:'Family_Expenses', warp:'Warp', weft:'Weft', production:'Production',
-  wageBonuses:'Wage_Bonuses', wagePayments:'Wage_Payments', wageSettlements:'Wage_Settlements', loanPayments:'Loans', rateCalcs:'Grey_Cloth_Rates',
+const EXPORT_LABELS = {sale:'Sales', recovery:'Recovery', expense:'Expenses', family:'Family_Expenses', personal:'Personal_Expenses', warp:'Warp', weft:'Weft', production:'Production',
+  wageBonuses:'Wage_Bonuses', wagePayments:'Wage_Payments', wageSettlements:'Wage_Settlements', loanPayments:'Loans', personalLoans:'Personal_Loans', rateCalcs:'Grey_Cloth_Rates',
   checkpoints:'Cash_Checkpoints', warpBeams:'Warp_Beams', warpBeamsFinished:'Warp_Beams_Finished', pendingCheques:'Pending_Cheques', bouncedCheques:'Bounced_Cheques', unlinkedReplaced:'Replaced_Cheques_Not_Linked'};
 function exportBarHtml(pageKey, count){
   if(!count) return '';
@@ -691,9 +703,9 @@ function showJustUpdatedBar(){
 const UNDO_STACK = [];                       // newest last: {id, label, kind, ops, at, size}
 const UNDO_MAX = 25, UNDO_MAX_CHARS = 12000000;
 let _undoSeq = 0;
-const UNDO_KEY_LABEL = {sale:'Sale', recovery:'Recovery', production:'Production', expense:'Expense', family:'Family expense', warp:'Warp purchase',
-  weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', dyeingUnits:'Dyeing unit', banks:'Bank',
-  wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', warpBeams:'Warp beam',
+const UNDO_KEY_LABEL = {sale:'Sale', recovery:'Recovery', production:'Production', expense:'Expense', family:'Family expense', personal:'Personal expense', warp:'Warp purchase',
+  weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', familyMembers:'Family member', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', dyeingUnits:'Dyeing unit', banks:'Bank',
+  wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', personalLoans:'Personal loan entry', warpBeams:'Warp beam',
   checkpoints:'Checkpoint', rateCalcs:'Rate calculation', loomAssignments:'Loom assignment', wageRateHistory:'Wage rates', businessInfo:'Business info'};
 const undoKeyLabel = k => UNDO_KEY_LABEL[k] || k;
 

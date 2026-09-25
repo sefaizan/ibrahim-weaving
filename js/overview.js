@@ -6,7 +6,7 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 
 function allDataYears(){
   const years = new Set();
-  ['production','sale','recovery','expense','family','warp','weft','checkpoints'].forEach(key=>{
+  ['production','sale','recovery','expense','family','personal','warp','weft','checkpoints'].forEach(key=>{
     (DATA[key]||[]).forEach(r=>{ if(r.date) years.add(Number(r.date.slice(0,4))); });
   });
   const nowYear = new Date().getFullYear();
@@ -490,6 +490,7 @@ function renderStats(monthVal){
       <div class="grid cols-4">
         ${card('Business Expenses', s.bizExpCum, `${fmtRs(monthVal?s.bizExpMonth:s.bizExpCum)} (incl. ${fmtRs(monthVal?s.wagesPaidMonth:s.wagesPaidCum)} wages)`)}
         ${card('Family Expenses', s.famExpCum, fmtRs(monthVal?s.famExpMonth:s.famExpCum))}
+        ${card('Personal Expenses', s.personalExpCum, fmtRs(monthVal?s.personalExpMonth:s.personalExpCum))}
         ${card('Warp (Tana) Cost', s.warpCostCum, `${fmtRs(monthVal?s.warpCostMonth:s.warpCostCum)} (${fmtNum(monthVal?s.warpSetsMonth:s.warpSetsCum)} sets)`)}
         ${card('Weft (Bana) Cost', s.weftCostCum, `${fmtRs(monthVal?s.weftCostMonth:s.weftCostCum)} (${fmtNum(monthVal?s.weftBagsMonth:s.weftBagsCum)} bags)`)}
       </div>
@@ -499,13 +500,18 @@ function renderStats(monthVal){
         ${card('Loan Repayments Received', s.loanRepaidCum, fmtRs(monthVal?s.loanRepaidMonth:s.loanRepaidCum))}
       </div>
       <div class="legend">Cash given to / received back from employees as loans — affects Cash Position but kept separate from Business Expenses and Profit/Loss. See the Loans tab for balances per employee.</div>` : ''}
+      ${((monthVal?s.personalLoanGivenMonth:s.personalLoanGivenCum) || (monthVal?s.personalLoanRepaidMonth:s.personalLoanRepaidCum)) ? `<div class="grid cols-4" style="margin-top:14px">
+        ${card('Personal Loans Given', s.personalLoanGivenCum, fmtRs(monthVal?s.personalLoanGivenMonth:s.personalLoanGivenCum))}
+        ${card('Personal Loan Repayments', s.personalLoanRepaidCum, fmtRs(monthVal?s.personalLoanRepaidMonth:s.personalLoanRepaidCum))}
+      </div>
+      <div class="legend">Cash given to / received back from family or friends as loans — affects Cash Position but kept separate from Business Expenses and Profit/Loss. See the Personal Loans (Given) tab for balances per person.</div>` : ''}
     </div>
     <div class="card"><h2>Profit / Loss</h2>
       <div class="grid cols-2">
         ${card('Cumulative (all time to period end)', s.profitCum, fmtRs(s.profitCum))}
         ${card('Selected Period Only', s.profitMonth, monthVal?fmtRs(s.profitMonth):'—')}
       </div>
-      <div class="legend">Sales − Business Expenses (incl. Wages Paid) − Family Expenses − Warp (Tana) Cost − Weft (Bana) Cost.</div>
+      <div class="legend">Sales − Business Expenses (incl. Wages Paid) − Family Expenses − Personal Expenses − Warp (Tana) Cost − Weft (Bana) Cost.</div>
     </div>
     ${s.checkpoint ? `<div class="note">Cash Position uses checkpoint from ${fmtDate(s.checkpoint.date)}${s.checkpoint.time?' '+s.checkpoint.time:''} (${fmtRs(s.checkpoint.balance)}) plus everything logged since — on the checkpoint's own date, only entries with a later time count.</div>`
       : `<div class="note">No checkpoint found on or before this date — Cash Position uses Opening Balance instead. Add checkpoints in the Cash Checkpoints tab for more accuracy.</div>`}
@@ -532,7 +538,7 @@ function lastNMonthKeys(n){
 // open-ended "From" when Graphs has a custom range with only a "To" date set.
 function earliestLedgerDate(){
   const dates = [];
-  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments]
+  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans]
     .forEach(arr=>{ if(arr) arr.forEach(r=>{ if(r.date) dates.push(r.date); }); });
   return dates.length ? dates.reduce((a,b)=> a<b?a:b) : todayStr();
 }
@@ -540,7 +546,7 @@ function earliestLedgerDate(){
 // current month — used for the "All available months" range option.
 function allMonthKeysFromData(){
   const dates = [];
-  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments]
+  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans]
     .forEach(arr=>{ if(arr) arr.forEach(r=>{ if(r.date) dates.push(r.date); }); });
   if(!dates.length) return lastNMonthKeys(12);
   const minDate = dates.reduce((a,b)=> a<b?a:b);
@@ -652,7 +658,7 @@ function graphsPanel(){
   const produced = perMonth.map(s=>s.producedMonth);
   const sold = perMonth.map(s=>s.soldMonth);
   const salesAmt = perMonth.map(s=>s.salesAmtMonth);
-  const totalExp = perMonth.map(s=>s.bizExpMonth+s.famExpMonth+s.warpCostMonth+s.weftCostMonth);
+  const totalExp = perMonth.map(s=>s.bizExpMonth+s.famExpMonth+s.personalExpMonth+s.warpCostMonth+s.weftCostMonth);
   const profit = perMonth.map(s=>s.profitMonth);
   const received = perMonth.map(s=>s.receivedMonth);
   const legend = (items)=>`<div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px;color:var(--ink-soft)">${
@@ -684,12 +690,12 @@ function graphsPanel(){
     </div>
     <div class="card">
       <div class="card-head"><h2>Profit / Loss (Rs)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.</p>
+      <p class="note info-note" hidden>Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Personal Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.</p>
       <div style="overflow-x:auto">${svgDivergingBarChart(monthKeys, profit)}</div>
     </div>
     <div class="card">
       <div class="card-head"><h2>Sales vs Total Expenses (Rs)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Sales amount vs combined Business + Family + Warp + Weft cost, per month.</p>
+      <p class="note info-note" hidden>Sales amount vs combined Business + Family + Personal + Warp + Weft cost, per month.</p>
       ${legend([['var(--green)','Sales'],['var(--red)','Expenses']])}
       <div style="overflow-x:auto">${svgGroupedBarChart(monthKeys,[
         {color:'var(--green)', values:salesAmt}, {color:'var(--red)', values:totalExp}

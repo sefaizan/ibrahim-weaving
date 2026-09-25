@@ -6,7 +6,8 @@ function renderPanel(id){
   CUR_PANEL = id;
   const map = {
     overview: overviewPanel, production: productionPanel, sale: salePanel, recovery: recoveryPanel,
-    expense: expensePanel, family: familyPanel, warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
+    expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel,
+    warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
     loans: loansPanel, ratecalc: ratecalcPanel,
     checkpoints: checkpointsPanel, settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
   };
@@ -139,7 +140,30 @@ function wirePanel(id){
       document.getElementById('p_e3').value = '';
       document.getElementById('p_e3m').value = '';
     };
-    e3btn.addEventListener('click', ()=>{ e3wrap.style.display === 'none' ? showE3() : hideE3(); });
+    // Live "Remaining to assign" readout: total Quantity Produced minus whatever's been split
+    // across Employee 1/2/3 so far — lets you catch a mis-typed meter figure (or a loom left
+    // out) before saving, instead of only noticing it later on the Production Log. Employee 3's
+    // meters only count while that field is actually shown (see e3wrap above); hidden-and-cleared
+    // is the same as 0, not counted twice.
+    const remainingEl = document.getElementById('p_remainingPreview');
+    const updateRemaining = ()=>{
+      const total = combineMtr16(v('p_qty'), v('p_qty_16'));
+      const assigned = Number(v('p_e1m')||0) + Number(v('p_e2m')||0)
+        + (e3wrap.style.display !== 'none' ? Number(v('p_e3m')||0) : 0);
+      if(!total){ remainingEl.textContent = 'Remaining to assign: —'; remainingEl.classList.remove('over'); return; }
+      const remaining = total - assigned;
+      remainingEl.textContent = `Remaining to assign: ${fmtQtyMtr(remaining)} mtr`;
+      remainingEl.classList.toggle('over', remaining < -1e-6); // more assigned than produced — flag it
+    };
+    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{
+      const inp = document.getElementById(id);
+      if(inp) inp.addEventListener('input', updateRemaining);
+    });
+    e3btn.addEventListener('click', ()=>{
+      e3wrap.style.display === 'none' ? showE3() : hideE3();
+      updateRemaining(); // e3's meters just came into (or dropped out of) the total
+    });
+    updateRemaining();
     // Auto-fill Employee 1/2 from this loom's usual assignment (set in Settings > Loom
     // Assignments) whenever the loom is changed by hand — never during Edit prefill, since
     // that sets .value directly without firing 'change'. Both stay fully editable; picking a
@@ -174,6 +198,7 @@ function wirePanel(id){
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
         document.getElementById('p_qty_16').value = s.sixteenths;
+        updateRemaining(); // fields above were set by hand, not typed, so the preview needs a nudge
       });
     const pfQuality = document.getElementById('pf_quality');
     pfQuality.value = FILTER.production || '';
@@ -582,6 +607,74 @@ function wirePanel(id){
     wireEnterSubmit(['f_date','f_time','f_cat','f_amt'],'addFamily');
     wireDelete('family');
     wireEditGeneric('family','addFamily','cancelFamily',{f_date:'date',f_time:'time',f_cat:'category',f_amt:'amount',f_desc:'desc'});
+  }
+  if(id==='personal'){
+    document.getElementById('addPersonal').onclick = async ()=>{
+      if(!requireFields([
+        [v('pex_date'), 'Pick the date first.', 'pex_date'],
+        [Number(v('pex_amt')||0) > 0, 'Enter the amount first.', 'pex_amt'],
+      ])) return;
+      const rec = {date:v('pex_date'), time:v('pex_time'), category:v('pex_cat'), desc:v('pex_desc'), amount:Number(v('pex_amt')||0)};
+      if(EDITING && EDITING.key==='personal'){
+        const idx = DATA.personal.findIndex(r=>r.id===EDITING.id);
+        if(idx>-1) DATA.personal[idx] = {...DATA.personal[idx], ...rec};
+        EDITING = null;
+      } else {
+        DATA.personal.push({id:uid(), ...rec}); PAGE.personal = 1;
+      }
+      await save(); switchTab('personal');
+    };
+    wireEnterSubmit(['pex_date','pex_time','pex_cat','pex_amt'],'addPersonal');
+    wireDelete('personal');
+    wireEditGeneric('personal','addPersonal','cancelPersonal',{pex_date:'date',pex_time:'time',pex_cat:'category',pex_amt:'amount',pex_desc:'desc'});
+  }
+  if(id==='personalloans'){
+    document.getElementById('addPersonalLoan').onclick = async ()=>{
+      if(!requireFields([
+        [v('pl_date'), 'Pick the date first.', 'pl_date'],
+        [v('pl_person'), 'Pick a person first.', 'pl_person'],
+        [Number(v('pl_amt')||0) > 0, 'Enter the amount first.', 'pl_amt'],
+      ])) return;
+      const rec = {date:v('pl_date'), person:v('pl_person'), amount:Number(v('pl_amt')||0), type:v('pl_type'), remarks:v('pl_rem')};
+      if(EDITING && EDITING.key==='personalLoans'){
+        const idx = DATA.personalLoans.findIndex(r=>r.id===EDITING.id);
+        if(idx>-1) DATA.personalLoans[idx] = {...DATA.personalLoans[idx], ...rec};
+        EDITING = null;
+      } else {
+        DATA.personalLoans.push({id:uid(), ...rec}); PAGE.personalLoans = 1;
+      }
+      await save(); switchTab('personalloans');
+    };
+    // Live helper text: for Loan Given, shows what the running balance becomes; for Loan
+    // Repaid, shows whether it clears the loan or leaves some still outstanding.
+    const updatePersonalLoanHelper = ()=>{
+      const person = v('pl_person');
+      const helperEl = document.getElementById('pl_helper');
+      if(!helperEl) return;
+      if(!person){ helperEl.textContent = ''; return; }
+      const b = computePersonLoanBalance(person);
+      const amt = Number(v('pl_amt')||0);
+      const type = v('pl_type');
+      if(type === 'Loan Repaid'){
+        if(amt <= 0){ helperEl.textContent = b.balance > 0.004 ? `Currently ${fmtRs2(b.balance)} outstanding.` : ''; return; }
+        const after = b.balance - amt;
+        helperEl.textContent = after <= 0.004
+          ? `This clears the loan${after < -0.004 ? `, with ${fmtRs2(Math.abs(after))} extra paid back` : ''}.`
+          : `Reduces the loan to ${fmtRs2(after)} still outstanding.`;
+        return;
+      }
+      if(amt <= 0){ helperEl.textContent = b.balance > 0.004 ? `Currently ${fmtRs2(b.balance)} outstanding.` : ''; return; }
+      const after = b.balance + amt;
+      helperEl.textContent = `This brings the loan outstanding to ${fmtRs2(after)}.`;
+    };
+    document.getElementById('pl_person').addEventListener('change', updatePersonalLoanHelper);
+    document.getElementById('pl_amt').addEventListener('input', updatePersonalLoanHelper);
+    document.getElementById('pl_type').addEventListener('change', updatePersonalLoanHelper);
+    updatePersonalLoanHelper();
+    wireEnterSubmit(['pl_date','pl_person','pl_amt'],'addPersonalLoan');
+    wireDelete('personalLoans');
+    wireEditGeneric('personalLoans','addPersonalLoan','cancelPersonalLoans',{pl_date:'date',pl_person:'person',pl_amt:'amount',pl_type:'type',pl_rem:'remarks'},
+      updatePersonalLoanHelper);
   }
   if(id==='warp'){
     document.getElementById('addWarp').onclick = async ()=>{
@@ -1428,7 +1521,7 @@ function wirePanel(id){
       disablePin();
       switchTab('settings');
     };
-    ['qualities','clients','employees','looms','warpTypes','weftTypes','dyeingUnits','banks'].forEach(key=>{
+    ['qualities','clients','employees','familyMembers','looms','warpTypes','weftTypes','dyeingUnits','banks'].forEach(key=>{
       document.querySelector(`[data-add="${key}"]`).onclick = async ()=>{
         const name = normalizeMasterName(v(`new_${key}`));
         if(!name) return;
@@ -1453,7 +1546,7 @@ function wirePanel(id){
       });
       wireEditGeneric(key, `add_${key}`, `cancel_${key}`, {[`new_${key}`]:'name'});
     });
-    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
+    wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('familyMembers'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{
       btn.onclick = async ()=>{
         const [key, idxStr, dir] = btn.dataset.move.split(':');
@@ -1587,11 +1680,12 @@ function wireEnterSubmit(fieldIds, buttonId){
   });
 }
 function tabForKey(key){
-  if(key==='qualities'||key==='clients'||key==='employees'||key==='looms'||key==='warpTypes'||key==='weftTypes'||key==='dyeingUnits'||key==='banks') return 'settings';
+  if(key==='qualities'||key==='clients'||key==='employees'||key==='familyMembers'||key==='looms'||key==='warpTypes'||key==='weftTypes'||key==='dyeingUnits'||key==='banks') return 'settings';
   if(key==='rateCalcs') return 'ratecalc';
   if(key==='warpBeams'||key==='warpBeamsFinished') return 'warpbeams';
   if(key==='wageBonuses'||key==='wagePayments'||key==='wageSettlements') return 'wages';
   if(key==='loanPayments') return 'loans';
+  if(key==='personalLoans') return 'personalloans';
   return key;
 }
 let RATE_EDITING = null; // {quality, date} of the Rate History entry being edited on the Wages page

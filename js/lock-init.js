@@ -420,9 +420,38 @@ if(window.visualViewport) window.visualViewport.addEventListener('resize', scrol
 
 /* ---------------- Init ---------------- */
 const SEARCH_DEBOUNCE_TIMERS = {};
+// Hides the floating Backup & Restore button while the page is actively scrolling, and brings it
+// back a moment after scrolling stops — see the .fab-scroll-hide rule in index.html for why.
+// Listens on document with capture:true, not on #panels: scroll events don't bubble, but a
+// capture-phase listener on an ancestor still fires for them, so this one listener covers both
+// how the app actually scrolls on a phone (the whole page/body scrolls) and how it scrolls in the
+// desktop preview frame (only #panels scrolls, inside a fixed-size shell) without caring which.
+function wireScrollAwareFab(fabBackup){
+  let hideTimer = null;
+  document.addEventListener('scroll', ()=>{
+    fabBackup.classList.add('fab-scroll-hide');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=> fabBackup.classList.remove('fab-scroll-hide'), 500);
+  }, {passive:true, capture:true});
+}
+
 (async function init(){
   const fabBackup = document.getElementById('fabBackup');
-  if(fabBackup) fabBackup.onclick = ()=> switchTab('backup');
+  if(fabBackup){
+    // Normal state: same as always — open Backup & Restore. "Needs backup" state (badge showing,
+    // see setFabNeedsBackup in autobackup.js): email a backup right from here instead, so the one
+    // thing the badge is asking for is one tap away without leaving whatever screen you're on.
+    fabBackup.onclick = async ()=>{
+      if(!AUTO_BACKUP_DIRTY || !autoBackupReady()){ switchTab('backup'); return; }
+      fabBackup.classList.add('fab-busy');
+      showToast('Sending backup…', 60000);
+      const r = await autoBackupSend(true); // true: send now even if today's automatic check already ran
+      fabBackup.classList.remove('fab-busy');
+      showToast(r.ok ? 'Backup emailed ✓' : r.message);
+      autoBackupRefreshFabState();
+    };
+    wireScrollAwareFab(fabBackup);
+  }
   const menuBtn = document.getElementById('menuBtn');
   if(menuBtn) menuBtn.onclick = openDrawer;
   const scrim = document.getElementById('scrim');
@@ -526,7 +555,12 @@ const SEARCH_DEBOUNCE_TIMERS = {};
     const btn = e.target.closest('[data-toggle-form]');
     if(!btn) return;
     const key = btn.dataset.toggleForm;
-    if(OPEN_FORMS.has(key)) OPEN_FORMS.delete(key); else OPEN_FORMS.add(key);
+    if(OPEN_FORMS.has(key)){
+      OPEN_FORMS.delete(key);
+      // Hiding a form that is mid-edit re-renders it blank, so the edit must end too — otherwise a
+      // later save from the blank form would overwrite the row that was being edited.
+      if(EDITING && EDITING.key === key) EDITING = null;
+    } else OPEN_FORMS.add(key);
     const activeTab = document.querySelector('nav.tabs button.active');
     const keepY = window.scrollY; // re-render must not throw the reader back to the top
     switchTab(activeTab ? activeTab.dataset.tab : 'wages');
@@ -623,8 +657,9 @@ const SEARCH_DEBOUNCE_TIMERS = {};
     });
   });
   await load();
+  autoBackupRefreshFabState(); // sets the FAB's "needs backup" badge to match reality on open
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort only */ } // Undo baseline for this session
-  switchTab('overview');
+  switchTab(restoredTab());
   try{
     const act = new URLSearchParams(location.search).get('action');
     if(act === 'addsale' || act === 'addrecovery'){ PENDING_QUICK = act === 'addrecovery' ? 'recovery' : 'sale'; history.replaceState(null, '', location.pathname); }
@@ -634,6 +669,7 @@ const SEARCH_DEBOUNCE_TIMERS = {};
   if(isPinEnabled() && (pinIdleTooLong() || (encEnabled() && !ENC_DEK))) mountLockScreen();
   else { markPinActive(); runPendingQuickAdd(); } // within the grace period (or PIN off) — resume unlocked and reset the clock
   setTimeout(runBeamAlerts, 2500);
+  setTimeout(noteIfJustUpdated, 1200);
   setTimeout(()=>{ maybeAutoSnapshot(); checkForNewVersion(); }, 4000);
   setTimeout(autoBackupOnWake, 8000); // emails a backup if one is due (Backup & Restore > Automatic email backup)
   // All data lives in this browser's storage, so ask it not to clear that under storage

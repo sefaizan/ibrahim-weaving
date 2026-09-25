@@ -22,6 +22,7 @@ function emptyData(){
     qualities: [], clients: [], employees: [], looms: [], warpTypes: [], banks: [],
     warpBeams: [], wageBonuses: [], wagePayments: [], wageSettlements: [], loanPayments: [],
     production: [], warp: [], weft: [], sale: [], recovery: [], expense: [], family: [],
+    personal: [], personalLoans: [], familyMembers: [],
     checkpoints: [], openingBalance: 0, wageRateHistory: {}, loomAssignments: [],
   };
 }

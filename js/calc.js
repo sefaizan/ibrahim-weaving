@@ -254,6 +254,42 @@ function loanRelevantEmployees(){
   });
 }
 
+// Running loan balance for one person under Personal Loans (Given) — money lent to family
+// or friends, entirely separate from the business/employee ledgers. Same shape as
+// computeEmployeeLoanBalance: every Loan Given entry for that person adds to what they owe
+// back, every Loan Repaid entry reduces it. Multiple loans to the same person are logged as
+// separate entries (so each one keeps its own date/remarks) but all roll up into one running
+// balance per person here.
+function computePersonLoanBalance(person){
+  const entries = DATA.personalLoans.filter(p=>p.person===person);
+  const given = entries.filter(p=>p.type !== 'Loan Repaid').reduce((s,p)=>s+(Number(p.amount)||0),0);
+  const repaid = entries.filter(p=>p.type === 'Loan Repaid').reduce((s,p)=>s+(Number(p.amount)||0),0);
+  return {given, repaid, balance: given - repaid};
+}
+// Distinct people who appear anywhere in Personal Loans, in first-seen order — there's no
+// separate master list of family/friends (unlike employees), so the Personal Loans page
+// builds its per-person rows straight from whoever has been logged.
+function personalLoanPeople(){
+  const seen = new Set(), out = [];
+  DATA.personalLoans.forEach(p=>{ if(p.person && !seen.has(p.person)){ seen.add(p.person); out.push(p.person); } });
+  return out;
+}
+// People to actually show on the Personal Loans page: everyone in Settings > Family Members
+// (active ones always, inactive ones only while they still have a nonzero balance — same
+// rule as loanRelevantEmployees), plus — just in case — any name that shows up in the
+// Personal Loans log but isn't in that list at all (e.g. entries logged before the list
+// existed, or a member since removed), so a balance never silently disappears.
+function personalLoanRelevantPeople(){
+  const rows = DATA.familyMembers.filter(m=>{
+    if(m.active !== false) return true;
+    const b = computePersonLoanBalance(m.name);
+    return Math.abs(b.balance) > 0.004;
+  }).map(m=>m.name);
+  const known = new Set(DATA.familyMembers.map(m=>m.name));
+  personalLoanPeople().forEach(name=>{ if(!known.has(name) && !rows.includes(name)) rows.push(name); });
+  return rows;
+}
+
 // Normalizes a Recovery record into {cashAmount, bankAmount, cheques} regardless of shape —
 // new entries store all three side by side (a single payment can genuinely be part cash,
 // part bank transfer, part cheques, all at once); older entries only ever had one exclusive
@@ -826,11 +862,26 @@ function computeStats(monthVal){
   const loanRepaidCum = sumWhere(DATA.loanPayments.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd);
   const loanRepaidMonth = start ? sumWhere(DATA.loanPayments.filter(p=>p.type==='Loan Repaid'),'amount',start,end) : loanRepaidCum;
 
+  // Personal Loans (Given) work exactly like employee loans: real cash out/in, but not a
+  // business expense — money lent to family/friends is expected back, so it only moves Cash
+  // Position and is kept out of Business Expenses / Profit-Loss (see computePersonLoanBalance
+  // for the per-person running balance).
+  const personalLoanGivenCum = sumWhere(DATA.personalLoans.filter(p=>p.type!=='Loan Repaid'),'amount',null,cumEnd);
+  const personalLoanGivenMonth = start ? sumWhere(DATA.personalLoans.filter(p=>p.type!=='Loan Repaid'),'amount',start,end) : personalLoanGivenCum;
+  const personalLoanRepaidCum = sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd);
+  const personalLoanRepaidMonth = start ? sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',start,end) : personalLoanRepaidCum;
+
   const bizExpCum = sumWhere(DATA.expense,'amount',null,cumEnd) + wagesPaidCum;
   const bizExpMonth = (start ? sumWhere(DATA.expense,'amount',start,end) : sumWhere(DATA.expense,'amount',null,cumEnd)) + wagesPaidMonth;
 
   const famExpCum = sumWhere(DATA.family,'amount',null,cumEnd);
   const famExpMonth = start ? sumWhere(DATA.family,'amount',start,end) : famExpCum;
+
+  // Personal Expense mirrors Family Expense exactly (real household/personal spending drawn
+  // from business cash) — tracked in its own ledger so the two totals stay visible
+  // separately, but treated the same way in Cash Position and Profit/Loss below.
+  const personalExpCum = sumWhere(DATA.personal,'amount',null,cumEnd);
+  const personalExpMonth = start ? sumWhere(DATA.personal,'amount',start,end) : personalExpCum;
 
   const warpCostCum = sumWhere(DATA.warp,'amount',null,cumEnd);
   const warpCostMonth = start ? sumWhere(DATA.warp,'amount',start,end) : warpCostCum;
@@ -844,8 +895,8 @@ function computeStats(monthVal){
 
   const receivable = salesAmtCum - receivedCum - bouncedCum;
   const stock = producedCum - soldCum;
-  const profitCum = salesAmtCum - (bizExpCum+famExpCum+warpCostCum+weftCostCum);
-  const profitMonth = salesAmtMonth - (bizExpMonth+famExpMonth+warpCostMonth+weftCostMonth);
+  const profitCum = salesAmtCum - (bizExpCum+famExpCum+personalExpCum+warpCostCum+weftCostCum);
+  const profitMonth = salesAmtMonth - (bizExpMonth+famExpMonth+personalExpMonth+warpCostMonth+weftCostMonth);
 
   // Stock breakdown by quality (always cumulative to period end, like overall stock)
   const producedByQ = sumWhereBy(DATA.production,'quality','qty',null,cumEnd);
@@ -905,19 +956,24 @@ function computeStats(monthVal){
     cash = Number(checkpoint.balance||0)
       + sumRecoveryAmount(DATA.recovery, recoveryCashAmount, null, cumEnd, cpDateTime)
       + sumWhere(DATA.loanPayments.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
+      + sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.expense,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.wagePayments,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.loanPayments.filter(p=>p.type!=='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
+      - sumWhere(DATA.personalLoans.filter(p=>p.type!=='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.family,'amount',null,cumEnd,cpDateTime)
+      - sumWhere(DATA.personal,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.warp,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.weft,'amount',null,cumEnd,cpDateTime);
   } else {
-    cash = Number(DATA.openingBalance||0) + receivedCashCum + loanRepaidCum - loanGivenCum - bizExpCum - famExpCum - warpCostCum - weftCostCum;
+    cash = Number(DATA.openingBalance||0) + receivedCashCum + loanRepaidCum - loanGivenCum
+      + personalLoanRepaidCum - personalLoanGivenCum - bizExpCum - famExpCum - personalExpCum - warpCostCum - weftCostCum;
   }
 
   return {producedCum,producedMonth,soldCum,soldMonth,salesAmtCum,salesAmtMonth,receivedCum,receivedMonth,
-    bizExpCum,bizExpMonth,famExpCum,famExpMonth,warpCostCum,warpCostMonth,weftCostCum,weftCostMonth,
+    bizExpCum,bizExpMonth,famExpCum,famExpMonth,personalExpCum,personalExpMonth,warpCostCum,warpCostMonth,weftCostCum,weftCostMonth,
     warpSetsCum,warpSetsMonth,weftBagsCum,weftBagsMonth,wagesPaidCum,wagesPaidMonth,loanGivenCum,loanGivenMonth,loanRepaidCum,loanRepaidMonth,
+    personalLoanGivenCum,personalLoanGivenMonth,personalLoanRepaidCum,personalLoanRepaidMonth,
     receivable,stock,profitCum,profitMonth,cash,checkpoint,stockByQuality,receivablesByClient,
     qualityNames,clientQualityBreakdown};
 }
