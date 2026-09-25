@@ -250,8 +250,10 @@ function salePanel(){
       ${textareaField('Description (optional)','s_desc')}
     </div>
     <div class="calc-amount" id="s_amtPreview">Amount: —</div>
-    <button class="primary" id="addSale">Add Entry</button>
-    <button class="ghost" id="cancelSale" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addSale">Add Entry</button>
+      <button class="ghost" id="cancelSale" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Sales Log</h2>
       <div class="grid cols-2">
         <div class="field"><label>Filter by Client</label><select id="sf_client"><option value="">All Clients</option>${groupedClientOpts()}</select></div>
@@ -435,8 +437,10 @@ function recoveryPanel(){
     </div>
     <p class="note">Cash and Bank Transfer count toward Cash Position immediately. Each cheque only counts once marked Cleared — other cheques in the same payment keep their own status independently.</p>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addRecovery">Add Entry</button>
-    <button class="ghost" id="cancelRecovery" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addRecovery">Add Entry</button>
+      <button class="ghost" id="cancelRecovery" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Recovery Log</h2>
       <div class="grid cols-2">
         <div class="field"><label>Filter by Client</label><select id="rf_client"><option value="">All Clients</option>${groupedClientOpts()}</select></div>
@@ -476,8 +480,10 @@ function expensePanel(){
       ${textareaField('Description','ex_desc')}
     </div>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addExpense">Add Entry</button>
-    <button class="ghost" id="cancelExpense" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addExpense">Add Entry</button>
+      <button class="ghost" id="cancelExpense" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Expense Log</h2>${logTable('expense',
       ['Date','Time','Category','Description','Amount',''],
       DATA.expense.slice().reverse(),
@@ -509,8 +515,10 @@ function familyPanel(){
       ${textareaField('Description','f_desc')}
     </div>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addFamily">Add Entry</button>
-    <button class="ghost" id="cancelFamily" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addFamily">Add Entry</button>
+      <button class="ghost" id="cancelFamily" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Family Expense Log</h2>${logTable('family',
       ['Date','Time','Category','Description','Amount',''],
       DATA.family.slice().reverse(),
@@ -545,8 +553,10 @@ function personalPanel(){
       ${textareaField('Description','pex_desc')}
     </div>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addPersonal">Add Entry</button>
-    <button class="ghost" id="cancelPersonal" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addPersonal">Add Entry</button>
+      <button class="ghost" id="cancelPersonal" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Personal Expense Log</h2>${logTable('personal',
       ['Date','Time','Category','Description','Amount',''],
       DATA.personal.slice().reverse(),
@@ -579,8 +589,10 @@ function warpPanel(){
     <div class="note" id="w_kgPreview">Enter cartons &amp; kg/carton to auto-calculate weight — or type the lbs directly.</div>
     <div class="calc-amount" id="w_amtPreview">Amount: —</div>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addWarp">Add Entry</button>
-    <button class="ghost" id="cancelWarp" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addWarp">Add Entry</button>
+      <button class="ghost" id="cancelWarp" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Warp (Tana) Log</h2>${logTable('warp',
       ['Date','Time','Type','Supplier','Cartons','Weight (lbs)','Amount',''],
       DATA.warp.slice().reverse(),
@@ -615,8 +627,10 @@ function weftPanel(){
     <div class="note" id="wf_bagsPreview">Enter bags &amp; lbs/bag to auto-calculate total weight.</div>
     <div class="calc-amount" id="wf_amtPreview">Amount: —</div>
     <p class="note">Time is used to order same-day entries against Cash Checkpoints — it doesn't need to be exact.</p>
-    <button class="primary" id="addWeft">Add Entry</button>
-    <button class="ghost" id="cancelWeft" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addWeft">Add Entry</button>
+      <button class="ghost" id="cancelWeft" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Weft (Bana) Log</h2>${logTable('weft',
       ['Date','Time','Type','Supplier','Bags','Weight (lbs)','Amount',''],
       DATA.weft.slice().reverse(),
@@ -835,8 +849,10 @@ function warpBeamsPanel(){
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Remarks (optional)','wb_rem')}
     </div>
-    <button class="primary" id="addWarpBeam">Log Beam</button>
-    <button class="ghost" id="cancelWarpbeams" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addWarpBeam">Log Beam</button>
+      <button class="ghost" id="cancelWarpbeams" style="display:none">Cancel Edit</button>
+    </div></div>
     ${activeYieldCard}
     ${completedYieldCard}
     <div class="card"><div class="card-head"><h2>Warp (Tana) Beam Log</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>

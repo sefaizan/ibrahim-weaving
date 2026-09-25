@@ -118,8 +118,10 @@ function wagesPanel(){
         <div class="field"><label>New Rate (Rs/m)</label><input type="number" step="0.01" id="rc_rate"></div>
         <div class="field"><label>Effective From</label><input type="date" id="rc_date" value="${todayStr()}"></div>
       </div>
-      <button class="primary" id="saveRateChange" style="margin-top:12px">Save New Rate</button>
-      <button class="ghost" id="cancelRateChange" style="display:none;margin-top:12px">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="saveRateChange">Save New Rate</button>
+        <button class="ghost" id="cancelRateChange" style="display:none">Cancel Edit</button>
+      </div>
       <div class="rate-warn" id="rc_editNote" role="alert" hidden></div>
       </div>
       <div class="rate-warn" id="rh_delNote" role="alert" hidden></div>
@@ -140,8 +142,10 @@ function wagesPanel(){
       <div class="grid cols-1" style="margin-top:12px">
         ${textareaField('Remarks (optional)','wp_rem')}
       </div>
-      <button class="primary" id="addWagePayment">Add Payment</button>
-      <button class="ghost" id="cancelWagePayments" style="display:none">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="addWagePayment">Add Payment</button>
+        <button class="ghost" id="cancelWagePayments" style="display:none">Cancel Edit</button>
+      </div>
       </div>
       ${logTable('wagePayments',
         ['Date','Employee','Amount','Remarks',''],
@@ -158,8 +162,10 @@ function wagesPanel(){
       <div class="grid cols-1" style="margin-top:12px">
         ${textareaField('Remarks (optional)','wb_rem')}
       </div>
-      <button class="primary" id="addWageBonus">Add Bonus</button>
-      <button class="ghost" id="cancelWageBonuses" style="display:none">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="addWageBonus">Add Bonus</button>
+        <button class="ghost" id="cancelWageBonuses" style="display:none">Cancel Edit</button>
+      </div>
       </div>
       ${logTable('wageBonuses',
         ['Date','Employee','Amount','Remarks',''],
@@ -182,8 +188,10 @@ function wagesPanel(){
       <div class="grid cols-1" style="margin-top:12px">
         ${textareaField('Remarks (optional)','ws_rem')}
       </div>
-      <button class="primary" id="addWageSettlement">Mark Settled</button>
-      <button class="ghost" id="cancelWageSettlements" style="display:none">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="addWageSettlement">Mark Settled</button>
+        <button class="ghost" id="cancelWageSettlements" style="display:none">Cancel Edit</button>
+      </div>
       </div>
       ${logTable('wageSettlements',
         ['Date','Employee','Carried Forward','Remarks',''],
@@ -335,8 +343,10 @@ function loansPanel(){
       <div class="grid cols-1" style="margin-top:12px">
         ${textareaField('Remarks (optional)','lp_rem')}
       </div>
-      <button class="primary" id="addLoanPayment">Add Loan Entry</button>
-      <button class="ghost" id="cancelLoanPayments" style="display:none">Cancel Edit</button></div>
+      <div class="form-actions">
+        <button class="primary" id="addLoanPayment">Add Loan Entry</button>
+        <button class="ghost" id="cancelLoanPayments" style="display:none">Cancel Edit</button>
+      </div></div>
       <div class="card"><h2>Loan Payments Log</h2>${logTable('loanPayments',
         ['Date','Employee','Type','Amount','Remarks',''],
         DATA.loanPayments.slice().reverse(),
@@ -411,8 +421,10 @@ function personalLoansPanel(){
       <div class="grid cols-1" style="margin-top:12px">
         ${textareaField('Remarks (optional)','pl_rem')}
       </div>
-      <button class="primary" id="addPersonalLoan">Add Loan Entry</button>
-      <button class="ghost" id="cancelPersonalLoans" style="display:none">Cancel Edit</button></div>
+      <div class="form-actions">
+        <button class="primary" id="addPersonalLoan">Add Loan Entry</button>
+        <button class="ghost" id="cancelPersonalLoans" style="display:none">Cancel Edit</button>
+      </div></div>
       <div class="card"><h2>Loan Payments Log</h2>${logTable('personalLoans',
         ['Date','Person','Type','Amount','Remarks',''],
         DATA.personalLoans.slice().reverse(),
@@ -524,8 +536,10 @@ function renderRateCalcResult(){
         <div class="value pos" style="font-size:34px">${(r.warpValid && r.weftValid) ? fmtRs2(r.finalRate) : '—'}</div>
         <div class="legend">Yarn Cost (${yarnCostValid?fmtRs2(yarnCost):'—'}) + Picks Addition (${fmtRs(r.picksAddition)}) + Extra Addition (${fmtRs2(inp.extra)})</div>
       </div>
-      <button class="primary" id="saveRateCalc">Save This Calculation</button>
-      <button class="ghost" id="cancelRateCalc" style="display:none">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="saveRateCalc">Save This Calculation</button>
+        <button class="ghost" id="cancelRateCalc" style="display:none">Cancel Edit</button>
+      </div>
     </div>`;
 }
 
@@ -545,8 +559,10 @@ function checkpointsPanel(){
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Remarks','cp_rem')}
     </div>
-    <button class="primary" id="addCheckpoint">Add Checkpoint</button>
-    <button class="ghost" id="cancelCheckpoints" style="display:none">Cancel Edit</button></div>
+    <div class="form-actions">
+      <button class="primary" id="addCheckpoint">Add Checkpoint</button>
+      <button class="ghost" id="cancelCheckpoints" style="display:none">Cancel Edit</button>
+    </div></div>
     <div class="card"><h2>Checkpoint Log</h2>${logTable('checkpoints',
       ['Date','Time','Balance','Remarks',''],
       DATA.checkpoints.slice().reverse(),

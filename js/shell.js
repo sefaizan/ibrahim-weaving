@@ -185,8 +185,10 @@ function settingsPanel(){
       <div class="grid cols-2">
         <div class="field"><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
       </div>
-      <button class="primary" id="add_${key}" data-add="${key}">Add ${title.slice(0,-1)}</button>
-      <button class="ghost" id="cancel_${key}" data-cancel="${key}" style="display:none">Cancel Edit</button>
+      <div class="form-actions">
+        <button class="primary" id="add_${key}" data-add="${key}">Add ${title.slice(0,-1)}</button>
+        <button class="ghost" id="cancel_${key}" data-cancel="${key}" style="display:none">Cancel Edit</button>
+      </div>
       <table style="margin-top:14px">
         <thead><tr><th>Name</th><th></th></tr></thead>
         <tbody>
