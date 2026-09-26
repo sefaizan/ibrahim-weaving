@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-27-backup-badge-pulse">
+<meta name="app-build" content="2026-09-27-backup-badge-ring-contrast">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -534,6 +534,11 @@
   /* Cheque action buttons (Mark Cleared / Bounced / Replaced ...): a tidy wrapping row in tables. */
   .chq-actions{ display:flex; flex-wrap:wrap; gap:6px; }
   .chq-actions button{ margin:0; }
+  /* These action buttons sit on a table row that turns the same rust-tonal shade on
+     hover/tap (see "tr:hover td" below) as button.ghost's own idle background — without a
+     border they visually vanish into a highlighted row instead of reading as tappable
+     buttons. A defined edge keeps them visible whatever the row behind them is doing. */
+  .chq-actions button.ghost{ border:1px solid var(--rust-deep); }
   /* Phone card layout for log tables (Production, Sale, Recovery, ...). Each record becomes a
      compact card: small label over value tiles that wrap to fit, empty fields left out, the
      Edit/Remove buttons on their own row underneath. No sideways swiping to read one entry.
@@ -615,11 +620,14 @@
      recoloring the whole button, so it reads as a notification ("something's waiting") rather
      than a warning ("something's wrong") — but it pulses continuously (see fabBackupPulse
      below) so it's still easy to notice rather than blending into the button's own gold/red
-     corner. Tapping the button while this shows emails a backup directly instead of opening
-     Backup & Restore — see fabBackup.onclick in js/lock-init.js. */
+     corner. The ring around the dot is a fixed light color (not var(--gold)) on purpose: the
+     ring used to match the button's own background exactly, so the pulse's scale-up all but
+     vanished into the button behind it instead of standing out. Tapping the button while this
+     shows emails a backup directly instead of opening Backup & Restore — see fabBackup.onclick
+     in js/lock-init.js. */
   .fab-backup.needs-backup::after{
     content:''; position:absolute; top:3px; right:3px; width:15px; height:15px;
-    border-radius:50%; background:var(--red); border:2px solid var(--gold);
+    border-radius:50%; background:var(--red); border:2px solid #FFF3E0;
     transform-origin:center; animation:fabBackupPulse 1.4s ease-in-out infinite;
   }
   @keyframes fabBackupPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.35); } }
@@ -666,6 +674,11 @@
   .receipt th, .receipt td{ border:1px solid #999; padding:7px 9px; text-align:left; }
   .receipt th{ background:#eee; }
   .receipt td.num, .receipt th.num{ text-align:right; }
+  /* Second line under a Shortage row's qty figure (the 16ths breakdown) — kept out of the
+     main figure's own line since the column is a fixed width and the two together would
+     overflow into the Rate column; wraps naturally if still too narrow (no nowrap here) and
+     never collides with the row above/below since it just adds to this row's own height. */
+  .receipt .receipt-qty-sub{ font-size:10.5px; color:#777; font-weight:400; }
   .receipt tfoot td{ font-weight:700; }
   .receipt .balance-summary{ margin-top:16px; border:1px solid #999; border-radius:4px; overflow:hidden; }
   .receipt .balance-summary .row{ display:flex; justify-content:space-between; align-items:baseline; padding:7px 9px; font-size:13px; background:#fff; border-bottom:1px solid #ddd; }
@@ -732,7 +745,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.13.7</span>
+      <span class="app-version" id="appVersionTag">v3.13.10</span>
     </div>
   </header>
 
