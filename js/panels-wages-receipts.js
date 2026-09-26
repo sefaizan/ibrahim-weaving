@@ -706,12 +706,11 @@ function shareRecoveryReceiptBtn(id){ return `<button class="ghost rowbtn share"
 // especially for a client who isn't literate, so "dispatched qty, L count, shortage
 // deducted, final qty" each get their own row instead. Shared by printSaleReceipt (HTML) and
 // the PDF builder so the two can never show different numbers.
-// The Shortage row's qty carries an optional qtySub — the same meters-and-16ths breakdown
-// shown on the Awaiting L card and Sales Log, kept as a SEPARATE (smaller, second-line)
-// field rather than appended to qty itself: the qty column is a fixed width in both the
-// printed HTML table and the PDF, and the 16ths text is too long to share a line with the
-// main figure there without overflowing into the Rate column, so each renderer places it
-// on its own line below instead.
+// The Shortage row's qty is shown purely in the meters-and-16ths format (e.g. "86-12") used
+// everywhere else in the app (Awaiting L card, Sales Log) — no decimal figure and no second
+// "(...)" line; a receipt is meant to be read at a glance, and two representations of the same
+// number invited confusion more than it helped. Shared by printSaleReceipt (HTML) and the PDF
+// builder so the two can never show different numbers.
 function saleReceiptRows(r, rate){
   const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
   if(r.lAdjustedFromId){
@@ -719,7 +718,7 @@ function saleReceiptRows(r, rate){
     if(orig) return {
       rows: [
         {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, qtySub:`(${fmtQtyMtr(orig.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
+        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
       ],
       totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
     };
@@ -728,7 +727,7 @@ function saleReceiptRows(r, rate){
   if(r.lStatus==='applied') return {
     rows: [
       {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, qtySub:`(${fmtQtyMtr(r.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
+      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
     ],
     totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
   };

@@ -366,6 +366,7 @@ function pendingLCardHtml(){
       `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
       `<div class="l-shortage-box" data-l-box="${r.id}" hidden>
         <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px">
+        <span aria-hidden="true">-</span>
         <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px">
       </div>`,
       `<div class="chq-actions">
