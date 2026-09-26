@@ -436,7 +436,7 @@ function computeReceivablesAging(){
   return {rows, totals};
 }
 
-// Cheque cards moved to Overview (below Stock Position) — these compute the underlying
+// Cheque cards moved to Overview (above Stock Position) — these compute the underlying
 // data; renderStats() builds the actual card HTML. Kept as standalone functions so the
 // same live-updating cheque data can be reused wherever it's needed.
 function computePendingCheques(){

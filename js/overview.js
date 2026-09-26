@@ -371,6 +371,8 @@ function renderStats(monthVal){
   ['stmt_client','stmt_from','stmt_to'].forEach(id=>{ const el = document.getElementById(id); if(el) keepStmt[id] = el.value; });
 
   wrap.innerHTML = `
+    ${pendingChequesCardHtml()}
+    ${bouncedChequesCardHtml()}
     <div class="card"><h2>Stock Position</h2>
       <div class="group-label" style="margin-top:0">Stock by Quality</div>
       <div class="table-lg log-scroll">${table(
@@ -386,8 +388,6 @@ function renderStats(monthVal){
       </div>
       <div class="legend">${monthVal ? 'Produced/Sold shown for the selected period. In Stock and Cash Position are cumulative as of the end of that period.' : 'All figures shown are all-time totals.'}</div>
     </div>
-    ${pendingChequesCardHtml()}
-    ${bouncedChequesCardHtml()}
     ${clientStatementCardHtml()}
     <div class="card"><h2>Sales & Receivables</h2>
       <div class="group-label" style="margin-top:0;display:flex;align-items:center;justify-content:space-between;gap:10px">Breakdown by Client<button type="button" class="info-btn" data-info-toggle data-info-target="info-beforeLastSale" title="Info">i</button></div>
