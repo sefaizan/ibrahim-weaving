@@ -627,17 +627,6 @@ document.addEventListener('click', (e)=>{
   const b = e.target.closest('[data-quick-add]');
   if(b) quickAdd(b.dataset.quickAdd);
 });
-// Sale form hint: quantities show in 1/16ths on receipts, but the amount uses the exact number typed.
-document.addEventListener('input', (e)=>{
-  if(!e.target || e.target.id !== 's_qty') return;
-  const hint = document.getElementById('s_qtyHint');
-  if(!hint) return;
-  const n = Number(e.target.value);
-  if(!(n > 0) || Math.abs(n*16 - Math.round(n*16)) < 1e-6){ hint.hidden = true; return; }
-  hint.hidden = false;
-  hint.textContent = `Receipts will show ${fmtQtyMtr(n)} (nearest 1/16), but the amount is calculated on exactly ${n} mtr.`;
-});
-
 /* ---------------- "New version available" prompt ---------------- */
 // The app opens instantly from its saved copy and updates itself in the background, so a
 // freshly deployed version is normally only seen on the launch AFTER the one that fetched it.

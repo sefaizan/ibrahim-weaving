@@ -171,11 +171,13 @@ function wirePanel(id){
       this.dataset.manual = this.value.trim() ? '1' : '';
     });
     // Common two-employee flow: total first, then Employee 1's share. Employee 2 Meters
-    // auto-fills live with whatever's left (total minus Employee 1) as a plain decimal — no
-    // sixteenths split, since that field only ever takes a plain number — so the same figure
-    // isn't typed twice. Only kicks in once there's a total to split, an Employee 2 is already
-    // picked (usually already true via the loom's usual assignment above), Employee 2 hasn't
-    // been hand-edited, and no third employee is in play (a 3-way split needs typing by hand).
+    // auto-fills live with whatever's left (total minus Employee 1), but only the WHOLE-meter
+    // part of it — any 1/16ths left over stay out of Employee 2's figure and fall through to
+    // the Diff column instead (see the production table's Diff calc), rather than silently
+    // getting attributed to Employee 2 as a fraction they didn't actually weave. Only kicks in
+    // once there's a total to split, an Employee 2 is already picked (usually already true via
+    // the loom's usual assignment above), Employee 2 hasn't been hand-edited, and no third
+    // employee is in play (a 3-way split needs typing by hand).
     const p_e1m = document.getElementById('p_e1m');
     const autoSplitRemaining = ()=>{
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
@@ -183,7 +185,7 @@ function wirePanel(id){
       if(!(total > 0) || !v('p_e2') || e2mInput.dataset.manual || e3wrap.style.display !== 'none') return false;
       const remaining = total - Number(v('p_e1m')||0);
       if(remaining < -1e-6) return false; // Employee 1 alone already exceeds the total — leave it for a manual fix
-      e2mInput.value = fmtQtyPlain(Math.max(0, remaining));
+      e2mInput.value = fmtQtyPlain(Math.max(0, Math.floor(remaining + 1e-9)));
       updateRemaining();
       return true;
     };
@@ -340,7 +342,7 @@ function wirePanel(id){
   }
   if(id==='sale'){
     document.getElementById('addSale').onclick = async ()=>{
-      const qty=Number(v('s_qty')), rate=Number(v('s_rate'));
+      const qty=combineMtr16(v('s_qty'), v('s_qty_16')), rate=Number(v('s_rate'));
       // An older sale saved before rates were stored has an Amount but no Rate. Editing it (even just
       // the description) used to recalculate its Amount as Rs 0. Keep the Amount as it was while the
       // quantity is unchanged and no rate is typed in; type a rate and it is recalculated as usual.
@@ -394,12 +396,19 @@ function wirePanel(id){
       }
       await save(); switchTab('sale');
     };
-    wireAmountPreview('s_qty','s_rate','s_amtPreview','Amount',true);
-    wireEnterSubmit(['s_date','s_client','s_quality','s_qty','s_rate','s_inv'],'addSale');
+    wireAmountPreview(['s_qty','s_qty_16'],'s_rate','s_amtPreview','Amount',true);
+    wireEnterSubmit(['s_date','s_client','s_quality','s_qty','s_qty_16','s_rate','s_inv'],'addSale');
     wireDelete('sale');
+    // Qty is stored as one decimal number, same as before — the Meters/16ths boxes are split
+    // out from that decimal by hand in afterFill below (same approach as Production).
     wireEditGeneric('sale','addSale','cancelSale',
-      {s_date:'date',s_client:'client',s_quality:'quality',s_qty:'qty',s_rate:'rate',s_inv:'invoice',s_dyeing:'dyeing',s_desc:'desc'},
-      ()=>{ const el=document.getElementById('s_qty'); if(el) el.dispatchEvent(new Event('input')); });
+      {s_date:'date',s_client:'client',s_quality:'quality',s_rate:'rate',s_inv:'invoice',s_dyeing:'dyeing',s_desc:'desc'},
+      (rec)=>{
+        const s = splitMtr16(rec.qty);
+        document.getElementById('s_qty').value = s.whole;
+        document.getElementById('s_qty_16').value = s.sixteenths;
+        const el=document.getElementById('s_qty'); if(el) el.dispatchEvent(new Event('input'));
+      });
     const sfClient = document.getElementById('sf_client');
     const sfQuality = document.getElementById('sf_quality');
     sfClient.value = FILTER.saleClient || '';
@@ -1708,12 +1717,16 @@ function wireBagsToLbs(bagsId, lbsPerBagId, lbsId, previewId, labelId){
 }
 function wireAmountPreview(qtyId, rateId, previewId, label='Amount', floorResult=false){
   const el = document.getElementById(previewId);
+  // qtyId is normally a single input's id; pass a [whole, sixteenths] pair instead (see the
+  // Sale form) to read the two-box Meters/16ths quantity via combineMtr16.
+  const qtyIds = Array.isArray(qtyId) ? qtyId : [qtyId];
+  const readQty = () => qtyIds.length > 1 ? combineMtr16(v(qtyIds[0]), v(qtyIds[1])) : Number(v(qtyIds[0])||0);
   const upd = ()=>{
-    const qty = Number(v(qtyId)||0), rate = Number(v(rateId)||0);
+    const qty = readQty(), rate = Number(v(rateId)||0);
     const raw = qty*rate;
     el.textContent = (qty && rate) ? `${label}: ${fmtRs(floorResult ? Math.floor(raw + 1e-6) : raw)}` : `${label}: —`;
   };
-  [qtyId, rateId].forEach(id=>{
+  [...qtyIds, rateId].forEach(id=>{
     const inp = document.getElementById(id);
     if(inp) inp.addEventListener('input', upd);
   });

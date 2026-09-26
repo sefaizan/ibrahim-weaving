@@ -239,7 +239,7 @@ function salePanel(){
       ${selectField('Quality','s_quality',DATA.qualities)}
     </div>
     <div class="grid cols-3" style="margin-top:12px">
-      ${field('Quantity (mtr)','s_qty','number')}
+      ${meterFracField('Quantity (mtr)','s_qty','s_qty_16')}
       ${field('Rate per mtr (Rs)','s_rate','number')}
       ${field('Invoice No (optional)','s_inv','text')}
     </div>
@@ -247,7 +247,6 @@ function salePanel(){
       ${selectField('Dyeing (optional)','s_dyeing',DATA.dyeingUnits)}
       <div></div>
     </div>
-    <div class="note" id="s_qtyHint" hidden style="margin:6px 0 0"></div>
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Description (optional)','s_desc')}
     </div>
