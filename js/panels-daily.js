@@ -364,7 +364,7 @@ function pendingLCardHtml(){
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
       `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px" placeholder="0"></div>`,
-      `<div data-l-box="${r.id}" hidden style="display:flex;gap:4px">
+      `<div class="l-shortage-box" data-l-box="${r.id}" hidden>
         <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px" placeholder="Whole">
         <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px" placeholder="/16">
       </div>`,
