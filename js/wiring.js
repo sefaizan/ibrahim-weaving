@@ -1775,27 +1775,44 @@ function wireBeamFinishToggle(){
     };
   });
 }
-// Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): a live shortage/
-// deduction preview as the L count is typed, "No Shortage" to clear the wait, "Confirm L" to
-// apply the confirmed market formula (lShortageMeters/lDeductionAmount in calc.js) by creating
-// a linked adjustment entry — the original stays in the Sales Log as an audit trail but is
-// excluded from every balance/total via activeSaleRows() — and "Return Lot" to record the lot
-// as rejected outright. L above 5 isn't calculated yet, so Confirm is refused past that
-// tolerance; Return Lot is the only option until the double-L formula is settled.
+// Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): typing an L count
+// auto-fills the Shortage (mtr) box via the market formula (lShortageMeters/
+// lDeductionAmount in calc.js, fractional meters dropped) and updates the live deduction
+// preview — but the meters box stays the actual source of truth. Once it's been hand-edited
+// (data-manual flag on the input itself), further L count changes no longer overwrite it,
+// so a mutually-agreed meter figure that differs from the formula (compensating more or
+// less) sticks and is what "Confirm L" applies; the L count is then only kept on the record
+// for reference. "No Shortage" clears the wait with nothing deducted; "Confirm L" creates a
+// linked adjustment entry — the original stays in the Sales Log as an audit trail but is
+// excluded from every balance/total via activeSaleRows(); "Return Lot" records the lot as
+// rejected outright. A blank/zero Shortage (mtr) box refuses Confirm — the L count alone
+// isn't enough once L is past the 5 tolerance where the formula isn't confirmed; the
+// negotiated meter figure must be typed in for those.
 function wireLConfirm(){
   const rateOf = rec => rec.rate || (rec.qty ? (Number(rec.amount)||0)/rec.qty : 0);
   document.querySelectorAll('[data-lcount-input]').forEach(input=>{
     const saleId = input.dataset.lcountInput;
     const rec = DATA.sale.find(r=>r.id===saleId);
     const preview = document.querySelector(`[data-l-preview="${saleId}"]`);
-    if(!rec || !preview) return;
+    const metersInput = document.querySelector(`[data-lmeters-input="${saleId}"]`);
+    if(!rec || !preview || !metersInput) return;
+    const updatePreview = ()=>{
+      const meters = Number(metersInput.value);
+      if(!(meters > 0)){ preview.textContent = ''; return; }
+      const deduction = lDeductionAmount(meters, rateOf(rec));
+      preview.textContent = `Shortage: ${fmtQtyPlain(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
+    };
     input.addEventListener('input', ()=>{
       const n = Number(input.value);
-      if(!(n > 0)){ preview.textContent = ''; return; }
-      if(n > 5){ preview.textContent = "L > 5 needs the double-L formula — not set up yet. Use Return Lot instead."; return; }
-      const shortage = lShortageMeters(rec.qty, n);
-      const deduction = lDeductionAmount(shortage, rateOf(rec));
-      preview.textContent = `Shortage: ${fmtQtyPlain(shortage)} mtr → Deduction: ${fmtRs(deduction)}`;
+      if(metersInput.dataset.manual) { updatePreview(); return; } // hand-edited figure sticks
+      if(!(n > 0)){ metersInput.value = ''; preview.textContent = ''; return; }
+      if(n > 5){ metersInput.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; return; }
+      metersInput.value = lShortageMeters(rec.qty, n) || '';
+      updatePreview();
+    });
+    metersInput.addEventListener('input', ()=>{
+      metersInput.dataset.manual = '1';
+      updatePreview();
     });
   });
   document.querySelectorAll('[data-l-ok]').forEach(btn=>{
@@ -1819,21 +1836,21 @@ function wireLConfirm(){
     btn.onclick = async ()=>{
       const rec = DATA.sale.find(r=>r.id===btn.dataset.lConfirm);
       if(!rec) return;
-      const input = document.querySelector(`[data-lcount-input="${rec.id}"]`);
-      const n = Number(input && input.value);
-      if(!(n > 0)){ showToast('Enter the L (AIL) count first.'); return; }
-      if(n > 5){ showToast("L > 5 isn't calculated yet — use Return Lot for now."); return; }
+      const countInput = document.querySelector(`[data-lcount-input="${rec.id}"]`);
+      const metersInput = document.querySelector(`[data-lmeters-input="${rec.id}"]`);
+      const n = Number(countInput && countInput.value) || 0;
+      const meters = Math.floor(Number(metersInput && metersInput.value) || 0);
+      if(!(meters > 0)){ showToast('Enter the Shortage (mtr) — type an L count to compute it, or type the negotiated meter figure directly.'); return; }
       const rate = rateOf(rec);
-      const shortage = lShortageMeters(rec.qty, n);
-      const deduction = lDeductionAmount(shortage, rate);
+      const deduction = lDeductionAmount(meters, rate);
       const adjusted = {
         id: uid(), date: rec.date, invoice: rec.invoice, client: rec.client, quality: rec.quality,
-        qty: Number(rec.qty) - shortage, rate, amount: (Number(rec.amount)||0) - deduction,
+        qty: Number(rec.qty) - meters, rate, amount: (Number(rec.amount)||0) - deduction,
         dyeing: rec.dyeing,
-        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr, ${n} L (AIL)`].filter(Boolean).join(' — '),
+        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${n} L (AIL)` : ''}`].filter(Boolean).join(' — '),
         lAdjustedFromId: rec.id,
       };
-      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = shortage; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
+      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
       DATA.sale.push(adjusted);
       await save(); switchTab('sale');
     };

@@ -343,9 +343,14 @@ function recoveryFaceAmount(r){
 
 // A dyeing unit's "L (AIL)" shortage check on a dispatched lot: they measure a few random
 // rolls and, per the settled market-convention formula, treat every 400 meters sold as
-// worth 1 meter of shortage per reported L. Kept as a plain function (not inlined) so the
-// UI preview and the actual apply-on-confirm step can never drift apart.
-function lShortageMeters(qty, lCount){ return (Number(qty)||0) / 400 * (Number(lCount)||0); }
+// worth 1 meter of shortage per reported L. The fractional part of that is neglected —
+// a shortage is only ever stated/settled in whole meters, so this floors rather than
+// rounds. Kept as a plain function (not inlined) so the UI preview and the actual
+// apply-on-confirm step can never drift apart. This is only ever the starting figure:
+// panels-daily.js lets it be overridden with a specific mutually-agreed meter amount
+// (e.g. when both sides settle on compensating more than the formula implies) before
+// Confirm is pressed — see the shortage-mtr input wired in wireLConfirm (wiring.js).
+function lShortageMeters(qty, lCount){ return Math.floor((Number(qty)||0) / 400 * (Number(lCount)||0) + 1e-6); }
 // PKR value of that shortage at the lot's own rate — matches the flooring addSale already
 // uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
 function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
