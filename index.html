@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-25-align-form-buttons">
+<meta name="app-build" content="2026-09-25-fix-required-field-highlight">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -333,6 +333,11 @@
   }
   textarea{ resize:vertical; min-height:60px; line-height:1.4; }
   input:focus, select:focus, textarea:focus{ outline:2px solid var(--rust); outline-offset:1px; border-color:var(--rust); background:var(--card); }
+  /* Briefly highlights the field a "this is required" toast points at (see requireFields in
+     wiring.js) — a plain text/number field also gets real keyboard focus alongside this, but a
+     <select> or a date/time input only gets this outline: focusing those two on some Android
+     WebViews pops their native picker open immediately, which is disruptive mid-form. */
+  .field-flag{ outline:2px solid var(--red) !important; outline-offset:1px; border-color:var(--red) !important; }
   input[type="file"]{ padding:7px 8px; font-size:12.5px; color:var(--ink-soft); }
   input[type="file"]::file-selector-button{
     background:var(--rust); color:#fff; border:none; padding:7px 14px; border-radius:9px;
@@ -722,7 +727,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.13.0</span>
+      <span class="app-version" id="appVersionTag">v3.13.1</span>
     </div>
   </header>
 
