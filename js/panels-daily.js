@@ -197,6 +197,12 @@ function salePanel(){
   if(clientVal) filteredSale = filteredSale.filter(r=>r.client===clientVal);
   if(qualityVal) filteredSale = filteredSale.filter(r=>r.quality===qualityVal);
   const filteredSaleActive = filteredSale.filter(r=> r.lStatus!=='applied' && r.lStatus!=='returned');
+  // A record involved in an L (AIL) adjustment either side of the link: the original
+  // (now lStatus 'applied'/'returned', greyed out and excluded from every total) or the
+  // adjusted/replacement entry that superseded it (r.lAdjustedFromId set). Kept as its own
+  // filtered set so the "linked records" toggle below can show just this pair-history view
+  // without also dragging in every ordinary active sale.
+  const filteredSaleLinked = filteredSale.filter(r=> r.lStatus==='applied' || r.lStatus==='returned' || r.lAdjustedFromId);
   const filterQty = filteredSaleActive.reduce((s,r)=>s+(Number(r.qty)||0),0);
   const filterAmt = filteredSaleActive.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const saleTotals = sumAllAndMonth(activeSaleRows(), 'amount');
@@ -261,14 +267,17 @@ function salePanel(){
         <div class="field"><label>Filter by Quality</label><select id="sf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
       </div>
       ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtQtyMtr(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
+      <button type="button" class="ghost" id="saleLinkedToggle" style="margin-bottom:10px">${FILTER.saleLinked ? '← Back to Active Records' : `Show Linked (L) Records${filteredSaleLinked.length?` (${filteredSaleLinked.length})`:''}`}</button>
+      ${FILTER.saleLinked ? `<p class="note">Showing only sales that were dispatched to a dyeing unit and had an L (AIL) shortage applied or the lot returned — the original entry (greyed out, excluded from every total) alongside the adjusted entry that replaced it.</p>` : ''}
       ${logTable('sale',
       ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','L (AIL)','Description',''],
-      filteredSale.slice().reverse(),
+      (FILTER.saleLinked ? filteredSaleLinked : filteredSaleActive).slice().reverse(),
       r=>{
         const cells = [fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), lBadge(r), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`];
         // Superseded (L applied) or returned entries no longer count anywhere money is
         // totaled (see activeSaleRows in calc.js) — greyed out here so that's visible at a
-        // glance in the log itself, not just implied by the badge text.
+        // glance in the log itself, not just implied by the badge text. Only reachable via
+        // the "Show Linked (L) Records" toggle now — the default view excludes them outright.
         if(r.lStatus==='applied' || r.lStatus==='returned') cells.rowStyle = 'opacity:0.55';
         return cells;
       }

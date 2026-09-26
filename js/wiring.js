@@ -415,6 +415,12 @@ function wirePanel(id){
     sfQuality.value = FILTER.saleQuality || '';
     sfClient.addEventListener('change', ()=>{ FILTER.saleClient = sfClient.value; PAGE.sale = 1; switchTab('sale'); });
     sfQuality.addEventListener('change', ()=>{ FILTER.saleQuality = sfQuality.value; PAGE.sale = 1; switchTab('sale'); });
+    // Toggles the Sales Log between its default (active records only — everything still
+    // counted in totals) and a "linked records" view showing just the L (AIL) pairs: the
+    // original entry (greyed out, excluded from totals) alongside the adjusted entry that
+    // replaced it. See filteredSaleActive/filteredSaleLinked in panels-daily.js.
+    const saleLinkedToggle = document.getElementById('saleLinkedToggle');
+    if(saleLinkedToggle) saleLinkedToggle.onclick = ()=>{ FILTER.saleLinked = !FILTER.saleLinked; PAGE.sale = 1; switchTab('sale'); };
   }
   if(id==='recovery'){
     // Cheque rows are managed as in-memory state and rebuilt into the DOM on every change —
