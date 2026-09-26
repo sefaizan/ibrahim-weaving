@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-27-production-e2-autosplit">
+<meta name="app-build" content="2026-09-27-backup-badge-pulse">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -611,14 +611,19 @@
   .fab-backup .icon{ font-size:24px; }
   .fab-backup:hover{ background:#D98A4B; }
   .fab-backup:active{ transform:scale(0.94); }
-  /* "Needs backup" badge (see setFabNeedsBackup, js/autobackup.js): a small dot rather than
+  /* "Needs backup" badge (see setFabNeedsBackup, js/autobackup.js): a dot rather than
      recoloring the whole button, so it reads as a notification ("something's waiting") rather
-     than a warning ("something's wrong"). Tapping the button while this shows emails a backup
-     directly instead of opening Backup & Restore — see fabBackup.onclick in js/lock-init.js. */
+     than a warning ("something's wrong") — but it pulses continuously (see fabBackupPulse
+     below) so it's still easy to notice rather than blending into the button's own gold/red
+     corner. Tapping the button while this shows emails a backup directly instead of opening
+     Backup & Restore — see fabBackup.onclick in js/lock-init.js. */
   .fab-backup.needs-backup::after{
-    content:''; position:absolute; top:4px; right:4px; width:13px; height:13px;
+    content:''; position:absolute; top:3px; right:3px; width:15px; height:15px;
     border-radius:50%; background:var(--red); border:2px solid var(--gold);
+    transform-origin:center; animation:fabBackupPulse 1.4s ease-in-out infinite;
   }
+  @keyframes fabBackupPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.35); } }
+  @media (prefers-reduced-motion: reduce){ .fab-backup.needs-backup::after{ animation:none; } }
   /* While a tap-triggered send is in flight, dim the button and ignore further taps — the same
      visual treatment as fab-scroll-hide, minus hiding it entirely, so it's clear something is
      happening without the button vanishing mid-send. */
@@ -727,7 +732,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.13.4</span>
+      <span class="app-version" id="appVersionTag">v3.13.7</span>
     </div>
   </header>
 
