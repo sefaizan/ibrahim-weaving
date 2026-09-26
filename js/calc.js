@@ -351,6 +351,15 @@ function recoveryFaceAmount(r){
 // (e.g. when both sides settle on compensating more than the formula implies) before
 // Confirm is pressed — see the shortage-mtr input wired in wireLConfirm (wiring.js).
 function lShortageMeters(qty, lCount){ return Math.floor((Number(qty)||0) / 400 * (Number(lCount)||0) + 1e-6); }
+// An L (AIL) count is always read against the market tolerance of 5 (past which the
+// double-L formula would apply — see wireLConfirm in wiring.js) — shown everywhere as
+// "count/5" rather than a bare number, so it's clear at a glance how close to that ceiling
+// a given shortage call is (e.g. 2 L reads as "2/5", 5 L as "5/5"). Zero reads as "OK"
+// instead of "0/5" — callers that also append a trailing " L"/"L (AIL)" word handle that
+// case themselves so the sentence still reads naturally (see saleStatementLNote below and
+// the "applied" badge in panels-daily.js).
+const L_TOLERANCE = 5;
+function fmtLCount(n){ n = Number(n)||0; return n===0 ? 'OK' : `${n}/${L_TOLERANCE}`; }
 // PKR value of that shortage at the lot's own rate — matches the flooring addSale already
 // uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
 function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
@@ -368,7 +377,7 @@ function saleStatementLNote(s){
   if(s.lStatus==='ok') return ' (L (AIL): OK)';
   if(s.lAdjustedFromId){
     const orig = DATA.sale.find(o=>o.id===s.lAdjustedFromId);
-    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount} L`:''})`;
+    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount ? `${fmtLCount(orig.lCount)} L` : 'OK'}`:''})`;
   }
   return '';
 }

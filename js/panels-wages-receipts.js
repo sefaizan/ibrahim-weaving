@@ -719,7 +719,7 @@ function saleReceiptRows(r, rate){
     if(orig) return {
       rows: [
         {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${orig.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, qtySub:`(${fmtQtyMtr(orig.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
+        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, qtySub:`(${fmtQtyMtr(orig.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
       ],
       totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
     };
@@ -728,7 +728,7 @@ function saleReceiptRows(r, rate){
   if(r.lStatus==='applied') return {
     rows: [
       {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${r.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, qtySub:`(${fmtQtyMtr(r.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
+      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, qtySub:`(${fmtQtyMtr(r.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
     ],
     totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
   };
@@ -738,7 +738,7 @@ function saleReceiptRows(r, rate){
 // Short status line kept below the table for context (which dyeing unit, cross-reference)
 // once the money/qty breakdown itself has already been shown as table rows above.
 function saleLBlockHtml(r){
-  if(r.lStatus==='returned') return `<div class="meta-row" style="margin-top:6px;color:var(--red)"><span>L (AIL)</span><b>Lot returned${r.lCount?` — ${r.lCount} L`:''}</b></div>`;
+  if(r.lStatus==='returned') return `<div class="meta-row" style="margin-top:6px;color:var(--red)"><span>L (AIL)</span><b>Lot returned${r.lCount?` — ${fmtLCount(r.lCount)} L`:''}</b></div>`;
   if(r.lStatus==='ok') return `<div class="meta-row" style="margin-top:6px"><span>L (AIL)</span><b>OK — no shortage</b></div>`;
   return '';
 }
@@ -928,7 +928,7 @@ async function shareSaleReceiptAsPdf(saleId){
     }
     if(r.lStatus==='returned'){
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(180,40,40);
-      doc.text(`L (AIL): Lot returned${r.lCount?` — ${r.lCount} L`:''}`, margin, y);
+      doc.text(`L (AIL): Lot returned${r.lCount?` — ${fmtLCount(r.lCount)} L`:''}`, margin, y);
       y += 16; doc.setTextColor(60);
     } else if(r.lStatus==='ok'){
       doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);

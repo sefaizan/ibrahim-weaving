@@ -182,8 +182,8 @@ function productionPanel(){
 function lBadge(r){
   if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
   if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
-  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount} L (AIL) — ${fmtQtyPlain16(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
-  if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${r.lCount} L)`:''}</span>`;
+  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount ? `${fmtLCount(r.lCount)} L (AIL)` : 'L (AIL) OK'} — ${fmtQtyPlain16(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
+  if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${fmtLCount(r.lCount)} L)`:''}</span>`;
   if(r.lAdjustedFromId){
     const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
     return `<span class="note" style="margin:0">L (AIL) adj.${orig?` — was ${fmtQtyMtr(orig.qty)}, now ${fmtQtyMtr(r.qty)} mtr`:''}</span>`;
@@ -342,16 +342,19 @@ function unlinkedReplacedCardHtml(){
 // Sales sent to a dyeing unit that haven't had their "L (AIL)" shortage call logged yet
 // (see lStatus:'awaiting' set in wiring.js's addSale). Card moved to Overview (above the
 // cheque cards) since it's one of the "needs your action" cards, same reasoning as those.
-// Each row lets that call be settled on
-// the spot: "No Shortage" clears it with nothing else changing, a typed L count fills the
-// Shortage (mtr) box via the market formula (lShortageMeters/lDeductionAmount in calc.js,
-// fractional meters dropped), and "Return Lot" records the lot as rejected outright. The
-// Shortage (mtr) box stays editable after that auto-fill — if the dyeing unit and the
-// client settle on a different, mutually-agreed meter figure (compensating more or less
-// than the formula gives), that number can be typed in directly and is what Confirm L
-// applies; the L count is then just kept on the record/receipt for reference. This also
-// covers the double-L (L > 5) case, where the formula isn't settled: type the negotiated
-// meter figure directly instead of an L count, or use "Return Lot".
+// Each row lets that call be settled on the spot: "L (AIL) OK" clears it with nothing else
+// changing, and "Return Lot" records the lot as rejected outright — both act immediately.
+// "Apply L (AIL)" is a reveal toggle, not an instant action: the L count / Shortage (mtr)
+// boxes (data-l-box) start hidden and only appear once it's tapped (wireLConfirm in
+// wiring.js), so the row stays compact until there's actually a shortage call to enter. A
+// typed L count fills the Shortage (mtr) box via the market formula (lShortageMeters/
+// lDeductionAmount in calc.js, fractional meters dropped); that box stays editable if the
+// dyeing unit and client settle on a different, mutually-agreed meter figure instead. Once
+// Shortage (mtr) holds a value, the "Apply"/"Cancel" pair (data-l-finalrow) appears below
+// it: "Apply" is what was previously "Confirm L" — it commits the shortage to this lot —
+// and "Cancel" does nothing to the record, it just re-hides the boxes. This also covers the
+// double-L (L > 5) case, where the formula isn't settled: type the negotiated meter figure
+// directly instead of an L count, or use "Return Lot".
 function pendingLCardHtml(){
   const awaiting = DATA.sale.filter(r=>r.lStatus==='awaiting');
   if(!awaiting.length) return '';
@@ -360,22 +363,26 @@ function pendingLCardHtml(){
     const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
-      `<input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px" placeholder="0">`,
-      `<div style="display:flex;gap:4px">
+      `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px" placeholder="0"></div>`,
+      `<div data-l-box="${r.id}" hidden style="display:flex;gap:4px">
         <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px" placeholder="Whole">
         <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px" placeholder="/16">
       </div>`,
       `<div class="chq-actions">
         <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
-        <button class="ghost" data-l-confirm="${r.id}">Confirm L</button>
+        <button class="ghost" data-l-toggle="${r.id}">Apply L (AIL)</button>
         <button class="ghost" data-l-return="${r.id}">Return Lot</button>
       </div>
-      <p class="note" data-l-preview="${r.id}" style="margin:4px 0 0"></p>`
+      <p class="note" data-l-preview="${r.id}" style="margin:4px 0 0"></p>
+      <div class="chq-actions" data-l-finalrow="${r.id}" style="margin-top:4px" hidden>
+        <button class="primary" data-l-confirm="${r.id}">Apply</button>
+        <button class="ghost" data-l-cancel="${r.id}">Cancel</button>
+      </div>`
     ];
   };
   return `
     <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Awaiting L (AIL) — ${awaiting.length}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, type the L (AIL) count — it fills the Shortage (mtr) boxes (Meters / 16ths, same convention as Quantity elsewhere) using the market formula (fractions dropped, whole meters only). Those boxes stay editable: overwrite them if you and the client settle on a different, mutually-agreed meter deduction instead — that's what Confirm L applies. Tap Confirm L to apply the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright.</p>
+      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, tap "Apply L (AIL)" to open the entry boxes, then type the L (AIL) count — it fills the Shortage (mtr) boxes (Meters / 16ths, same convention as Quantity elsewhere) using the market formula (fractions dropped, whole meters only). Those boxes stay editable: overwrite them if you and the client settle on a different, mutually-agreed meter deduction instead. Once Shortage (mtr) has a value, tap Apply to commit the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference — or Cancel to close the boxes without changing anything. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright.</p>
       ${logTable('pendingL', headers, awaiting, mapFn)}
     </div>`;
 }

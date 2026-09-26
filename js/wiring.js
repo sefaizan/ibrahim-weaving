@@ -1817,32 +1817,54 @@ function wireBeamFinishToggle(){
     };
   });
 }
-// Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): typing an L count
-// auto-fills the Shortage (mtr) boxes (Meters / 16ths, same two-box convention as Quantity
-// elsewhere — combineMtr16/splitMtr16 in core.js) via the market formula (lShortageMeters/
-// lDeductionAmount in calc.js, fractional meters dropped so the 16ths box lands on 0) and
-// updates the live deduction preview — but the boxes stay the actual source of truth. Once
-// either has been hand-edited (data-manual flag on the whole-meters box), further L count
-// changes no longer overwrite them, so a mutually-agreed meter figure that differs from the
-// formula (compensating more or less, including a 16ths fraction) sticks and is what
-// "Confirm L" applies; the L count is then only kept on the record for reference. "No
-// Shortage" clears the wait with nothing deducted; "Confirm L" creates a linked adjustment
-// entry — the original stays in the Sales Log as an audit trail but is excluded from every
-// balance/total via activeSaleRows(); "Return Lot" records the lot as rejected outright. A
-// blank/zero Shortage (mtr) refuses Confirm — the L count alone isn't enough once L is past
-// the 5 tolerance where the formula isn't confirmed; the negotiated meter figure must be
-// typed in for those.
+// Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): "Apply L (AIL)" is
+// a plain reveal toggle — it just shows/hides the L count and Shortage (mtr) boxes
+// (data-l-box) for that row, nothing else. Typing an L count auto-fills the Shortage (mtr)
+// boxes (Meters / 16ths, same two-box convention as Quantity elsewhere — combineMtr16/
+// splitMtr16 in core.js) via the market formula (lShortageMeters/lDeductionAmount in
+// calc.js, fractional meters dropped so the 16ths box lands on 0) and updates the live
+// deduction preview — but the boxes stay the actual source of truth. Once either has been
+// hand-edited (data-manual flag on the whole-meters box), further L count changes no longer
+// overwrite them, so a mutually-agreed meter figure that differs from the formula
+// (compensating more or less, including a 16ths fraction) sticks and is what "Apply"
+// applies; the L count is then only kept on the record for reference. As soon as Shortage
+// (mtr) holds a value, the row's own Apply/Cancel pair (data-l-finalrow) appears: "Apply"
+// creates a linked adjustment entry — the original stays in the Sales Log as an audit trail
+// but is excluded from every balance/total via activeSaleRows() — while "Cancel" makes no
+// change to the record at all, it just re-hides the boxes. "L (AIL) OK" (a separate, always-
+// visible button) clears the wait with nothing deducted; "Return Lot" records the lot as
+// rejected outright. A blank/zero Shortage (mtr) refuses Apply — the L count alone isn't
+// enough once L is past the 5 tolerance where the formula isn't confirmed; the negotiated
+// meter figure must be typed in for those.
 function wireLConfirm(){
   const rateOf = rec => rec.rate || (rec.qty ? (Number(rec.amount)||0)/rec.qty : 0);
+  document.querySelectorAll('[data-l-toggle]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.lToggle;
+      document.querySelectorAll(`[data-l-box="${id}"]`).forEach(el=>{ el.hidden = !el.hidden; });
+    };
+  });
+  document.querySelectorAll('[data-l-cancel]').forEach(btn=>{
+    btn.onclick = ()=>{
+      // Deliberately makes no change to the record — only re-hides what "Apply L (AIL)"
+      // (and typing a shortage) revealed.
+      const id = btn.dataset.lCancel;
+      document.querySelectorAll(`[data-l-box="${id}"]`).forEach(el=>{ el.hidden = true; });
+      const finalRow = document.querySelector(`[data-l-finalrow="${id}"]`);
+      if(finalRow) finalRow.hidden = true;
+    };
+  });
   document.querySelectorAll('[data-lcount-input]').forEach(input=>{
     const saleId = input.dataset.lcountInput;
     const rec = DATA.sale.find(r=>r.id===saleId);
     const preview = document.querySelector(`[data-l-preview="${saleId}"]`);
     const metersInput = document.querySelector(`[data-lmeters-input="${saleId}"]`);
     const meters16Input = document.querySelector(`[data-lmeters16-input="${saleId}"]`);
+    const finalRow = document.querySelector(`[data-l-finalrow="${saleId}"]`);
     if(!rec || !preview || !metersInput || !meters16Input) return;
     const updatePreview = ()=>{
       const meters = combineMtr16(metersInput.value, meters16Input.value);
+      if(finalRow) finalRow.hidden = !(meters > 0); // Apply/Cancel only once there's a shortage figure
       if(!(meters > 0)){ preview.textContent = ''; return; }
       const deduction = lDeductionAmount(meters, rateOf(rec));
       preview.textContent = `Shortage: ${fmtQtyMtr(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
@@ -1850,8 +1872,8 @@ function wireLConfirm(){
     input.addEventListener('input', ()=>{
       const n = Number(input.value);
       if(metersInput.dataset.manual) { updatePreview(); return; } // hand-edited figure sticks
-      if(!(n > 0)){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = ''; return; }
-      if(n > 5){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; return; }
+      if(!(n > 0)){ metersInput.value = ''; meters16Input.value = ''; updatePreview(); return; }
+      if(n > 5){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; if(finalRow) finalRow.hidden = true; return; }
       metersInput.value = lShortageMeters(rec.qty, n) || '';
       meters16Input.value = '';
       updatePreview();
@@ -1898,7 +1920,7 @@ function wireLConfirm(){
         id: uid(), date: rec.date, invoice: rec.invoice, client: rec.client, quality: rec.quality,
         qty: Number(rec.qty) - meters, rate, amount: (Number(rec.amount)||0) - deduction,
         dyeing: rec.dyeing,
-        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${n} L (AIL)` : ''}`].filter(Boolean).join(' — '),
+        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${fmtLCount(n)} L (AIL)` : ''}`].filter(Boolean).join(' — '),
         lAdjustedFromId: rec.id,
       };
       rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
