@@ -68,7 +68,7 @@ function wirePanel(id){
     renderStats('');
   }
   if(id==='production'){
-    const readProductionForm = ()=>({date:v('p_date'), loom:v('p_loom'), quality:v('p_quality'), qty:combineMtr16(v('p_qty'), v('p_qty_16')), beam:v('p_beam'),
+    const readProductionForm = ()=>({date:v('p_date'), time:v('p_time'), loom:v('p_loom'), quality:v('p_quality'), qty:combineMtr16(v('p_qty'), v('p_qty_16')), beam:v('p_beam'),
       e1:v('p_e1'), e1m:Number(v('p_e1m')||0), e2:v('p_e2'), e2m:Number(v('p_e2m')||0),
       e3:v('p_e3'), e3m:Number(v('p_e3m')||0)});
     // Both Add buttons need a date, loom, quality and quantity, so a stray tap can't save a blank
@@ -164,6 +164,36 @@ function wirePanel(id){
       updateRemaining(); // e3's meters just came into (or dropped out of) the total
     });
     updateRemaining();
+    // Employee 2 Meters stays fully editable — marking it "manual" the moment it's typed into
+    // directly stops the Employee 1 auto-split just below from overwriting a deliberately
+    // different split; clearing it back to blank opts back into the auto-fill.
+    document.getElementById('p_e2m').addEventListener('input', function(){
+      this.dataset.manual = this.value.trim() ? '1' : '';
+    });
+    // Common two-employee flow: total first, then Employee 1's share. Employee 2 Meters
+    // auto-fills live with whatever's left (total minus Employee 1) as a plain decimal — no
+    // sixteenths split, since that field only ever takes a plain number — so the same figure
+    // isn't typed twice. Only kicks in once there's a total to split, an Employee 2 is already
+    // picked (usually already true via the loom's usual assignment above), Employee 2 hasn't
+    // been hand-edited, and no third employee is in play (a 3-way split needs typing by hand).
+    const p_e1m = document.getElementById('p_e1m');
+    const autoSplitRemaining = ()=>{
+      const total = combineMtr16(v('p_qty'), v('p_qty_16'));
+      const e2mInput = document.getElementById('p_e2m');
+      if(!(total > 0) || !v('p_e2') || e2mInput.dataset.manual || e3wrap.style.display !== 'none') return false;
+      const remaining = total - Number(v('p_e1m')||0);
+      if(remaining < -1e-6) return false; // Employee 1 alone already exceeds the total — leave it for a manual fix
+      e2mInput.value = fmtQtyPlain(Math.max(0, remaining));
+      updateRemaining();
+      return true;
+    };
+    p_e1m.addEventListener('input', autoSplitRemaining);
+    // Once Employee 1's figure is typed in (leaving the field, e.g. by Tab), control moves
+    // straight to the save button instead of stopping at Employee 2's already-filled fields —
+    // the split is on screen to check, and Enter from there saves the entry.
+    p_e1m.addEventListener('change', ()=>{
+      if(autoSplitRemaining()) document.getElementById(EDITING ? 'addProduction' : 'addProductionNext').focus();
+    });
     // Auto-fill Employee 1/2 from this loom's usual assignment (set in Settings > Loom
     // Assignments) whenever the loom is changed by hand — never during Edit prefill, since
     // that sets .value directly without firing 'change'. Both stay fully editable; picking a
@@ -191,7 +221,7 @@ function wirePanel(id){
     // plain select/date/employee/etc fields go through the generic value=rec[field] fill. The
     // Qty/16ths boxes are split out from that decimal by hand in afterFill below.
     wireEditGeneric('production','addProduction','cancelProduction',
-      {p_date:'date',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
+      {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
       (rec)=>{
         renderBeamToggle(false); if(v('p_e3')) showE3(); nextBtn.style.display = 'none';
         document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing

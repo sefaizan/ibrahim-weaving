@@ -103,8 +103,9 @@ function productionPanel(){
   if(toVal) filteredProduction = filteredProduction.filter(r=>r.date <= toVal);
   const filterQty = filteredProduction.reduce((s,r)=>s+(Number(r.qty)||0),0);
   return `<div class="card"><h2>Log Production</h2>
-    <div class="grid cols-3">
+    <div class="grid cols-4">
       ${field('Date','p_date','date',`value="${todayStr()}" autofocus`)}
+      ${field('Time','p_time','time',`value="${nowStr()}"`)}
       ${selectField('Quality','p_quality',DATA.qualities)}
       ${selectField('Loom','p_loom',DATA.looms)}
     </div>
@@ -126,6 +127,7 @@ function productionPanel(){
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
     <div class="calc-amount" id="p_remainingPreview">Remaining to assign: —</div>
+    <p class="note">Time helps tell entries apart when several looms are logged the same day — it doesn't need to be exact. Employee 2's meters auto-fill from what's left once Employee 1's are entered — still editable if the split isn't even.</p>
     <div class="form-actions">
       <button class="primary" id="addProductionNext">Add &amp; next loom →</button>
       <button class="ghost" id="addProduction">Add Entry</button>
@@ -166,12 +168,12 @@ function productionPanel(){
       </div>
       ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
-      ['Date','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],
+      ['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],
       filteredProduction.slice().reverse(),
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—', fmtQtyMtr(diff), actionBtns('production',r.id)];
+        return [fmtDate(r.date), r.time||'—', `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—', fmtQtyMtr(diff), actionBtns('production',r.id)];
       }
     )}</div>`;
 }
