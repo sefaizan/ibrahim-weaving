@@ -1602,8 +1602,26 @@ function requireFields(checks){
   for(const [ok, msg, fieldId] of checks){
     if(ok) continue;
     showToast(msg);
-    const el = fieldId ? document.getElementById(fieldId) : null;
-    if(el){ try{ el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){ /* best effort */ } }
+    const raw = fieldId ? document.getElementById(fieldId) : null;
+    if(raw){
+      try{
+        // enhanceSelects() wraps every <select> into an invisible, non-interactive native
+        // element (opacity:0, aria-hidden, tabIndex -1) sitting behind a visible ".sel-fake"
+        // button — pointing at the real <select> here would highlight/focus something the
+        // user can never see, so redirect to its visible stand-in.
+        const target = (raw.tagName === 'SELECT' && raw.parentElement && raw.parentElement.querySelector('.sel-fake'))
+          ? raw.parentElement.querySelector('.sel-fake') : raw;
+        target.classList.add('field-flag');
+        setTimeout(()=> target.classList.remove('field-flag'), 1600);
+        target.scrollIntoView({block:'center', behavior:'smooth'});
+        // Only steal keyboard focus for a plain text/number field. Doing it on a select's fake
+        // button would pop its option list open uninvited, and on a date/time input it pops the
+        // native OS picker open uninvited — both more disruptive than just pointing at the
+        // field (via the highlight above) and letting the person tap it themselves.
+        const type = (target.type || '').toLowerCase();
+        if(target.tagName === 'INPUT' && type !== 'date' && type !== 'time'){ target.focus(); }
+      }catch(e){ /* best effort */ }
+    }
     return false;
   }
   return true;
