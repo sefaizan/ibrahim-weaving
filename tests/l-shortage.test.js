@@ -3,10 +3,15 @@
  * L (AIL) shortage-deduction feature.
  * A dyeing unit reports a lot as short by "L" (ail) — market convention (confirmed by the
  * business's senior, supersedes an earlier mm-based guess): shortage meters = (total meters
- * sold / 400) x L, and the PKR deduction is that shortage x the lot's own rate. Once applied,
- * the original Sale entry is superseded by a linked adjustment entry — see lStatus/
- * lAdjustedFromId on the records and activeSaleRows() in calc.js, which is what every
- * balance/total in the app reads instead of DATA.sale directly.
+ * sold / 400) x L, floored to a whole meter (a shortage is only ever stated/settled in whole
+ * meters, so the fractional part is dropped, not rounded). The PKR deduction is that
+ * (floored) shortage x the lot's own rate, floored the same way addSale floors a normal
+ * Sale's Amount. This formula only supplies the starting figure though — the Shortage (mtr)
+ * box in the Awaiting L (AIL) card (panels-daily.js/wiring.js) is editable, so a specific
+ * mutually-agreed meter figure can be entered instead and is what actually gets applied.
+ * Once applied, the original Sale entry is superseded by a linked adjustment entry — see
+ * lStatus/lAdjustedFromId on the records and activeSaleRows() in calc.js, which is what
+ * every balance/total in the app reads instead of DATA.sale directly.
  */
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -15,11 +20,11 @@ const { loadApp, sale, closeTo } = require('./helpers/load-app');
 const app = loadApp();
 
 describe('L (AIL) shortage formula', () => {
-  test('the confirmed worked example: 5,000m lot, 7 L, Rs 120/mtr -> 87.5m short, Rs 10,500 deducted', () => {
+  test('the confirmed worked example: 5,000m lot, 7 L, Rs 120/mtr -> 87m short (fraction dropped), Rs 10,440 deducted', () => {
     const shortage = app.lShortageMeters(5000, 7);
-    closeTo(shortage, 87.5, 'shortage meters');
+    closeTo(shortage, 87, 'shortage meters, floored from 87.5');
     const deduction = app.lDeductionAmount(shortage, 120);
-    closeTo(deduction, 10500, 'deduction amount');
+    closeTo(deduction, 10440, 'deduction amount');
   });
 
   test('0 L is 0 shortage and 0 deduction', () => {
@@ -33,11 +38,16 @@ describe('L (AIL) shortage formula', () => {
     closeTo(app.lShortageMeters(400, 5), 5, '400m lot, 5 L -> 5m short (at the tolerance)');
   });
 
+  test('a fractional shortage has its fractional part dropped, not rounded', () => {
+    // 333 meters / 400 * 1 L = 0.8325m short -> floors to 0, not rounds to 1.
+    closeTo(app.lShortageMeters(333, 1), 0, 'fraction below a whole meter floors to 0');
+    // 900 / 400 * 3 = 6.75m short -> floors to 6, not rounds to 7.
+    closeTo(app.lShortageMeters(900, 3), 6, 'fraction above half a meter still floors down');
+  });
+
   test('deduction amount is floored to whole paisa the same way a normal Sale amount is', () => {
-    // 333 meters / 400 * 1 L = 0.8325m short, at a rate that produces a fractional result.
-    const shortage = app.lShortageMeters(333, 1);
-    const deduction = app.lDeductionAmount(shortage, 3);
-    assert.equal(deduction, Math.floor(shortage * 3 + 1e-6), 'floored like addSale\'s Amount');
+    const deduction = app.lDeductionAmount(7, 100.5);
+    assert.equal(deduction, Math.floor(7 * 100.5 + 1e-6), 'floored like addSale\'s Amount');
   });
 });
 
@@ -45,15 +55,15 @@ describe('activeSaleRows excludes superseded/returned Sales from every total', (
   test('an "applied" (L-adjusted) original is excluded; its linked adjustment entry counts instead', () => {
     app.setData({
       sale: [
-        sale({ id: 'orig', qty: 5000, amount: 600000, rate: 120, client: 'A', lStatus: 'applied', lCount: 7, lShortageQty: 87.5, lDeduction: 10500, lSupersededBy: 'adj' }),
-        sale({ id: 'adj', qty: 4912.5, amount: 589500, rate: 120, client: 'A', lAdjustedFromId: 'orig' }),
+        sale({ id: 'orig', qty: 5000, amount: 600000, rate: 120, client: 'A', lStatus: 'applied', lCount: 7, lShortageQty: 87, lDeduction: 10440, lSupersededBy: 'adj' }),
+        sale({ id: 'adj', qty: 4913, amount: 589560, rate: 120, client: 'A', lAdjustedFromId: 'orig' }),
       ],
     });
     const active = app.activeSaleRows();
     const ids = active.map(r => r.id);
     assert.ok(!ids.includes('orig'), 'the superseded original should not be active');
     assert.ok(ids.includes('adj'), 'the adjustment entry should be active');
-    closeTo(active.reduce((s, r) => s + r.amount, 0), 589500, 'total active amount is just the adjusted figure, not both');
+    closeTo(active.reduce((s, r) => s + r.amount, 0), 589560, 'total active amount is just the adjusted figure, not both');
   });
 
   test('a "returned" lot is excluded entirely — no adjustment entry replaces it', () => {
@@ -83,7 +93,7 @@ describe('activeSaleRows excludes superseded/returned Sales from every total', (
     app.setData({
       sale: [
         sale({ id: 'orig', date: '2026-09-01', qty: 5000, amount: 600000, client: 'A', lStatus: 'applied', lCount: 7, lSupersededBy: 'adj' }),
-        sale({ id: 'adj', date: '2026-09-01', qty: 4912.5, amount: 589500, client: 'A', lAdjustedFromId: 'orig' }),
+        sale({ id: 'adj', date: '2026-09-01', qty: 4913, amount: 589560, client: 'A', lAdjustedFromId: 'orig' }),
       ],
       recovery: [],
     });
@@ -97,7 +107,7 @@ describe('activeSaleRows excludes superseded/returned Sales from every total', (
     app.setData({
       sale: [
         sale({ id: 'orig', date: '2026-09-01', qty: 5000, amount: 600000, rate: 120, client: 'A', quality: 'Q', lStatus: 'applied', lCount: 7, lSupersededBy: 'adj' }),
-        sale({ id: 'adj', date: '2026-09-01', qty: 4912.5, amount: 589500, rate: 120, client: 'A', quality: 'Q', lAdjustedFromId: 'orig' }),
+        sale({ id: 'adj', date: '2026-09-01', qty: 4913, amount: 589560, rate: 120, client: 'A', quality: 'Q', lAdjustedFromId: 'orig' }),
       ],
       recovery: [],
     });
