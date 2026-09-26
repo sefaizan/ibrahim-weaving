@@ -363,10 +363,10 @@ function pendingLCardHtml(){
     const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
-      `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px" placeholder="0"></div>`,
+      `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
       `<div class="l-shortage-box" data-l-box="${r.id}" hidden>
-        <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px" placeholder="Whole">
-        <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px" placeholder="/16">
+        <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px">
+        <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px">
       </div>`,
       `<div class="chq-actions">
         <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
