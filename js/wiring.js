@@ -415,7 +415,6 @@ function wirePanel(id){
     sfQuality.value = FILTER.saleQuality || '';
     sfClient.addEventListener('change', ()=>{ FILTER.saleClient = sfClient.value; PAGE.sale = 1; switchTab('sale'); });
     sfQuality.addEventListener('change', ()=>{ FILTER.saleQuality = sfQuality.value; PAGE.sale = 1; switchTab('sale'); });
-    wireLConfirm();
   }
   if(id==='recovery'){
     // Cheque rows are managed as in-memory state and rebuilt into the DOM on every change —
@@ -1819,18 +1818,20 @@ function wireBeamFinishToggle(){
   });
 }
 // Wires the Awaiting L (AIL) card (pendingLCardHtml in panels-daily.js): typing an L count
-// auto-fills the Shortage (mtr) box via the market formula (lShortageMeters/
-// lDeductionAmount in calc.js, fractional meters dropped) and updates the live deduction
-// preview — but the meters box stays the actual source of truth. Once it's been hand-edited
-// (data-manual flag on the input itself), further L count changes no longer overwrite it,
-// so a mutually-agreed meter figure that differs from the formula (compensating more or
-// less) sticks and is what "Confirm L" applies; the L count is then only kept on the record
-// for reference. "No Shortage" clears the wait with nothing deducted; "Confirm L" creates a
-// linked adjustment entry — the original stays in the Sales Log as an audit trail but is
-// excluded from every balance/total via activeSaleRows(); "Return Lot" records the lot as
-// rejected outright. A blank/zero Shortage (mtr) box refuses Confirm — the L count alone
-// isn't enough once L is past the 5 tolerance where the formula isn't confirmed; the
-// negotiated meter figure must be typed in for those.
+// auto-fills the Shortage (mtr) boxes (Meters / 16ths, same two-box convention as Quantity
+// elsewhere — combineMtr16/splitMtr16 in core.js) via the market formula (lShortageMeters/
+// lDeductionAmount in calc.js, fractional meters dropped so the 16ths box lands on 0) and
+// updates the live deduction preview — but the boxes stay the actual source of truth. Once
+// either has been hand-edited (data-manual flag on the whole-meters box), further L count
+// changes no longer overwrite them, so a mutually-agreed meter figure that differs from the
+// formula (compensating more or less, including a 16ths fraction) sticks and is what
+// "Confirm L" applies; the L count is then only kept on the record for reference. "No
+// Shortage" clears the wait with nothing deducted; "Confirm L" creates a linked adjustment
+// entry — the original stays in the Sales Log as an audit trail but is excluded from every
+// balance/total via activeSaleRows(); "Return Lot" records the lot as rejected outright. A
+// blank/zero Shortage (mtr) refuses Confirm — the L count alone isn't enough once L is past
+// the 5 tolerance where the formula isn't confirmed; the negotiated meter figure must be
+// typed in for those.
 function wireLConfirm(){
   const rateOf = rec => rec.rate || (rec.qty ? (Number(rec.amount)||0)/rec.qty : 0);
   document.querySelectorAll('[data-lcount-input]').forEach(input=>{
@@ -1838,22 +1839,28 @@ function wireLConfirm(){
     const rec = DATA.sale.find(r=>r.id===saleId);
     const preview = document.querySelector(`[data-l-preview="${saleId}"]`);
     const metersInput = document.querySelector(`[data-lmeters-input="${saleId}"]`);
-    if(!rec || !preview || !metersInput) return;
+    const meters16Input = document.querySelector(`[data-lmeters16-input="${saleId}"]`);
+    if(!rec || !preview || !metersInput || !meters16Input) return;
     const updatePreview = ()=>{
-      const meters = Number(metersInput.value);
+      const meters = combineMtr16(metersInput.value, meters16Input.value);
       if(!(meters > 0)){ preview.textContent = ''; return; }
       const deduction = lDeductionAmount(meters, rateOf(rec));
-      preview.textContent = `Shortage: ${fmtQtyPlain16(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
+      preview.textContent = `Shortage: ${fmtQtyMtr(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
     };
     input.addEventListener('input', ()=>{
       const n = Number(input.value);
       if(metersInput.dataset.manual) { updatePreview(); return; } // hand-edited figure sticks
-      if(!(n > 0)){ metersInput.value = ''; preview.textContent = ''; return; }
-      if(n > 5){ metersInput.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; return; }
+      if(!(n > 0)){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = ''; return; }
+      if(n > 5){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; return; }
       metersInput.value = lShortageMeters(rec.qty, n) || '';
+      meters16Input.value = '';
       updatePreview();
     });
     metersInput.addEventListener('input', ()=>{
+      metersInput.dataset.manual = '1';
+      updatePreview();
+    });
+    meters16Input.addEventListener('input', ()=>{
       metersInput.dataset.manual = '1';
       updatePreview();
     });
@@ -1863,7 +1870,7 @@ function wireLConfirm(){
       const rec = DATA.sale.find(r=>r.id===btn.dataset.lOk);
       if(!rec) return;
       rec.lStatus = 'ok'; rec.lCount = 0;
-      await save(); switchTab('sale');
+      await save(); switchTab('overview');
     };
   });
   document.querySelectorAll('[data-l-return]').forEach(btn=>{
@@ -1872,7 +1879,7 @@ function wireLConfirm(){
       if(!rec) return;
       const input = document.querySelector(`[data-lcount-input="${rec.id}"]`);
       rec.lStatus = 'returned'; rec.lCount = Number(input && input.value) || 0;
-      await save(); switchTab('sale');
+      await save(); switchTab('overview');
     };
   });
   document.querySelectorAll('[data-l-confirm]').forEach(btn=>{
@@ -1881,8 +1888,9 @@ function wireLConfirm(){
       if(!rec) return;
       const countInput = document.querySelector(`[data-lcount-input="${rec.id}"]`);
       const metersInput = document.querySelector(`[data-lmeters-input="${rec.id}"]`);
+      const meters16Input = document.querySelector(`[data-lmeters16-input="${rec.id}"]`);
       const n = Number(countInput && countInput.value) || 0;
-      const meters = Math.floor(Number(metersInput && metersInput.value) || 0);
+      const meters = combineMtr16(metersInput && metersInput.value, meters16Input && meters16Input.value);
       if(!(meters > 0)){ showToast('Enter the Shortage (mtr) — type an L count to compute it, or type the negotiated meter figure directly.'); return; }
       const rate = rateOf(rec);
       const deduction = lDeductionAmount(meters, rate);
@@ -1895,7 +1903,7 @@ function wireLConfirm(){
       };
       rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
       DATA.sale.push(adjusted);
-      await save(); switchTab('sale');
+      await save(); switchTab('overview');
     };
   });
 }

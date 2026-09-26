@@ -232,7 +232,7 @@ function salePanel(){
     </div>
     ${clientTable}
   ${sumCardClose()}`;
-  return `${summary}${pendingLCardHtml()}<div class="card"><h2>Log Sale</h2>
+  return `${summary}<div class="card"><h2>Log Sale</h2>
     <div class="grid cols-3">
       ${field('Date','s_date','date',`value="${todayStr()}" autofocus`)}
       ${clientSelectField('Client','s_client')}
@@ -340,7 +340,9 @@ function unlinkedReplacedCardHtml(){
     </div>`;
 }
 // Sales sent to a dyeing unit that haven't had their "L (AIL)" shortage call logged yet
-// (see lStatus:'awaiting' set in wiring.js's addSale). Each row lets that call be settled on
+// (see lStatus:'awaiting' set in wiring.js's addSale). Card moved to Overview (above the
+// cheque cards) since it's one of the "needs your action" cards, same reasoning as those.
+// Each row lets that call be settled on
 // the spot: "No Shortage" clears it with nothing else changing, a typed L count fills the
 // Shortage (mtr) box via the market formula (lShortageMeters/lDeductionAmount in calc.js,
 // fractional meters dropped), and "Return Lot" records the lot as rejected outright. The
@@ -359,7 +361,10 @@ function pendingLCardHtml(){
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
       `<input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px" placeholder="0">`,
-      `<input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:72px" placeholder="0">`,
+      `<div style="display:flex;gap:4px">
+        <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px" placeholder="Whole">
+        <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px" placeholder="/16">
+      </div>`,
       `<div class="chq-actions">
         <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
         <button class="ghost" data-l-confirm="${r.id}">Confirm L</button>
@@ -370,7 +375,7 @@ function pendingLCardHtml(){
   };
   return `
     <div class="card"><div class="card-head"><h2 style="color:var(--rust)">Awaiting L (AIL) — ${awaiting.length}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, type the L (AIL) count — it fills the Shortage (mtr) figure using the market formula (fractions dropped, whole meters only). That figure stays editable: overwrite it if you and the client settle on a different, mutually-agreed meter deduction instead — that's what Confirm L applies. Tap Confirm L to apply the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright.</p>
+      <p class="note info-note" hidden>Once the dyeing unit calls with the shortage check, type the L (AIL) count — it fills the Shortage (mtr) boxes (Meters / 16ths, same convention as Quantity elsewhere) using the market formula (fractions dropped, whole meters only). Those boxes stay editable: overwrite them if you and the client settle on a different, mutually-agreed meter deduction instead — that's what Confirm L applies. Tap Confirm L to apply the shortage to this lot — it reduces the quantity/amount owed and both the original and adjusted entries stay in the Sales Log for reference. "L (AIL) OK" clears the wait with nothing deducted. "Return Lot" records the lot as rejected outright.</p>
       ${logTable('pendingL', headers, awaiting, mapFn)}
     </div>`;
 }

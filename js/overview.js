@@ -371,6 +371,7 @@ function renderStats(monthVal){
   ['stmt_client','stmt_from','stmt_to'].forEach(id=>{ const el = document.getElementById(id); if(el) keepStmt[id] = el.value; });
 
   wrap.innerHTML = `
+    ${pendingLCardHtml()}
     ${pendingChequesCardHtml()}
     ${bouncedChequesCardHtml()}
     <div class="card"><h2>Stock Position</h2>
@@ -520,6 +521,10 @@ function renderStats(monthVal){
   // on first render), then put back the statement choices.
   enhanceSelects(wrap);
   Object.keys(keepStmt).forEach(id=>{ const el = document.getElementById(id); if(el && keepStmt[id] !== '') el.value = keepStmt[id]; });
+  // Awaiting L (AIL) card now lives here (moved from Sale) — its inputs/buttons are wired
+  // per-element (not delegated like the cheque status buttons), so re-wire on every rebuild
+  // of this wrap, same as switchTab('sale') used to do for it.
+  wireLConfirm();
 }
 
 /* ---------------- Graphs (trends over time) ----------------
