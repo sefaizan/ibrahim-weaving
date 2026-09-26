@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-27-awaiting-l-card-cosmetic">
+<meta name="app-build" content="2026-09-27-l-card-hidden-fix">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -533,12 +533,23 @@
   .log-scroll table{ margin-top:0; }
   /* Cheque action buttons (Mark Cleared / Bounced / Replaced ...): a tidy wrapping row in tables. */
   .chq-actions{ display:flex; flex-wrap:wrap; gap:6px; }
+  /* .chq-actions{display:flex} is an author rule, so it beats the UA [hidden]{display:none}
+     default even without !important (author origin always wins over UA origin) — the Awaiting
+     L (AIL) card's Apply/Cancel row (data-l-finalrow) stayed visible before this row was
+     toggled visible via JS. Same story for .l-shortage-box's own inline display:flex below. */
+  .chq-actions[hidden]{ display:none; }
   .chq-actions button{ margin:0; }
   /* These action buttons sit on a table row that turns the same rust-tonal shade on
      hover/tap (see "tr:hover td" below) as button.ghost's own idle background — without a
      border they visually vanish into a highlighted row instead of reading as tappable
      buttons. A defined edge keeps them visible whatever the row behind them is doing. */
   .chq-actions button.ghost{ border:1px solid var(--rust-deep); }
+  /* Awaiting L (AIL) card's Meters/16ths shortage boxes (data-l-box, pendingLCardHtml in
+     panels-daily.js) — replaces an inline style="display:flex" that fought the [hidden]
+     attribute the exact same way .chq-actions did above (inline styles beat stylesheets,
+     hidden or not, so it never actually hid until this rule + the [hidden] override below). */
+  .l-shortage-box{ display:flex; gap:4px; }
+  .l-shortage-box[hidden]{ display:none; }
   /* Phone card layout for log tables (Production, Sale, Recovery, ...). Each record becomes a
      compact card: small label over value tiles that wrap to fit, empty fields left out, the
      Edit/Remove buttons on their own row underneath. No sideways swiping to read one entry.
@@ -745,7 +756,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.13.15</span>
+      <span class="app-version" id="appVersionTag">v3.13.16</span>
     </div>
   </header>
 
