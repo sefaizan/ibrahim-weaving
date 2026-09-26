@@ -182,7 +182,7 @@ function productionPanel(){
 function lBadge(r){
   if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
   if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
-  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount} L (AIL) — ${fmtQtyPlain(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
+  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount} L (AIL) — ${fmtQtyPlain16(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
   if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${r.lCount} L)`:''}</span>`;
   if(r.lAdjustedFromId){
     const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);

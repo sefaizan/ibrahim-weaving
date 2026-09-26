@@ -706,6 +706,12 @@ function shareRecoveryReceiptBtn(id){ return `<button class="ghost rowbtn share"
 // especially for a client who isn't literate, so "dispatched qty, L count, shortage
 // deducted, final qty" each get their own row instead. Shared by printSaleReceipt (HTML) and
 // the PDF builder so the two can never show different numbers.
+// The Shortage row's qty carries an optional qtySub — the same meters-and-16ths breakdown
+// shown on the Awaiting L card and Sales Log, kept as a SEPARATE (smaller, second-line)
+// field rather than appended to qty itself: the qty column is a fixed width in both the
+// printed HTML table and the PDF, and the 16ths text is too long to share a line with the
+// main figure there without overflowing into the Rate column, so each renderer places it
+// on its own line below instead.
 function saleReceiptRows(r, rate){
   const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
   if(r.lAdjustedFromId){
@@ -713,7 +719,7 @@ function saleReceiptRows(r, rate){
     if(orig) return {
       rows: [
         {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${orig.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
+        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${orig.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(orig.lShortageQty)}`, qtySub:`(${fmtQtyMtr(orig.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
       ],
       totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
     };
@@ -722,7 +728,7 @@ function saleReceiptRows(r, rate){
   if(r.lStatus==='applied') return {
     rows: [
       {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${r.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
+      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${r.lCount} L)` : ''}`, qty:`-${fmtQtyPlain(r.lShortageQty)}`, qtySub:`(${fmtQtyMtr(r.lShortageQty)} in 16ths)`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
     ],
     totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
   };
@@ -790,7 +796,7 @@ function printSaleReceipt(saleId, opts){
     <div class="meta-row"><span>Client</span><b>${escHtml(r.client||'—')}</b></div>
     <table>
       <thead><tr><th>Quality</th><th class="num">Quantity (mtr)</th><th class="num">Rate (Rs)</th><th class="num">Amount (Rs)</th></tr></thead>
-      <tbody>${rowset.rows.map(row=>`<tr><td>${escHtml(row.label)}</td><td class="num">${escHtml(row.qty)}</td><td class="num">${escHtml(row.rate)}</td><td class="num">${escHtml(row.amount)}</td></tr>`).join('')}</tbody>
+      <tbody>${rowset.rows.map(row=>`<tr><td>${escHtml(row.label)}</td><td class="num">${escHtml(row.qty)}${row.qtySub?`<br><span class="receipt-qty-sub">${escHtml(row.qtySub)}</span>`:''}</td><td class="num">${escHtml(row.rate)}</td><td class="num">${escHtml(row.amount)}</td></tr>`).join('')}</tbody>
       <tfoot><tr><td colspan="3">${escHtml(rowset.totalLabel)}</td><td class="num">${escHtml(rowset.totalAmount)}</td></tr></tfoot>
     </table>
     ${balanceHtml}
@@ -885,6 +891,17 @@ async function shareSaleReceiptAsPdf(saleId){
       const rowVals = [row.label, row.qty, row.rate, row.amount];
       x = margin;
       cols.forEach((c,i)=>{ const w=c.w*tableW; doc.text(String(rowVals[i]||''), c.align==='left'?x+4:x+w-4, y, {align:c.align}); x+=w; });
+      // A Shortage row's 16ths breakdown goes on its own smaller line under the qty figure,
+      // in the same (Qty) column only — appending it to the qty string above would run past
+      // this fixed-width column into Rate, since the column doesn't wrap. Extra line height
+      // is added to y afterward so it never overlaps the row that follows.
+      if(row.qtySub){
+        const qtyColX = margin + cols[0].w*tableW, qtyColW = cols[1].w*tableW;
+        doc.setFontSize(7); doc.setTextColor(120);
+        doc.text(row.qtySub, qtyColX + qtyColW - 4, y + 10, {align:'right'});
+        doc.setFontSize(9); doc.setTextColor(20);
+        y += 10;
+      }
       y += 18;
     });
     doc.setFontSize(10);

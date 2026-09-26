@@ -142,6 +142,11 @@ const fmtQtyPlain = n => {
   n = Number(n) || 0;
   return (Math.round(n*100)/100).toString();
 };
+// Same exact-decimal figure as fmtQtyPlain, with the 16ths breakdown alongside in
+// parentheses — so a Shortage (mtr) figure reads in the same "meters and 16ths" convention
+// used everywhere else in the app (production qty, receipts), without losing precision to
+// fmtQtyMtr's rounding: the plain decimal outside the parentheses stays the exact figure.
+const fmtQtyPlain16 = n => `${fmtQtyPlain(n)} (${fmtQtyMtr(n)} in 16ths)`;
 // Same whole/sixteenths split as fmtQtyMtr above, but returned as numbers rather than a
 // formatted string — used to populate the two-box (Meters / 16ths) production entry fields
 // when editing an existing entry.

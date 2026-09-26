@@ -1843,7 +1843,7 @@ function wireLConfirm(){
       const meters = Number(metersInput.value);
       if(!(meters > 0)){ preview.textContent = ''; return; }
       const deduction = lDeductionAmount(meters, rateOf(rec));
-      preview.textContent = `Shortage: ${fmtQtyPlain(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
+      preview.textContent = `Shortage: ${fmtQtyPlain16(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
     };
     input.addEventListener('input', ()=>{
       const n = Number(input.value);
