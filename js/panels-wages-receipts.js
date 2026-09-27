@@ -711,6 +711,12 @@ function shareRecoveryReceiptBtn(id){ return `<button class="ghost rowbtn share"
 // "(...)" line; a receipt is meant to be read at a glance, and two representations of the same
 // number invited confusion more than it helped. Shared by printSaleReceipt (HTML) and the PDF
 // builder so the two can never show different numbers.
+// A negotiated ("Calculated X from n/5 L — reason") shortage figure is NOT repeated here on
+// the Shortage row's own label — it already lives in the adjustment entry's own Description
+// (r.desc, set once by wireLConfirm's Apply handler in wiring.js) and showed up a second time
+// in this row's label too, which just repeated the same sentence twice on one receipt. Keep
+// it out of this label; add it to saleLBlockHtml or the Description instead if it ever needs
+// to show up somewhere new.
 function saleReceiptRows(r, rate){
   const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
   if(r.lAdjustedFromId){
@@ -718,7 +724,7 @@ function saleReceiptRows(r, rate){
     if(orig) return {
       rows: [
         {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}${lCalcRefNote(orig)}`, qty:`-${fmtQtyMtr(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
+        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
       ],
       totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
     };
@@ -727,7 +733,7 @@ function saleReceiptRows(r, rate){
   if(r.lStatus==='applied') return {
     rows: [
       {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}${lCalcRefNote(r)}`, qty:`-${fmtQtyMtr(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
+      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
     ],
     totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
   };
@@ -774,7 +780,7 @@ function buildReceiptFields(saleId){
 // receipt, on plain paper styling, regardless of the app's own theme.
 function printSaleReceipt(saleId, opts){
   const f = buildReceiptFields(saleId);
-  if(!f) return;
+  if(!f){ if(!(opts && opts.htmlOnly)) showToast('That sale entry could not be found — try refreshing the page.', 5000); return; }
   const {r, bizName, biz, rate, previousBalance, currentSale, currentBalance, fileBase} = f;
   const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
     biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',
@@ -1029,7 +1035,7 @@ function buildRecoveryReceiptFields(recoveryId){
 // printSaleReceipt.
 function printRecoveryReceipt(recoveryId, opts){
   const f = buildRecoveryReceiptFields(recoveryId);
-  if(!f) return;
+  if(!f){ if(!(opts && opts.htmlOnly)) showToast('That payment entry could not be found — try refreshing the page.', 5000); return; }
   const {r, bizName, biz, items, totalReceived, previousBalance, amountCredited, currentBalance, fileBase, notes} = f;
   const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
     biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',

@@ -566,10 +566,18 @@ function wireScrollAwareFab(fabBackup){
     switchTab(activeTab ? activeTab.dataset.tab : 'wages');
     window.scrollTo(0, keepY);
   });
+  // Print/Share buttons call straight into printSaleReceipt/shareSaleReceipt etc., which build
+  // the whole receipt (client statement math, L (AIL) rows, watermark) inline right when the
+  // button is tapped. If any of that throws — a data edge case one of these can't yet handle —
+  // an unwrapped click handler swallows the error silently (visible only in devtools), so the
+  // button just looks broken with no way to tell why. Catching it here and toasting the actual
+  // message means a failure is always visible, and — as important — actually says what went
+  // wrong instead of just "something broke", which is what we'd need to fix it for real.
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-receipt]');
     if(!btn) return;
-    printSaleReceipt(btn.dataset.receipt);
+    try{ printSaleReceipt(btn.dataset.receipt); }
+    catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
   });
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-share-receipt]');
@@ -579,7 +587,8 @@ function wireScrollAwareFab(fabBackup){
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-recovery-receipt]');
     if(!btn) return;
-    printRecoveryReceipt(btn.dataset.recoveryReceipt);
+    try{ printRecoveryReceipt(btn.dataset.recoveryReceipt); }
+    catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
   });
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-share-recovery-receipt]');
