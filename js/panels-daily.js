@@ -182,7 +182,7 @@ function productionPanel(){
 function lBadge(r){
   if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
   if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
-  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount ? `${fmtLCount(r.lCount)} L (AIL)` : 'L (AIL) OK'} — Negotiated Shortage: ${fmtQtyMtr(r.lShortageQty)}${lCalcRefNote(r)} / ${fmtRs(r.lDeduction)} deducted</span>`;
+  if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount ? `${fmtLCount(r.lCount)} L (AIL)` : 'L (AIL) OK'} — ${fmtQtyPlain16(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
   if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${fmtLCount(r.lCount)} L)`:''}</span>`;
   if(r.lAdjustedFromId){
     const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
@@ -372,7 +372,7 @@ function pendingLCardHtml(){
     const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
-      `<div data-l-box="${r.id}" hidden><input type="number" min="1" max="5" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
+      `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
       `<div class="l-shortage-box" data-l-box="${r.id}" hidden>
         <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px">
         <span aria-hidden="true">-</span>
@@ -384,6 +384,9 @@ function pendingLCardHtml(){
         <button class="ghost" data-l-return="${r.id}">Return Lot</button>
       </div>
       <p class="note" data-l-preview="${r.id}" style="margin:4px 0 0"></p>
+      <div data-l-reasonrow="${r.id}" style="margin-top:4px" hidden>
+        <input type="text" data-lreason-input="${r.id}" placeholder="Reason for the different figure (optional) — e.g. double-L avoided by negotiating extra meters" style="width:100%">
+      </div>
       <div class="chq-actions" data-l-finalrow="${r.id}" style="margin-top:4px" hidden>
         <button class="primary" data-l-confirm="${r.id}">Apply</button>
         <button class="ghost" data-l-cancel="${r.id}">Cancel</button>

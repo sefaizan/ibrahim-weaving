@@ -1793,9 +1793,24 @@ function wireDelete(key){
       // back on the Bounced list (and links pointing at this payment's own cheques are dropped).
       const gone = key === 'recovery' ? DATA.recovery.find(r=>r.id===delId) : null;
       const goneLinks = gone && Array.isArray(gone.replaces) ? gone.replaces.map(l=>({...l})) : [];
-      DATA[key] = DATA[key].filter(r=>r.id!==delId);
+      // An L (AIL) shortage pair (see wireLConfirm's Apply handler) is really one unit split
+      // across two Sale records: the original (now greyed out/excluded from every total via
+      // activeSaleRows, linked forward via lSupersededBy) and the adjustment entry that
+      // replaced it (linked back via lAdjustedFromId). Deleting either half alone leaves the
+      // other as an orphan — a blurred original with nothing left to explain it, or an
+      // adjustment whose "was X, now Y" badge (lBadge in panels-daily.js) loses its reference
+      // — so both records go together, whichever end of the pair the delete was tapped on.
+      const idsToDelete = new Set([delId]);
+      if(key === 'sale'){
+        const goneSale = DATA.sale.find(r=>r.id===delId);
+        if(goneSale){
+          if(goneSale.lAdjustedFromId) idsToDelete.add(goneSale.lAdjustedFromId);
+          if(goneSale.lSupersededBy) idsToDelete.add(goneSale.lSupersededBy);
+        }
+      }
+      DATA[key] = DATA[key].filter(r=>!idsToDelete.has(r.id));
       if(key === 'recovery') settleReplacementLinks(goneLinks, [], null);
-      if(EDITING && EDITING.key===key && EDITING.id===delId) EDITING = null;
+      if(EDITING && EDITING.key===key && idsToDelete.has(EDITING.id)) EDITING = null;
       await save(); switchTab(tabForKey(key));
     };
   });
@@ -1858,6 +1873,8 @@ function wireLConfirm(){
       document.querySelectorAll(`[data-l-box="${id}"]`).forEach(el=>{ el.hidden = true; });
       const finalRow = document.querySelector(`[data-l-finalrow="${id}"]`);
       if(finalRow) finalRow.hidden = true;
+      const reasonRow = document.querySelector(`[data-l-reasonrow="${id}"]`);
+      if(reasonRow) reasonRow.hidden = true;
     };
   });
   document.querySelectorAll('[data-lcount-input]').forEach(input=>{
@@ -1867,22 +1884,30 @@ function wireLConfirm(){
     const metersInput = document.querySelector(`[data-lmeters-input="${saleId}"]`);
     const meters16Input = document.querySelector(`[data-lmeters16-input="${saleId}"]`);
     const finalRow = document.querySelector(`[data-l-finalrow="${saleId}"]`);
+    const reasonRow = document.querySelector(`[data-l-reasonrow="${saleId}"]`);
     if(!rec || !preview || !metersInput || !meters16Input) return;
     const updatePreview = ()=>{
       const meters = combineMtr16(metersInput.value, meters16Input.value);
       if(finalRow) finalRow.hidden = !(meters > 0); // Apply/Cancel only once there's a shortage figure
-      if(!(meters > 0)){ preview.textContent = ''; return; }
+      if(!(meters > 0)){ preview.textContent = ''; if(reasonRow) reasonRow.hidden = true; return; }
       const deduction = lDeductionAmount(meters, rateOf(rec));
-      preview.textContent = `Shortage: ${fmtQtyMtr(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
+      // If the figure was hand-edited away from what the L count's formula gives, show both —
+      // this is exactly the "calculated vs decided" reference so the gap isn't lost by next year.
+      const n = Number(input.value) || 0;
+      const calc = n > 0 ? lShortageMeters(rec.qty, n) : 0;
+      if(calc > 0 && Math.abs(calc - meters) > 1e-6){
+        preview.textContent = `Calculated: ${fmtQtyMtr(calc)} mtr (from ${fmtLCount(n)} L) → Decided: ${fmtQtyMtr(meters)} mtr — Deduction: ${fmtRs(deduction)}`;
+        if(reasonRow) reasonRow.hidden = false;
+      } else {
+        preview.textContent = `Shortage: ${fmtQtyMtr(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
+        if(reasonRow) reasonRow.hidden = true;
+      }
     };
     input.addEventListener('input', ()=>{
-      // L count is only ever 1-5 (the market tolerance) — clamp rather than reject, since a
-      // typed "6" is almost always a slipped keystroke on the way to "5" or a manual meter
-      // figure they'll type into the Shortage boxes instead.
-      if(input.value !== '' && Number(input.value) > 5) input.value = '5';
       const n = Number(input.value);
       if(metersInput.dataset.manual) { updatePreview(); return; } // hand-edited figure sticks
-      if(!(n >= 1)){ metersInput.value = ''; meters16Input.value = ''; updatePreview(); return; }
+      if(!(n > 0)){ metersInput.value = ''; meters16Input.value = ''; updatePreview(); return; }
+      if(n > 5){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; if(finalRow) finalRow.hidden = true; return; }
       metersInput.value = lShortageMeters(rec.qty, n) || '';
       meters16Input.value = '';
       updatePreview();
@@ -1925,20 +1950,22 @@ function wireLConfirm(){
       if(!(meters > 0)){ showToast('Enter the Shortage (mtr) — type an L count to compute it, or type the negotiated meter figure directly.'); return; }
       const rate = rateOf(rec);
       const deduction = lDeductionAmount(meters, rate);
-      // The L (AIL) shortage is a billing dispute over cloth that already left for the dyeing
-      // unit, not returned goods — so the adjustment keeps the original qty (Stock Position
-      // reads qty, not amount) and only reduces the amount owed.
-      const calc = n>=1 ? lShortageMeters(rec.qty, n) : null;
+      const calc = n > 0 ? lShortageMeters(rec.qty, n) : 0;
+      const differs = calc > 0 && Math.abs(calc - meters) > 1e-6;
+      const reasonInput = document.querySelector(`[data-lreason-input="${rec.id}"]`);
+      const reason = differs ? (reasonInput && reasonInput.value.trim()) : '';
+      const descBit = differs
+        ? `L (AIL) adjustment: calculated ${fmtQtyMtr(calc)} mtr (${fmtLCount(n)} L) → decided ${fmtQtyMtr(meters)} mtr${reason ? ` — ${reason}` : ''}`
+        : `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${fmtLCount(n)} L (AIL)` : ''}`;
       const adjusted = {
         id: uid(), date: rec.date, invoice: rec.invoice, client: rec.client, quality: rec.quality,
-        qty: Number(rec.qty), rate, amount: (Number(rec.amount)||0) - deduction,
+        qty: Number(rec.qty) - meters, rate, amount: (Number(rec.amount)||0) - deduction,
         dyeing: rec.dyeing,
-        desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${fmtLCount(n)} L (AIL)` : ''}`].filter(Boolean).join(' — '),
+        desc: [rec.desc, descBit].filter(Boolean).join(' — '),
         lAdjustedFromId: rec.id,
       };
-      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction;
-      rec.lCalcShortageQty = (calc!=null && calc!==meters) ? calc : null;
-      rec.lSupersededBy = adjusted.id;
+      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
+      if(differs){ rec.lCalculatedShortageQty = calc; if(reason) rec.lReasonNote = reason; }
       DATA.sale.push(adjusted);
       await save(); switchTab('overview');
     };

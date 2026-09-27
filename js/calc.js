@@ -360,13 +360,6 @@ function lShortageMeters(qty, lCount){ return Math.floor((Number(qty)||0) / 400 
 // the "applied" badge in panels-daily.js).
 const L_TOLERANCE = 5;
 function fmtLCount(n){ n = Number(n)||0; return n===0 ? 'OK' : `${n}/${L_TOLERANCE}`; }
-// "(Actual n/5 was X)" — only when a typed L count's formula value (rec.lCalcShortageQty,
-// set in wiring.js's Apply handler) differs from what was actually applied (rec.lShortageQty),
-// so a negotiated override is never silently lost from the record.
-function lCalcRefNote(rec){
-  if(rec.lCalcShortageQty==null || rec.lCalcShortageQty===rec.lShortageQty) return '';
-  return ` (Actual ${fmtLCount(rec.lCount)} was ${fmtQtyMtr(rec.lCalcShortageQty)})`;
-}
 // PKR value of that shortage at the lot's own rate — matches the flooring addSale already
 // uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
 function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
@@ -384,7 +377,7 @@ function saleStatementLNote(s){
   if(s.lStatus==='ok') return ' (L (AIL): OK)';
   if(s.lAdjustedFromId){
     const orig = DATA.sale.find(o=>o.id===s.lAdjustedFromId);
-    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount ? `${fmtLCount(orig.lCount)} L` : 'OK'}${lCalcRefNote(orig)}`:''})`;
+    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount ? `${fmtLCount(orig.lCount)} L` : 'OK'}`:''})`;
   }
   return '';
 }
@@ -915,17 +908,22 @@ function computeStats(monthVal){
   const weftBagsMonth = start ? sumWhere(DATA.weft,'bags',start,end) : weftBagsCum;
 
   const receivable = salesAmtCum - receivedCum - bouncedCum;
-  const stock = producedCum - soldCum;
+  // L (AIL) shortage meterage is cloth that measured short once checked (dyeing shrinkage) —
+  // it isn't sitting anywhere as stock once an L is confirmed, so it must come off stock too,
+  // not just off the adjusted Sale's billed qty (which is what soldCum already reflects).
+  const lShortageCum = sumWhere(DATA.sale.filter(s=>s.lStatus==='applied'),'lShortageQty',null,cumEnd);
+  const stock = producedCum - soldCum - lShortageCum;
   const profitCum = salesAmtCum - (bizExpCum+famExpCum+personalExpCum+warpCostCum+weftCostCum);
   const profitMonth = salesAmtMonth - (bizExpMonth+famExpMonth+personalExpMonth+warpCostMonth+weftCostMonth);
 
   // Stock breakdown by quality (always cumulative to period end, like overall stock)
   const producedByQ = sumWhereBy(DATA.production,'quality','qty',null,cumEnd);
   const soldByQ = sumWhereBy(activeSaleRows(),'quality','qty',null,cumEnd);
+  const lShortageByQ = sumWhereBy(DATA.sale.filter(s=>s.lStatus==='applied'),'quality','lShortageQty',null,cumEnd);
   const qualityNames = orderedGroupNames(DATA.qualities.map(q=>q.name), [DATA.production,'quality'], [DATA.sale,'quality']);
   const stockByQuality = qualityNames.map(name=>{
-    const produced = producedByQ[name]||0, sold = soldByQ[name]||0;
-    return {name, produced, sold, stock: produced-sold};
+    const produced = producedByQ[name]||0, sold = soldByQ[name]||0, lShort = lShortageByQ[name]||0;
+    return {name, produced, sold, stock: produced-sold-lShort};
   }).filter(r=> r.produced || r.sold);
 
   // Sales & receivables breakdown by client
