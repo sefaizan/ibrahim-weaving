@@ -360,6 +360,13 @@ function lShortageMeters(qty, lCount){ return Math.floor((Number(qty)||0) / 400 
 // the "applied" badge in panels-daily.js).
 const L_TOLERANCE = 5;
 function fmtLCount(n){ n = Number(n)||0; return n===0 ? 'OK' : `${n}/${L_TOLERANCE}`; }
+// "(Actual n/5 was X)" — only when a typed L count's formula value (rec.lCalcShortageQty,
+// set in wiring.js's Apply handler) differs from what was actually applied (rec.lShortageQty),
+// so a negotiated override is never silently lost from the record.
+function lCalcRefNote(rec){
+  if(rec.lCalcShortageQty==null || rec.lCalcShortageQty===rec.lShortageQty) return '';
+  return ` (Actual ${fmtLCount(rec.lCount)} was ${fmtQtyMtr(rec.lCalcShortageQty)})`;
+}
 // PKR value of that shortage at the lot's own rate — matches the flooring addSale already
 // uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
 function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
@@ -377,7 +384,7 @@ function saleStatementLNote(s){
   if(s.lStatus==='ok') return ' (L (AIL): OK)';
   if(s.lAdjustedFromId){
     const orig = DATA.sale.find(o=>o.id===s.lAdjustedFromId);
-    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount ? `${fmtLCount(orig.lCount)} L` : 'OK'}`:''})`;
+    return ` (adjusted for L (AIL)${orig?` — ${orig.lCount ? `${fmtLCount(orig.lCount)} L` : 'OK'}${lCalcRefNote(orig)}`:''})`;
   }
   return '';
 }

@@ -1876,10 +1876,13 @@ function wireLConfirm(){
       preview.textContent = `Shortage: ${fmtQtyMtr(meters)} mtr → Deduction: ${fmtRs(deduction)}`;
     };
     input.addEventListener('input', ()=>{
+      // L count is only ever 1-5 (the market tolerance) — clamp rather than reject, since a
+      // typed "6" is almost always a slipped keystroke on the way to "5" or a manual meter
+      // figure they'll type into the Shortage boxes instead.
+      if(input.value !== '' && Number(input.value) > 5) input.value = '5';
       const n = Number(input.value);
       if(metersInput.dataset.manual) { updatePreview(); return; } // hand-edited figure sticks
-      if(!(n > 0)){ metersInput.value = ''; meters16Input.value = ''; updatePreview(); return; }
-      if(n > 5){ metersInput.value = ''; meters16Input.value = ''; preview.textContent = "L > 5 needs the double-L formula — not set up yet. Type the negotiated shortage (mtr) directly, or use Return Lot."; if(finalRow) finalRow.hidden = true; return; }
+      if(!(n >= 1)){ metersInput.value = ''; meters16Input.value = ''; updatePreview(); return; }
       metersInput.value = lShortageMeters(rec.qty, n) || '';
       meters16Input.value = '';
       updatePreview();
@@ -1922,14 +1925,20 @@ function wireLConfirm(){
       if(!(meters > 0)){ showToast('Enter the Shortage (mtr) — type an L count to compute it, or type the negotiated meter figure directly.'); return; }
       const rate = rateOf(rec);
       const deduction = lDeductionAmount(meters, rate);
+      // The L (AIL) shortage is a billing dispute over cloth that already left for the dyeing
+      // unit, not returned goods — so the adjustment keeps the original qty (Stock Position
+      // reads qty, not amount) and only reduces the amount owed.
+      const calc = n>=1 ? lShortageMeters(rec.qty, n) : null;
       const adjusted = {
         id: uid(), date: rec.date, invoice: rec.invoice, client: rec.client, quality: rec.quality,
-        qty: Number(rec.qty) - meters, rate, amount: (Number(rec.amount)||0) - deduction,
+        qty: Number(rec.qty), rate, amount: (Number(rec.amount)||0) - deduction,
         dyeing: rec.dyeing,
         desc: [rec.desc, `L (AIL) adjustment of ${fmtQtyMtr(rec.qty)} mtr${n ? `, ${fmtLCount(n)} L (AIL)` : ''}`].filter(Boolean).join(' — '),
         lAdjustedFromId: rec.id,
       };
-      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction; rec.lSupersededBy = adjusted.id;
+      rec.lStatus = 'applied'; rec.lCount = n; rec.lShortageQty = meters; rec.lDeduction = deduction;
+      rec.lCalcShortageQty = (calc!=null && calc!==meters) ? calc : null;
+      rec.lSupersededBy = adjusted.id;
       DATA.sale.push(adjusted);
       await save(); switchTab('overview');
     };
