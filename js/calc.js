@@ -360,6 +360,15 @@ function lShortageMeters(qty, lCount){ return Math.floor((Number(qty)||0) / 400 
 // the "applied" badge in panels-daily.js).
 const L_TOLERANCE = 5;
 function fmtLCount(n){ n = Number(n)||0; return n===0 ? 'OK' : `${n}/${L_TOLERANCE}`; }
+// "(Calculated X from n/5 L — reason)" — only when the L count's formula figure
+// (rec.lCalculatedShortageQty, set by wireLConfirm's Apply handler in wiring.js) differs from
+// what was actually applied/recorded (rec.lShortageQty), so a negotiated override is never
+// silently lost from the printed/shared receipt (saleReceiptRows in panels-wages-receipts.js)
+// — mirrors the live "Calculated vs Decided" preview shown while applying.
+function lCalcRefNote(rec){
+  if(rec.lCalculatedShortageQty==null) return '';
+  return ` (Calculated ${fmtQtyMtr(rec.lCalculatedShortageQty)} from ${fmtLCount(rec.lCount)} L${rec.lReasonNote ? ` — ${rec.lReasonNote}` : ''})`;
+}
 // PKR value of that shortage at the lot's own rate — matches the flooring addSale already
 // uses for a normal sale's Amount, so an L-adjusted amount is never off by a paisa rounding.
 function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortageQty)||0) * (Number(rate)||0) + 1e-6); }
