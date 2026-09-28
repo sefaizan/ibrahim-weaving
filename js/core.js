@@ -658,6 +658,7 @@ async function save(){
   UNDO_PREV_PARTS = curParts; // baseline for detecting whatever gets saved *next*
   if(typeof updateWeekBadge === 'function') updateWeekBadge(); // header "Week Rs …" pill follows every change
   if(typeof autoBackupSchedule === 'function') autoBackupSchedule(); // emails a backup shortly after changes (Backup & Restore > Automatic email backup)
+  if(typeof cloudSyncSchedule === 'function') cloudSyncSchedule(); // pushes to Cloud Sync shortly after changes, if turned on (Settings > Cloud Sync)
 }
 async function load(){
   if(encEnabled()){

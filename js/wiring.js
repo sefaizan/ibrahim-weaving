@@ -1555,6 +1555,7 @@ function wirePanel(id){
       switchTab('settings');
     };
     wireEncryptionCard();
+    wireCloudSyncCard();
     wireBeamAlertSettings();
     const pinDisableSaveBtn = document.getElementById('pinDisableSaveBtn');
     if(pinDisableSaveBtn) pinDisableSaveBtn.onclick = async ()=>{

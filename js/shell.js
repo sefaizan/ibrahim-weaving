@@ -213,7 +213,7 @@ function settingsPanel(){
     </label>
     <p class="note" style="margin-top:6px">Turn off to go back to the classic sideways-scrolling tables. Only affects small screens.</p>
   </div>
-  ` + pinLockSection() + encryptionSection() + beamAlertSettingsCard() + `
+  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + beamAlertSettingsCard() + `
   <div class="card"><div class="card-head"><h2>Business Info</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>Shown on the header of printed Sale receipts (Sales Log → Receipt). Leave any of these blank to leave that line off the receipt.</p>
     <div class="grid cols-1">

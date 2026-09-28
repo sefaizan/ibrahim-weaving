@@ -681,6 +681,7 @@ function wireScrollAwareFab(fabBackup){
   setTimeout(noteIfJustUpdated, 1200);
   setTimeout(()=>{ maybeAutoSnapshot(); checkForNewVersion(); }, 4000);
   setTimeout(autoBackupOnWake, 8000); // emails a backup if one is due (Backup & Restore > Automatic email backup)
+  if(typeof cloudSyncCheckOnStart === 'function') setTimeout(cloudSyncCheckOnStart, 3000); // Settings > Cloud Sync, if turned on
   // All data lives in this browser's storage, so ask it not to clear that under storage
   // pressure. Best effort: granted automatically for installed apps on most browsers, ignored
   // (or refused) elsewhere, and nothing here depends on the answer.
