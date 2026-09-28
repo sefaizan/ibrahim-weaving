@@ -254,7 +254,15 @@ function wireEncryptionCard(){
       showToast(okMsg, 5000);
     };
   };
-  run('encOnBtn', 'encOnError', ()=> enableEncryption(v('enc_pin'), v('enc_ans')), 'Encryption is on ✓');
+  // Push right away when Cloud Sync is on — turning encryption on doesn't change DATA's
+  // content (only how it's stored locally), so the debounced auto-push never fires for it on
+  // its own, leaving another device's "Join Encrypted Sync" with no keyWrap to find until some
+  // unrelated edit happened to trigger a push later.
+  run('encOnBtn', 'encOnError', async ()=>{
+    const msg = await enableEncryption(v('enc_pin'), v('enc_ans'));
+    if(!msg && cloudSyncEnabled()) cloudPushNow();
+    return msg;
+  }, 'Encryption is on ✓');
   run('encOffBtn', 'encOffError', ()=> disableEncryption(v('enc_off_pin'), v('enc_off_ans')), 'Encryption is off');
 }
 

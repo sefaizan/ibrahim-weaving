@@ -126,32 +126,47 @@ async function cloudPushNow(){
     setCloudStatus('synced');
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
+// Decrypts (or passes through) a remote doc's payload; used by both cloudApplyRemote and the
+// auto-merge path below. Returns {json} or {error} (never throws) so callers just check which.
+async function cloudDecryptRemote(remote){
+  if(remote.encrypted && !ENC_DEK){
+    return { error: encEnabled()
+      ? 'app is locked — unlock with your PIN first, then try Sync Now'
+      : 'the cloud copy is encrypted — use "Join Encrypted Sync" below to read it' };
+  }
+  if(!remote.encrypted) return { json: remote.payload };
+  try{ return { json: await encOpen(remote.payload) }; }
+  catch(e){ return { error: "could not decrypt this device's data — its encryption key doesn't match the device that saved it. Use \"Join Encrypted Sync\" below to adopt the same key." }; }
+}
+// Per-record merge: unions each array by id (never drops an entry either side added) instead of
+// picking one whole device's copy wholesale — this is what lets both-sides-changed resolve
+// automatically instead of asking. Same id present on both sides with different content (the
+// same record edited on two devices) keeps the local edit; that's the only case this can't
+// perfectly reconcile, but no entry is ever silently discarded, which was the real risk with
+// whole-document last-write-wins.
+function mergeLedgers(local, remote){
+  const out = {};
+  new Set([...Object.keys(local||{}), ...Object.keys(remote||{})]).forEach(k=>{
+    const a = local[k], b = remote[k];
+    if(Array.isArray(a) || Array.isArray(b)){
+      const map = new Map();
+      (b||[]).forEach(r=> r && r.id!=null && map.set(r.id, r));
+      (a||[]).forEach(r=> r && r.id!=null && map.set(r.id, r)); // local wins on same-id edits
+      out[k] = Array.from(map.values());
+    } else if(a && typeof a==='object'){
+      out[k] = Object.assign({}, b||{}, a); // local keys win on collision, union otherwise
+    } else {
+      out[k] = a!==undefined ? a : b;
+    }
+  });
+  return out;
+}
 // Replaces DATA wholesale with a remote copy (mirrors load()'s own full-overwrite approach),
 // saves it locally too, and updates the sync markers so this device now matches the cloud.
 async function cloudApplyRemote(remote){
-  // Same reasoning as the guard in cloudPushNow above, but for the decrypt side (encOpen) —
-  // this is what a fresh install actually hits first, since "Use Cloud's Data Instead" (and
-  // the automatic pull in cloudSyncCheckOnStart when only the remote side changed) both come
-  // through here.
-  if(remote.encrypted && !ENC_DEK){
-    setCloudStatus('error', encEnabled()
-      ? 'app is locked — unlock with your PIN first, then try Sync Now'
-      : 'the cloud copy is encrypted — use "Join Encrypted Sync" below to read it');
-    return;
-  }
-  let json;
-  if(remote.encrypted){
-    try{ json = await encOpen(remote.payload); }
-    // crypto.subtle.decrypt's own failure (OperationError) carries no useful .message, so on
-    // its own it falls through to a bare "unknown error" — which is what actually happens
-    // whenever this device's encryption key doesn't match the one that sealed this payload
-    // (see enableEncryption in encryption.js: each device generates its own random key, so
-    // typing the same PIN on two devices does NOT give them the same key). Name that
-    // explicitly rather than leaving it as an unexplained failure.
-    catch(e){ setCloudStatus('error', "could not decrypt this device's data — its encryption key doesn't match the device that saved it. Use \"Join Encrypted Sync\" below to adopt the same key."); return; }
-  } else {
-    json = remote.payload;
-  }
+  const dec = await cloudDecryptRemote(remote);
+  if(dec.error){ setCloudStatus('error', dec.error); return; }
+  const json = dec.json;
   const parsed = JSON.parse(json);
   Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
   Object.assign(DATA, parsed);
@@ -179,8 +194,14 @@ async function cloudSyncCheckOnStart(){
     if(!remoteChanged && !localChanged){ setCloudStatus('synced'); return; }
     if(remoteChanged && !localChanged){ await cloudApplyRemote(remote); return; }
     if(!remoteChanged && localChanged){ await cloudPushNow(); return; }
-    CLOUD_PENDING_REMOTE = remote; // both sides changed — ask, don't guess
-    setCloudStatus('conflict');
+    // Both sides changed — merge by record id instead of asking which whole copy to keep, so
+    // nothing either device added gets silently discarded (see mergeLedgers above).
+    const dec = await cloudDecryptRemote(remote);
+    if(dec.error){ setCloudStatus('error', dec.error); return; }
+    Object.assign(DATA, mergeLedgers(DATA, JSON.parse(dec.json)));
+    await save();
+    CLOUD_PENDING_REMOTE = null;
+    await cloudPushNow(); // share the merged result back so the other device converges too
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); }
