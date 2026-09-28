@@ -128,7 +128,19 @@ async function cloudApplyRemote(remote){
   // the automatic pull in cloudSyncCheckOnStart when only the remote side changed) both come
   // through here.
   if(remote.encrypted && !ENC_DEK){ setCloudStatus('error', 'app is locked — unlock with your PIN first, then try Sync Now'); return; }
-  const json = remote.encrypted ? await encOpen(remote.payload) : remote.payload;
+  let json;
+  if(remote.encrypted){
+    try{ json = await encOpen(remote.payload); }
+    // crypto.subtle.decrypt's own failure (OperationError) carries no useful .message, so on
+    // its own it falls through to a bare "unknown error" — which is what actually happens
+    // whenever this device's encryption key doesn't match the one that sealed this payload
+    // (see enableEncryption in encryption.js: each device generates its own random key, so
+    // typing the same PIN on two devices does NOT give them the same key). Name that
+    // explicitly rather than leaving it as an unexplained failure.
+    catch(e){ setCloudStatus('error', "could not decrypt this device's data — its encryption key doesn't match the device that saved it (see Settings > Encrypt Data)"); return; }
+  } else {
+    json = remote.payload;
+  }
   const parsed = JSON.parse(json);
   Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
   Object.assign(DATA, parsed);

@@ -711,12 +711,14 @@ function shareRecoveryReceiptBtn(id){ return `<button class="ghost rowbtn share"
 // "(...)" line; a receipt is meant to be read at a glance, and two representations of the same
 // number invited confusion more than it helped. Shared by printSaleReceipt (HTML) and the PDF
 // builder so the two can never show different numbers.
-// A negotiated ("Calculated X from n/5 L — reason") shortage figure is NOT repeated here on
-// the Shortage row's own label — it already lives in the adjustment entry's own Description
-// (r.desc, set once by wireLConfirm's Apply handler in wiring.js) and showed up a second time
-// in this row's label too, which just repeated the same sentence twice on one receipt. Keep
-// it out of this label; add it to saleLBlockHtml or the Description instead if it ever needs
-// to show up somewhere new.
+// A negotiated shortage (the typed Shortage (mtr) figure differs from what the L count's own
+// formula would give — orig.lCalculatedShortageQty is only set in that case, by wireLConfirm's
+// Apply handler in wiring.js) gets a short pointer note on this row rather than repeating the
+// full "calculated X, decided Y, reason: ..." sentence that's already in the Description.
+function lNegotiatedNote(rec){
+  if(rec.lCalculatedShortageQty==null) return '';
+  return ` — ${fmtLCount(rec.lCount)} was calculated (${fmtQtyMtr(rec.lCalculatedShortageQty)} mtr) but there are some negotiations. Please check the description.`;
+}
 function saleReceiptRows(r, rate){
   const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
   if(r.lAdjustedFromId){
@@ -724,7 +726,7 @@ function saleReceiptRows(r, rate){
     if(orig) return {
       rows: [
         {label:`${orig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(orig.qty), rate:fmtRs2(rate), amount:fmtRs(orig.amount)},
-        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
+        {label:`Less: L (AIL) Shortage${orig.lCount ? ` (${fmtLCount(orig.lCount)} L)` : ''}${lNegotiatedNote(orig)}`, qty:`-${fmtQtyMtr(orig.lShortageQty)}`, rate:'', amount:`-${fmtRs(orig.lDeduction)}`},
       ],
       totalLabel:'Net Total (after L (AIL))', totalAmount: fmtRs(r.amount),
     };
@@ -733,7 +735,7 @@ function saleReceiptRows(r, rate){
   if(r.lStatus==='applied') return {
     rows: [
       {label:`${r.quality||'—'} — Dispatched`, qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)},
-      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}`, qty:`-${fmtQtyMtr(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
+      {label:`Less: L (AIL) Shortage${r.lCount ? ` (${fmtLCount(r.lCount)} L)` : ''}${lNegotiatedNote(r)}`, qty:`-${fmtQtyMtr(r.lShortageQty)}`, rate:'', amount:`-${fmtRs(r.lDeduction)}`},
     ],
     totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs((Number(r.amount)||0) - (Number(r.lDeduction)||0)),
   };
