@@ -100,6 +100,12 @@ function cloudSyncSchedule(){
 }
 async function cloudPushNow(){
   if(!cloudSyncEnabled()) return;
+  // Encrypting the outgoing payload (encSeal) needs the vault unlocked — on a fresh install
+  // this can be tapped (via Sync Now, or the debounced schedule below) before the person has
+  // entered their PIN even once, which used to surface as the raw "Sync error: locked" from
+  // encSeal's own Error('locked'). Give a message that actually says what to do instead, and
+  // stop here rather than letting that exception reach the catch block below.
+  if(encEnabled() && !ENC_DEK){ setCloudStatus('error', 'app is locked — unlock with your PIN first, then try Sync Now'); return; }
   if(navigator.onLine === false){ setCloudStatus('offline'); return; }
   setCloudStatus('syncing');
   try{
@@ -117,6 +123,11 @@ async function cloudPushNow(){
 // Replaces DATA wholesale with a remote copy (mirrors load()'s own full-overwrite approach),
 // saves it locally too, and updates the sync markers so this device now matches the cloud.
 async function cloudApplyRemote(remote){
+  // Same reasoning as the guard in cloudPushNow above, but for the decrypt side (encOpen) —
+  // this is what a fresh install actually hits first, since "Use Cloud's Data Instead" (and
+  // the automatic pull in cloudSyncCheckOnStart when only the remote side changed) both come
+  // through here.
+  if(remote.encrypted && !ENC_DEK){ setCloudStatus('error', 'app is locked — unlock with your PIN first, then try Sync Now'); return; }
   const json = remote.encrypted ? await encOpen(remote.payload) : remote.payload;
   const parsed = JSON.parse(json);
   Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
