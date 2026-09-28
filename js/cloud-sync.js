@@ -174,6 +174,7 @@ async function cloudApplyRemote(remote){
   try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(json)); }catch(e){}
   CLOUD_PENDING_REMOTE = null;
   switchTab(CURRENT_TAB || 'overview');
+  showToast('Synced — new data pulled from the cloud', 4000);
 }
 // App start/unlock, and "Sync Now": decide whether to pull, push, or flag a real conflict.
 // Never guesses when both sides have changed — see the file header note.
@@ -202,6 +203,8 @@ async function cloudSyncCheckOnStart(){
     await save();
     CLOUD_PENDING_REMOTE = null;
     await cloudPushNow(); // share the merged result back so the other device converges too
+    switchTab(CURRENT_TAB || 'overview');
+    showToast('Synced — merged changes from another device', 4000);
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); }
