@@ -294,7 +294,13 @@ function pendingChequesCardHtml(){
     const cells = [
       fmtDate(c.date), `<span class="name">${escHtml(c.client)}</span>`, escHtml(c.owner||'—'), escHtml(c.chequeNo||'—'), escHtml(c.bank||'—'),
       c.chequeDate?fmtDate(c.chequeDate)+(isChequeOverdue(c)?' <span style="color:var(--rust)"><b>(overdue)</b></span>':''):'—',
-      fmtRs(c.amount), daysSince(c.date),
+      // "Days Pending" counts from the cheque's OWN date (the date it clears/is dated for),
+      // not from c.date (when this recovery entry was logged into the app) — those two dates
+      // are often different (a cheque logged today but dated for next week, or logged late for
+      // a cheque from a few days ago). A cheque dated today shows 0 here, matching "not overdue
+      // yet"; daysSince clamps at 0 for a still-future-dated cheque too, which is correct for
+      // the same reason — isChequeOverdue (above) is what actually flags it red.
+      fmtRs(c.amount), daysSince(c.chequeDate || c.date),
       `<div class="chq-actions"><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Cleared">Mark Cleared</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Bounced">Mark Bounced</button></div>`
     ];
     if(isChequeOverdue(c)) cells.rowStyle = 'background:var(--warn-bg-1)';
