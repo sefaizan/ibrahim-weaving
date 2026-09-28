@@ -16,9 +16,10 @@
  * exactly what the local ledger holds — the same encrypted blob as local storage if Settings >
  * Encrypt Data is on, plain JSON otherwise (see ledgerToLocalStorage in encryption.js for the
  * matching local-storage logic). Every save() schedules a debounced push (cloudSyncSchedule);
- * app start/unlock calls cloudSyncCheckOnStart, which pulls a newer remote copy in automatically
- * UNLESS this device also has its own unsynced changes, in which case it asks rather than
- * guessing which copy to keep (same "never silently overwrite" principle as Restore a backup).
+ * app start/unlock calls cloudSyncCheckOnStart, which ASKS (blue bar with Update / ✕, like the
+ * "new version" prompt) before pulling or merging another device's changes — nothing is applied
+ * until the person taps Update, and while a prompt is waiting no automatic push runs, so a
+ * dismissed prompt can never let this device overwrite the other device's newer data.
  */
 const CLOUD_SYNC_ON_KEY = 'khata-cloud-sync-on';
 const CLOUD_LAST_SEEN_KEY = 'khata-cloud-last-seen';   // remote `savedAt` this device last matched (via push or pull)
@@ -45,6 +46,7 @@ function cloudSyncEnabled(){ try{ return localStorage.getItem(CLOUD_SYNC_ON_KEY)
 let CLOUD_STATUS = 'idle';    // 'idle' | 'syncing' | 'synced' | 'offline' | 'conflict' | 'error'
 let CLOUD_LAST_ERROR = '';
 let CLOUD_PENDING_REMOTE = null; // set when a genuine conflict needs the user to pick a side
+let CLOUD_PENDING_PULL = null;   // {remote, mode:'pull'|'merge'} — newer cloud data waiting for the person to approve
 let CLOUD_SDK_READY = null;      // Promise, set once loading/signing-in has started
 
 function loadScriptOnce(src){
@@ -83,6 +85,7 @@ function cloudStatusText(){
   if(CLOUD_STATUS === 'syncing') return 'Syncing…';
   if(CLOUD_STATUS === 'synced') return 'Synced just now';
   if(CLOUD_STATUS === 'offline') return 'Offline — will sync once back online';
+  if(CLOUD_STATUS === 'waiting') return 'New data from another device is waiting — tap Sync Now to review it';
   if(CLOUD_STATUS === 'conflict') return "Another device has changes this device hasn't seen — pick which copy to keep below";
   if(CLOUD_STATUS === 'error') return 'Sync error: ' + CLOUD_LAST_ERROR;
   let t = null; try{ t = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
@@ -94,12 +97,12 @@ let CLOUD_PUSH_TIMER = null;
 // Called from save() (core.js) after every change — debounced so a burst of edits sends one
 // push a few seconds after the user stops, not one push per keystroke/field.
 function cloudSyncSchedule(){
-  if(!cloudSyncEnabled()) return;
+  if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return; // never auto-push over cloud data the person hasn't accepted yet
   clearTimeout(CLOUD_PUSH_TIMER);
   CLOUD_PUSH_TIMER = setTimeout(cloudPushNow, 4000);
 }
 async function cloudPushNow(){
-  if(!cloudSyncEnabled()) return;
+  if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return;
   // Encrypting the outgoing payload (encSeal) needs the vault unlocked — on a fresh install
   // this can be tapped (via Sync Now, or the debounced schedule below) before the person has
   // entered their PIN even once, which used to surface as the raw "Sync error: locked" from
@@ -194,10 +197,50 @@ async function cloudApplyRemote(remote){
   switchTab(CURRENT_TAB || 'overview');
   showSyncNotice('New data synced from the cloud');
 }
+// Asks before touching local data: a blue bar at the top (Update / ✕), the same idea as the
+// "new version" bar. Nothing is applied and nothing is pushed until Update is tapped; ✕ leaves
+// the prompt for later (Settings > Cloud Sync > Sync Now brings it back).
+function cloudAskToApply(remote, mode){
+  CLOUD_PENDING_PULL = { remote, mode };
+  setCloudStatus('waiting');
+  const old = document.getElementById('cloudAskBar'); if(old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'cloudAskBar';
+  el.setAttribute('role', 'status');
+  el.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top,0px));z-index:100000;background:#1F4E8C;color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px';
+  const msg = mode === 'merge'
+    ? 'Another device has new changes too. Merge them with this device?'
+    : 'New data from another device is available.';
+  el.innerHTML = '<span style="flex:1">' + msg + '</span><button type="button" id="cloudAskGo" style="background:#fff;color:#1F4E8C;border:0;border-radius:8px;padding:8px 14px;font-weight:700">' + (mode === 'merge' ? 'Merge' : 'Update') + '</button><button type="button" id="cloudAskLater" aria-label="Later" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">\u2715</button>';
+  document.body.appendChild(el);
+  el.querySelector('#cloudAskLater').onclick = ()=> el.remove();
+  el.querySelector('#cloudAskGo').onclick = async ()=>{
+    el.remove();
+    const pending = CLOUD_PENDING_PULL;
+    if(!pending) return;
+    CLOUD_PENDING_PULL = null;
+    try{
+      if(pending.mode === 'merge'){
+        const dec = await cloudDecryptRemote(pending.remote);
+        if(dec.error){ setCloudStatus('error', dec.error); return; }
+        Object.assign(DATA, mergeLedgers(DATA, JSON.parse(dec.json)));
+        await save();
+        CLOUD_PENDING_REMOTE = null;
+        await cloudPushNow(); // share the merged result back so the other device converges too
+        switchTab(CURRENT_TAB || 'overview');
+        showSyncNotice('Changes from another device merged');
+      } else {
+        await cloudApplyRemote(pending.remote);
+      }
+    }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+  };
+}
 // App start/unlock, and "Sync Now": decide whether to pull, push, or flag a real conflict.
 // Never guesses when both sides have changed — see the file header note.
 async function cloudSyncCheckOnStart(){
   if(!cloudSyncEnabled()) return;
+  CLOUD_PENDING_PULL = null; // re-evaluated from scratch on every check (also what "Sync Now" does)
+  const oldBar = document.getElementById('cloudAskBar'); if(oldBar) oldBar.remove();
   if(encEnabled() && !ENC_DEK) return; // still locked — afterUnlockLoad() calls this again once unlocked
   if(navigator.onLine === false){ setCloudStatus('offline'); return; }
   setCloudStatus('syncing');
@@ -211,23 +254,17 @@ async function cloudSyncCheckOnStart(){
     const remoteChanged = !!remote.savedAt && remote.savedAt !== lastSeen;
     const localChanged = lastHash !== await cloudCurrentHash();
     if(!remoteChanged && !localChanged){ setCloudStatus('synced'); return; }
-    if(remoteChanged && !localChanged){ await cloudApplyRemote(remote); return; }
+    if(remoteChanged && !localChanged){ cloudAskToApply(remote, 'pull'); return; }
     if(!remoteChanged && localChanged){ await cloudPushNow(); return; }
-    // Both sides changed — merge by record id instead of asking which whole copy to keep, so
-    // nothing either device added gets silently discarded (see mergeLedgers above).
-    const dec = await cloudDecryptRemote(remote);
-    if(dec.error){ setCloudStatus('error', dec.error); return; }
-    Object.assign(DATA, mergeLedgers(DATA, JSON.parse(dec.json)));
-    await save();
-    CLOUD_PENDING_REMOTE = null;
-    await cloudPushNow(); // share the merged result back so the other device converges too
-    switchTab(CURRENT_TAB || 'overview');
-    showSyncNotice('Changes from another device merged');
+    // Both sides changed — offer to merge by record id (nothing either device added is dropped,
+    // see mergeLedgers above), but only once the person agrees.
+    cloudAskToApply(remote, 'merge');
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
-async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); }
+async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; CLOUD_PENDING_PULL = null; await cloudPushNow(); }
 async function cloudResolveUseCloud(){
   try{
+    CLOUD_PENDING_PULL = null;
     let remote = CLOUD_PENDING_REMOTE;
     if(!remote){ // conflict flag didn't survive a reload/relaunch — fetch fresh instead of doing nothing
       const db = await cloudSdkReady();
