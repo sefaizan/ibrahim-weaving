@@ -133,7 +133,12 @@ async function cloudApplyRemote(remote){
   // this is what a fresh install actually hits first, since "Use Cloud's Data Instead" (and
   // the automatic pull in cloudSyncCheckOnStart when only the remote side changed) both come
   // through here.
-  if(remote.encrypted && !ENC_DEK){ setCloudStatus('error', 'app is locked — unlock with your PIN first, then try Sync Now'); return; }
+  if(remote.encrypted && !ENC_DEK){
+    setCloudStatus('error', encEnabled()
+      ? 'app is locked — unlock with your PIN first, then try Sync Now'
+      : 'the cloud copy is encrypted — use "Join Encrypted Sync" below to read it');
+    return;
+  }
   let json;
   if(remote.encrypted){
     try{ json = await encOpen(remote.payload); }
@@ -211,7 +216,8 @@ function cloudSyncSection(){
         <button class="ghost" id="cloudKeepDeviceBtn" type="button" style="width:100%;margin-bottom:8px">Keep This Device's Data</button>
         <button class="ghost" id="cloudUseCloudBtn" type="button" style="width:100%;background:var(--rust-deep);color:#fff">Use Cloud's Data Instead</button>
       </div>
-      <div id="cloudJoinEnc" style="${encEnabled() ? 'display:none' : ''};margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
+      <div id="cloudJoinEnc" style="margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
+        <p class="note" style="margin:0 0 8px;font-weight:500">${encEnabled() ? 'Adopt a different device\'s key' : 'Join an already-encrypted cloud copy'}</p>
         <p class="note" style="margin:0 0 8px">If the cloud copy is encrypted (saved by a device with Encrypt Data on), this device needs that same key before it can read it — enter the PIN used on that other device, plus this device's own current PIN and recovery answer:</p>
         <input type="password" id="cloudJoinSharedPin" placeholder="PIN from the other device" style="width:100%;margin-bottom:8px" inputmode="numeric">
         <input type="password" id="cloudJoinLocalPin" placeholder="This device's current PIN" style="width:100%;margin-bottom:8px" inputmode="numeric">
