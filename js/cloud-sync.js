@@ -161,6 +161,24 @@ function mergeLedgers(local, remote){
   });
   return out;
 }
+// Sync notice: deliberately looks nothing like the "App updated" bar (dark teal, bottom, full width)
+// or the generic toast (dark grey pill, bottom) — it's a blue pill at the TOP of the screen with a
+// sync icon, so "your data changed from another device" is never mistaken for a version update.
+let _syncNoticeTimer = null;
+function showSyncNotice(msg){
+  let el = document.getElementById('syncNotice');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'syncNotice';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);max-width:min(92vw,420px);z-index:100000;background:#1F4E8C;color:#fff;border-radius:999px;padding:9px 16px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.3);font-size:13.5px;line-height:1.3;cursor:pointer';
+    el.onclick = ()=> el.remove();
+    document.body.appendChild(el);
+  }
+  el.textContent = '\u21BB  ' + msg;
+  clearTimeout(_syncNoticeTimer);
+  _syncNoticeTimer = setTimeout(()=>{ if(el.parentNode) el.remove(); }, 4000);
+}
 // Replaces DATA wholesale with a remote copy (mirrors load()'s own full-overwrite approach),
 // saves it locally too, and updates the sync markers so this device now matches the cloud.
 async function cloudApplyRemote(remote){
@@ -174,7 +192,7 @@ async function cloudApplyRemote(remote){
   try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(json)); }catch(e){}
   CLOUD_PENDING_REMOTE = null;
   switchTab(CURRENT_TAB || 'overview');
-  showToast('Synced — new data pulled from the cloud', 4000);
+  showSyncNotice('New data synced from the cloud');
 }
 // App start/unlock, and "Sync Now": decide whether to pull, push, or flag a real conflict.
 // Never guesses when both sides have changed — see the file header note.
@@ -204,7 +222,7 @@ async function cloudSyncCheckOnStart(){
     CLOUD_PENDING_REMOTE = null;
     await cloudPushNow(); // share the merged result back so the other device converges too
     switchTab(CURRENT_TAB || 'overview');
-    showToast('Synced — merged changes from another device', 4000);
+    showSyncNotice('Changes from another device merged');
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); }
