@@ -150,7 +150,18 @@ async function cloudSyncCheckOnStart(){
   }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); }
-async function cloudResolveUseCloud(){ if(CLOUD_PENDING_REMOTE) await cloudApplyRemote(CLOUD_PENDING_REMOTE); }
+async function cloudResolveUseCloud(){
+  try{
+    let remote = CLOUD_PENDING_REMOTE;
+    if(!remote){ // conflict flag didn't survive a reload/relaunch — fetch fresh instead of doing nothing
+      const db = await cloudSdkReady();
+      const snap = await cloudDocRef(db).get();
+      if(!snap.exists){ setCloudStatus('error', 'No cloud copy found yet.'); return; }
+      remote = snap.data();
+    }
+    await cloudApplyRemote(remote);
+  }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+}
 
 // --- Settings card ---
 function cloudSyncSection(){
