@@ -113,7 +113,13 @@ async function cloudPushNow(){
     const json = JSON.stringify(DATA);
     const payload = encEnabled() ? await encSeal(json) : json;
     const savedAt = new Date().toISOString();
-    await cloudDocRef(db).set({ payload, encrypted: !!encEnabled(), savedAt, entryCount: currentEntryCount() });
+    const doc = { payload, encrypted: !!encEnabled(), savedAt, entryCount: currentEntryCount() };
+    // Also push the PIN-wrapped key bundle (not the key itself) so another device can adopt
+    // this same key via joinEncryptedSync (encryption.js) instead of generating its own —
+    // that mismatch was the actual cause of cross-device decrypt always failing before.
+    const meta = encEnabled() ? encMeta() : null;
+    if(meta){ doc.keyWrap = meta.pin; doc.iter = meta.iter; }
+    await cloudDocRef(db).set(doc);
     const hash = await sha256Hex(json);
     try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, hash); }catch(e){}
     CLOUD_PENDING_REMOTE = null;
@@ -137,7 +143,7 @@ async function cloudApplyRemote(remote){
     // (see enableEncryption in encryption.js: each device generates its own random key, so
     // typing the same PIN on two devices does NOT give them the same key). Name that
     // explicitly rather than leaving it as an unexplained failure.
-    catch(e){ setCloudStatus('error', "could not decrypt this device's data — its encryption key doesn't match the device that saved it (see Settings > Encrypt Data)"); return; }
+    catch(e){ setCloudStatus('error', "could not decrypt this device's data — its encryption key doesn't match the device that saved it. Use \"Join Encrypted Sync\" below to adopt the same key."); return; }
   } else {
     json = remote.payload;
   }
@@ -205,6 +211,14 @@ function cloudSyncSection(){
         <button class="ghost" id="cloudKeepDeviceBtn" type="button" style="width:100%;margin-bottom:8px">Keep This Device's Data</button>
         <button class="ghost" id="cloudUseCloudBtn" type="button" style="width:100%;background:var(--rust-deep);color:#fff">Use Cloud's Data Instead</button>
       </div>
+      <div id="cloudJoinEnc" style="${encEnabled() ? 'display:none' : ''};margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
+        <p class="note" style="margin:0 0 8px">If the cloud copy is encrypted (saved by a device with Encrypt Data on), this device needs that same key before it can read it — enter the PIN used on that other device, plus this device's own current PIN and recovery answer:</p>
+        <input type="password" id="cloudJoinSharedPin" placeholder="PIN from the other device" style="width:100%;margin-bottom:8px" inputmode="numeric">
+        <input type="password" id="cloudJoinLocalPin" placeholder="This device's current PIN" style="width:100%;margin-bottom:8px" inputmode="numeric">
+        <input type="text" id="cloudJoinLocalAnswer" placeholder="This device's recovery answer" style="width:100%;margin-bottom:8px">
+        <button class="ghost" id="cloudJoinBtn" type="button" style="width:100%">Join Encrypted Sync</button>
+        <p class="note" id="cloudJoinStatus" style="margin:6px 0 0"></p>
+      </div>
     </div>
   </div>`;
 }
@@ -221,4 +235,22 @@ function wireCloudSyncCard(){
   if(keepBtn) keepBtn.onclick = async ()=>{ await cloudResolveKeepDevice(); switchTab('settings'); };
   const useCloudBtn = document.getElementById('cloudUseCloudBtn');
   if(useCloudBtn) useCloudBtn.onclick = async ()=>{ await cloudResolveUseCloud(); switchTab('settings'); };
+  const joinBtn = document.getElementById('cloudJoinBtn');
+  if(joinBtn) joinBtn.onclick = async ()=>{
+    const statusEl = document.getElementById('cloudJoinStatus');
+    const sharedPin = (document.getElementById('cloudJoinSharedPin')||{}).value || '';
+    const localPin = (document.getElementById('cloudJoinLocalPin')||{}).value || '';
+    const localAnswer = (document.getElementById('cloudJoinLocalAnswer')||{}).value || '';
+    if(!sharedPin || !localPin || !localAnswer){ if(statusEl) statusEl.textContent = 'Fill in all three fields.'; return; }
+    joinBtn.disabled = true;
+    try{
+      const db = await cloudSdkReady();
+      const snap = await cloudDocRef(db).get();
+      const remote = snap.exists ? snap.data() : null;
+      const msg = await joinEncryptedSync(sharedPin, localPin, localAnswer, remote);
+      if(msg){ if(statusEl) statusEl.textContent = msg; }
+      else { await save(); switchTab('settings'); }
+    }catch(e){ console.error(e); if(statusEl) statusEl.textContent = e && e.message ? e.message : 'unknown error'; }
+    joinBtn.disabled = false;
+  };
 }

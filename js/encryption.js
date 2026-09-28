@@ -136,6 +136,35 @@ async function enableEncryption(pin, answer){
   try{ await snapConvertAll(true); }catch(e){ /* older safety copies are converted best-effort */ }
   return '';
 }
+// Adopts another device's encryption key from the cloud, instead of this device generating its
+// own (which is what made cross-device decrypt always fail before — see cloud-sync.js). sharedPin
+// is the PIN used on the device that first turned encryption on (unwraps remote.keyWrap, the
+// pin-wrapped copy of its key, now also pushed to the cloud by cloudPushNow); localPin/localAnswer
+// are THIS device's own already-set credentials, used to re-wrap the same key locally exactly like
+// enableEncryption does. Returns '' on success, otherwise the message to show.
+async function joinEncryptedSync(sharedPin, localPin, localAnswer, remote){
+  if(!remote || !remote.keyWrap) return 'No shared key found in the cloud yet.';
+  if(!(await checkPin(localPin))) return "This device's current PIN is incorrect.";
+  if(!(await checkRecoveryAnswer(localAnswer))) return "This device's recovery answer is incorrect.";
+  let dek;
+  try{ dek = await encUnwrap(remote.keyWrap, sharedPin, remote.iter || ENC_ITER); }
+  catch(e){ return "Couldn't unlock the shared key — check the PIN from the other device."; }
+  let json;
+  try{ json = await encOpenWith(dek, remote.payload); }
+  catch(e){ return 'Shared key did not match the cloud data.'; }
+  const meta = {v:1, iter:ENC_ITER, pin: await encWrap(dek, localPin, ENC_ITER), rec: await encWrap(dek, normalizeAnswer(localAnswer), ENC_ITER)};
+  const blob = await encSealWith(dek, json);
+  try{
+    localStorage.setItem(ENC_DATA_KEY, blob);
+    localStorage.setItem(ENC_META_KEY, JSON.stringify(meta));
+  }catch(e){ return 'Not enough storage space to write the encrypted copy — nothing was changed.'; }
+  ENC_DEK = dek; ENC_PENDING_LOAD = false; ENC_LOAD_FAILED = false;
+  purgePlaintextLedgerAndHashes();
+  Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
+  Object.assign(DATA, JSON.parse(json));
+  try{ await snapConvertAll(true); }catch(e){ /* best effort */ }
+  return '';
+}
 // Turn encryption off (ledger and safety copies go back to plain storage). Returns '' or a message.
 async function disableEncryption(pin, answer){
   if(!encEnabled()) return 'Encryption is already off.';
