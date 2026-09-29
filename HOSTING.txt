@@ -53,6 +53,13 @@ GOOD TO KNOW
 - The tests/ folder and package.json are for development only (run the tests with: node --test).
   You don't need to upload them to the host; the files listed at the top are all the app needs.
 
+- Cloud Sync sign-in (Settings > Cloud Sync): sync needs an account. In the Firebase console turn on Authentication >
+  Sign-in method > Email/Password, and set the Firestore rules shown in that Settings card (they already contain the owner
+  address; they are the final rules - who may view or write is stored in a config/access record that only the owner can read or edit; the app creates that record, empty, the
+  first time the owner signs in after the rules are pasted). Then, in the app, tap Create account, open the verification link that arrives by email, and
+  tap "I've verified". Sign-in, sign-out and Forgot password are all in that same card. The phone stays signed in, including
+  offline; the ledger on the phone never depends on being signed in. Signing out only stops syncing on that phone.
+
 - Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
   output over its last 7 days and how much of their logged length your last finished beams actually wove),
   the Overview shows a "Beams ending soon" card, and a message appears when you open the app or save a

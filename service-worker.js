@@ -15,12 +15,15 @@
  * app-build meta tag in index.html) and offers a "Reload" bar — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v123';
+const CACHE_VERSION = 'v126';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
 const FONTS_CSS_URL = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700&display=swap';
 const CROSS_ORIGIN_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
+// The Firebase scripts Cloud Sync loads (versioned files, so they never change): kept after the first
+// load so a phone that is already signed in can start sync again on a weak or missing connection.
+const FIREBASE_SDK_HOST = 'www.gstatic.com';
 
 const APP_FILES = [
   './',
@@ -111,7 +114,7 @@ async function staleWhileRevalidate(event, cacheKey){
   return fresh || Response.error();
 }
 
-// Cross-origin helpers (jsPDF, fonts): the cached copy wins; otherwise fetch it and keep it.
+// Cross-origin helpers (fonts, the Firebase scripts): the cached copy wins; otherwise fetch it and keep it.
 async function cacheFirst(event){
   const cache = await caches.open(CACHE);
   const cached = await cache.match(event.request, {ignoreVary:true}); // Google Fonts CSS varies by browser
@@ -141,6 +144,11 @@ self.addEventListener('fetch', (event)=>{
     if(url.href.startsWith(self.registration.scope)){
       event.respondWith(staleWhileRevalidate(event, req.url));
     }
+    return;
+  }
+
+  if(url.hostname === FIREBASE_SDK_HOST && url.pathname.startsWith('/firebasejs/')){
+    event.respondWith(cacheFirst(event));
     return;
   }
 
