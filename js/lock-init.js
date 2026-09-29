@@ -166,7 +166,7 @@ function recordPinFailure(key=PIN_FAIL_KEY, lockMs=30000){
 function clearPinFailState(key=PIN_FAIL_KEY){ setPinFailState({count:0, until:0}, key); }
 
 let PIN_ENTRY = ''; // digits typed so far on whichever keypad screen is showing
-let PIN_STAGE = 'unlock'; // unlock | recover-answer | recover-newpin-1 | recover-newpin-2
+let PIN_STAGE = 'unlock'; // unlock | recover-answer | recover-key | recover-newpin-1 | recover-newpin-2
 let PIN_NEW_FIRST = null; // first entry of a new PIN, while awaiting the confirmation entry
 
 function mountLockScreen(){
@@ -242,6 +242,7 @@ function renderLockStage(){
         <div class="mark">🔑</div>
         <h1>Recover PIN</h1>
         <p class="hint">No recovery question was set on this device, so the PIN can't be recovered here. To get back in, clear this app's data and Restore from your latest backup.</p>
+        ${hasRecoveryKey() ? '<button type="button" class="link-btn" id="pinUseKeyBtn">Use recovery key instead</button>' : ''}
         <button type="button" class="link-btn" id="pinBackBtn">Back to PIN entry</button>
       `;
     } else {
@@ -254,10 +255,24 @@ function renderLockStage(){
         <div class="field"><input id="pinAnswerInput" type="password" placeholder="Your answer" autocomplete="off" autocapitalize="off" spellcheck="false" ${rCool>0?'disabled':''}></div>
         <div class="error-text" id="pinError">${rCool>0?`Too many attempts — try again in ${rCool}s`:''}</div>
         <button type="button" class="primary" id="pinVerifyBtn" ${rCool>0?'disabled':''}>Verify</button>
+        ${hasRecoveryKey() ? '<button type="button" class="link-btn" id="pinUseKeyBtn">Use recovery key instead</button>' : ''}
         <button type="button" class="link-btn" id="pinBackBtn">Back to PIN entry</button>
       `;
       if(rCool>0) setTimeout(renderLockStage, 1000);
     }
+  } else if(PIN_STAGE === 'recover-key'){
+    const rf = getPinFailState(PIN_RECOVER_FAIL_KEY);
+    const rCool = Math.max(0, Math.ceil((rf.until - Date.now())/1000));
+    el.innerHTML = `
+      <div class="mark">🔑</div>
+      <h1>Recovery Key</h1>
+      <p class="hint">Type the recovery key you printed or saved when encryption was turned on (dashes and spaces don't matter).</p>
+      <div class="field"><input id="pinKeyInput" type="text" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" ${rCool>0?'disabled':''}></div>
+      <div class="error-text" id="pinError">${rCool>0?`Too many attempts — try again in ${rCool}s`:''}</div>
+      <button type="button" class="primary" id="pinKeyVerifyBtn" ${rCool>0?'disabled':''}>Verify</button>
+      <button type="button" class="link-btn" id="pinBackBtn">Back to PIN entry</button>
+    `;
+    if(rCool>0) setTimeout(renderLockStage, 1000);
   } else if(PIN_STAGE === 'recover-newpin-1'){
     el.innerHTML = `
       <div class="mark">🔒</div>
@@ -283,6 +298,24 @@ function pinShakeAndError(msg){
   const err = document.getElementById('pinError');
   if(err) err.textContent = msg;
   setTimeout(()=>{ if(dots) dots.classList.remove('shake'); }, 400);
+}
+async function submitRecoveryKey(){
+  const input = document.getElementById('pinKeyInput');
+  const btn = document.getElementById('pinKeyVerifyBtn');
+  if(!input) return;
+  if(getPinFailState(PIN_RECOVER_FAIL_KEY).until > Date.now()) return;
+  if(!normalizeRecoveryKey(input.value)){ pinShakeAndError('Enter your recovery key.'); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+  const ok = await checkRecoveryKey(input.value);
+  if(ok){
+    clearPinFailState(PIN_RECOVER_FAIL_KEY);
+    PIN_STAGE = 'recover-newpin-1'; PIN_ENTRY = ''; PIN_NEW_FIRST = null;
+    renderLockStage();
+  } else {
+    const state = recordPinFailure(PIN_RECOVER_FAIL_KEY, 60000);
+    renderLockStage();
+    if(state.until <= Date.now()) pinShakeAndError('Incorrect recovery key');
+  }
 }
 async function submitRecoveryAnswer(){
   const input = document.getElementById('pinAnswerInput');
@@ -312,6 +345,12 @@ function wireLockStage(){
   if(forgotBtn) forgotBtn.onclick = ()=>{ PIN_STAGE='recover-answer'; PIN_ENTRY=''; renderLockStage(); };
   const backBtn = document.getElementById('pinBackBtn');
   if(backBtn) backBtn.onclick = ()=>{ PIN_STAGE='unlock'; PIN_ENTRY=''; renderLockStage(); };
+  const useKeyBtn = document.getElementById('pinUseKeyBtn');
+  if(useKeyBtn) useKeyBtn.onclick = ()=>{ PIN_STAGE='recover-key'; PIN_ENTRY=''; renderLockStage(); };
+  const keyVerifyBtn = document.getElementById('pinKeyVerifyBtn');
+  if(keyVerifyBtn) keyVerifyBtn.onclick = submitRecoveryKey;
+  const keyInput = document.getElementById('pinKeyInput');
+  if(keyInput) keyInput.onkeydown = (e)=>{ if(e.key==='Enter'){ e.preventDefault(); submitRecoveryKey(); } };
   const verifyBtn = document.getElementById('pinVerifyBtn');
   if(verifyBtn) verifyBtn.onclick = submitRecoveryAnswer;
   const answerInput = document.getElementById('pinAnswerInput');
@@ -668,6 +707,7 @@ function wireScrollAwareFab(fabBackup){
   await load();
   autoBackupRefreshFabState(); // sets the FAB's "needs backup" badge to match reality on open
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort only */ } // Undo baseline for this session
+  if(typeof tombRebaseline === 'function') tombRebaseline(); // deletion-tracking baseline for this session
   switchTab(restoredTab());
   try{
     const act = new URLSearchParams(location.search).get('action');

@@ -6,8 +6,8 @@
 
 /* ---------------- Encryption of the ledger stored on this phone ---------------- */
 // Design: the ledger is encrypted with a random 256-bit data key (AES-GCM). That key is never
-// stored as-is — only two locked copies of it: one locked with the PIN, one with the recovery
-// answer (each through PBKDF2, so guessing is slow). So: the PIN unlocks the app, a forgotten PIN
+// stored as-is — only locked copies of it: one locked with the PIN, one with the recovery
+// answer, and (optional) one with a random recovery KEY shown once when it is created (each through PBKDF2, so guessing is slow). So: the PIN unlocks the app, a forgotten PIN
 // is still recoverable through the recovery answer (which re-locks the key under a new PIN), and
 // changing the PIN never has to re-encrypt the ledger. While the app is unlocked the key lives in
 // memory only. The fast PIN/answer hashes used when encryption is off are deleted when it is on
@@ -15,7 +15,7 @@
 // Honest limit: strength is bounded by the PIN. 4 digits = 10,000 guesses, 6 = a million, 8 = a
 // hundred million. The app slows guessing down, but it cannot stop someone who copies the
 // phone's storage and guesses offline — a longer PIN is what makes that expensive.
-const ENC_META_KEY = 'khata-enc-meta';        // JSON: {v, iter, pin:{salt,iv,wk}, rec:{salt,iv,wk}}
+const ENC_META_KEY = 'khata-enc-meta';        // JSON: {v, iter, pin:{salt,iv,wk}, rec:{salt,iv,wk}, key?:{salt,iv,wk}}
 const ENC_DATA_KEY = 'khata-data-v3-enc';      // 'KHENC1:' + base64(iv | AES-GCM(flag | ledger))
 const ENC_PREFIX = 'KHENC1:';
 const ENC_ITER = 600000; // PBKDF2 rounds: each PIN guess costs this much work (stored in the meta, so it can be raised later)
@@ -97,6 +97,7 @@ async function afterUnlockLoad(){
   if(typeof cloudSyncCheckOnStart === 'function') setTimeout(cloudSyncCheckOnStart, 1500);
   autoBackupRefreshFabState(); // sets the FAB's "needs backup" badge to match reality on unlock
   try{ UNDO_PREV_PARTS = undoParts(); }catch(e){ /* best effort */ }
+  if(typeof tombRebaseline === 'function') tombRebaseline();
   UNDO_STACK.length = 0; updateUndoButton();
   switchTab(CURRENT_TAB || 'overview');
   setTimeout(()=>{ maybeAutoSnapshot(); }, 1500);
@@ -112,13 +113,55 @@ function setPinLength(n){
   PIN_LENGTH = n;
 }
 
+/* ---- Recovery key: a random code shown once, a third way to unlock (besides PIN and recovery answer) ---- */
+// 20 characters from an alphabet with no look-alikes (no 0/O/1/I/L) = about 99 bits, written in
+// groups of four: K7QM-2XNR-4TDA-9WHC-B3PF. Only a locked copy of the data key is stored (the
+// code itself never is), so it can be shown exactly once.
+const RECOVERY_KEY_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const RECOVERY_KEY_LEN = 20;
+function newRecoveryKey(){
+  let out = '';
+  const limit = 256 - (256 % RECOVERY_KEY_CHARS.length); // reject the few bytes that would bias the pick
+  while(out.length < RECOVERY_KEY_LEN){
+    for(const b of encRandom(32)){
+      if(b < limit && out.length < RECOVERY_KEY_LEN) out += RECOVERY_KEY_CHARS[b % RECOVERY_KEY_CHARS.length];
+    }
+  }
+  return out.match(/.{4}/g).join('-');
+}
+// Upper-case, drop spaces/dashes, so it can be typed or pasted in any layout.
+function normalizeRecoveryKey(k){ return String(k || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+function hasRecoveryKey(){ const m = encMeta(); return !!(m && m.key); }
+// Unlocks with the recovery key (like checkRecoveryAnswer does for the answer).
+async function checkRecoveryKey(code){
+  const meta = encMeta();
+  if(!meta || !meta.key) return false;
+  const k = normalizeRecoveryKey(code);
+  if(k.length !== RECOVERY_KEY_LEN) return false;
+  try{ const dek = await encUnwrap(meta.key, k, meta.iter); if(!ENC_DEK) ENC_DEK = dek; return true; }
+  catch(e){ return false; }
+}
+// Creates (or replaces — the old key stops working) the recovery key for an unlocked, encrypted
+// ledger. The caller shows `key` to the person once. Returns '' on success, otherwise the message.
+async function setRecoveryKey(pin, key){
+  if(!encEnabled()) return 'Turn on Encrypt Data first.';
+  if(!ENC_DEK) return 'Unlock the app first.';
+  if(!(await checkPin(pin))) return 'Current PIN is incorrect.';
+  const meta = encMeta();
+  meta.key = await encWrap(ENC_DEK, normalizeRecoveryKey(key), meta.iter);
+  try{ localStorage.setItem(ENC_META_KEY, JSON.stringify(meta)); }
+  catch(e){ return 'Not enough storage space — nothing was changed.'; }
+  return '';
+}
+
 // Turn encryption on. Returns '' on success, otherwise the message to show (nothing is changed on failure).
-async function enableEncryption(pin, answer){
+async function enableEncryption(pin, answer, recoveryKey){
   if(encEnabled()) return 'Encryption is already on.';
   if(!(await checkPin(pin))) return 'Current PIN is incorrect.';
   if(!(await checkRecoveryAnswer(answer))) return 'Recovery answer is incorrect.';
   const dek = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
   const meta = {v:1, iter:ENC_ITER, pin: await encWrap(dek, pin, ENC_ITER), rec: await encWrap(dek, normalizeAnswer(answer), ENC_ITER)};
+  if(recoveryKey) meta.key = await encWrap(dek, normalizeRecoveryKey(recoveryKey), ENC_ITER); // optional third way in
   const json = JSON.stringify(DATA);
   const blob = await encSealWith(dek, json);
   // Prove the copy can be opened with what will actually be stored, before touching the plain one.
@@ -162,6 +205,7 @@ async function joinEncryptedSync(sharedPin, localPin, localAnswer, remote){
   purgePlaintextLedgerAndHashes();
   Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
   Object.assign(DATA, JSON.parse(json));
+  if(typeof tombRebaseline === 'function') tombRebaseline(); // joined a different ledger — start deletion tracking fresh
   try{ await snapConvertAll(true); }catch(e){ /* best effort */ }
   return '';
 }
@@ -204,7 +248,7 @@ async function snapConvertAll(toEncrypted){
 function encryptionSection(){
   const ans = 'autocomplete="off" autocapitalize="off" spellcheck="false"';
   const head = `<div class="card-head"><h2>Encrypt Data</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-    <p class="note info-note" hidden>Scrambles the ledger stored on this phone — and the app's safety copies — so it can't be read without your PIN, even by someone who copies the phone's storage. Backups you export are separate: tick the password option on the Backup tab for those. The PIN unlocks the app; the recovery answer can still unlock it if the PIN is forgotten. If both are lost, the data cannot be recovered except from a backup. Strength depends on the PIN: 4 digits can be guessed by a determined attacker who has a copy of the storage, 6–8 digits is far stronger.</p>`;
+    <p class="note info-note" hidden>Scrambles the ledger stored on this phone — and the app's safety copies — so it can't be read without your PIN, even by someone who copies the phone's storage. Backups you export are separate: tick the password option on the Backup tab for those. The PIN unlocks the app; the recovery answer, or the printable recovery key created when you turn this on, can still unlock it if the PIN is forgotten. If all are lost, the data cannot be recovered except from a backup. Strength depends on the PIN: 4 digits can be guessed by a determined attacker who has a copy of the storage, 6–8 digits is far stronger.</p>`;
   if(!isPinEnabled()){
     return `<div class="card">${head}<p class="note" style="margin:0">Turn on PIN Lock above first — the PIN is what unlocks the encryption.</p></div>`;
   }
@@ -217,6 +261,7 @@ function encryptionSection(){
         ${field('Current PIN','enc_pin','password',`inputmode="numeric" maxlength="8" placeholder="••••"`)}
         <div class="grid cols-1" style="margin-top:10px">${field('Recovery answer','enc_ans','password',ans)}</div>
         <p class="note" style="margin:8px 0 0">The recovery question is: <b>${escHtml(getRecoveryQuestion())}</b></p>
+        <p class="note" style="margin:8px 0 0">A recovery key will be shown once when encryption turns on — print or save it right then.</p>
         <p class="note" id="encOnError" style="margin:8px 0;min-height:16px"></p>
         <button class="primary" id="encOnBtn" type="button">Encrypt Now</button>
       </div>
@@ -224,6 +269,16 @@ function encryptionSection(){
   }
   return `<div class="card">${head}
     <p class="note" style="margin:0 0 12px"><b>On.</b> The ledger on this phone is encrypted. ${PIN_LENGTH < 6 ? '<span style="color:var(--rust)">Your PIN is only ' + PIN_LENGTH + ' digits — change it to 6 or 8 digits (Change PIN above) for much stronger protection.</span>' : ''}</p>
+    <div style="margin:0 0 12px;padding-bottom:12px;border-bottom:1px solid var(--field-border)">
+      <p class="note" style="margin:0 0 8px"><b>Recovery key:</b> ${hasRecoveryKey() ? 'created. Keep the printed or saved copy somewhere safe — it opens the app if the PIN is forgotten.' : '<span style="color:var(--rust)">not created yet.</span> A random code you print or save once, as a third way in if the PIN and recovery answer are both forgotten.'}</p>
+      <button class="ghost" id="encShowKey" type="button" style="width:100%">${hasRecoveryKey() ? 'Replace Recovery Key…' : 'Create Recovery Key…'}</button>
+      <div id="encKeyWrap" style="display:none;margin-top:14px">
+        ${hasRecoveryKey() ? '<p class="note" style="margin:0 0 8px">A new key replaces the old one — the old key stops working.</p>' : ''}
+        ${field('Current PIN','enc_key_pin','password',`inputmode="numeric" maxlength="8" placeholder="••••"`)}
+        <p class="note" id="encKeyError" style="margin:8px 0;min-height:16px"></p>
+        <button class="primary" id="encKeyBtn" type="button">Create Key</button>
+      </div>
+    </div>
     <button class="ghost" id="encShowOff" type="button" style="width:100%">Turn Off Encryption…</button>
     <div id="encOffWrap" style="display:none;margin-top:14px">
       ${field('Current PIN','enc_off_pin','password',`inputmode="numeric" maxlength="8" placeholder="••••"`)}
@@ -238,8 +293,8 @@ function wireEncryptionCard(){
     const b = document.getElementById(btnId), w = document.getElementById(wrapId);
     if(b && w) b.onclick = ()=>{ w.style.display = w.style.display === 'none' ? 'block' : 'none'; };
   };
-  toggle('encShowOn','encOnWrap'); toggle('encShowOff','encOffWrap');
-  const run = (btnId, errId, work, okMsg)=>{
+  toggle('encShowOn','encOnWrap'); toggle('encShowOff','encOffWrap'); toggle('encShowKey','encKeyWrap');
+  const run = (btnId, errId, work, okMsg, after)=>{
     const btn = document.getElementById(btnId);
     if(!btn) return;
     btn.onclick = async ()=>{
@@ -252,17 +307,70 @@ function wireEncryptionCard(){
       if(msg){ if(err) err.textContent = msg; return; }
       switchTab('settings');
       showToast(okMsg, 5000);
+      if(after) after();
     };
   };
   // Push right away when Cloud Sync is on — turning encryption on doesn't change DATA's
   // content (only how it's stored locally), so the debounced auto-push never fires for it on
   // its own, leaving another device's "Join Encrypted Sync" with no keyWrap to find until some
   // unrelated edit happened to trigger a push later.
+  let freshKey = '';
   run('encOnBtn', 'encOnError', async ()=>{
-    const msg = await enableEncryption(v('enc_pin'), v('enc_ans'));
-    if(!msg && cloudSyncEnabled()) cloudPushNow();
+    const key = newRecoveryKey();
+    const msg = await enableEncryption(v('enc_pin'), v('enc_ans'), key);
+    if(!msg){ freshKey = key; if(cloudSyncEnabled()) cloudPushNow(); }
     return msg;
-  }, 'Encryption is on ✓');
+  }, 'Encryption is on ✓', ()=> showRecoveryKeyDialog(freshKey));
+  run('encKeyBtn', 'encKeyError', async ()=>{
+    const key = newRecoveryKey();
+    const msg = await setRecoveryKey(v('enc_key_pin'), key);
+    if(!msg) freshKey = key;
+    return msg;
+  }, 'Recovery key created ✓', ()=> showRecoveryKeyDialog(freshKey));
   run('encOffBtn', 'encOffError', ()=> disableEncryption(v('enc_off_pin'), v('enc_off_ans')), 'Encryption is off');
 }
 
+
+/* ---- Recovery key: shown once, with Copy / Print / Save as text ---- */
+function recoveryKeyText(key){
+  return 'KHATA RECOVERY KEY\n\n' + key + '\n\nOpens the app if the PIN is forgotten: on the lock screen tap "Forgot PIN?", then "Use recovery key instead".\nAnyone with this key and access to the phone can open the ledger — keep it somewhere safe and private.\nCreating a new key later makes this one stop working.\n';
+}
+function showRecoveryKeyDialog(key){
+  if(!key) return;
+  const old = document.getElementById('recKeyDialog'); if(old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'recKeyDialog'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+  el.style.cssText = 'position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px';
+  el.innerHTML = `<div style="background:var(--paper,#fff);color:var(--ink,#222);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:92vh;overflow:auto">
+    <h2 style="margin:0 0 8px;font-size:18px">Your recovery key</h2>
+    <p class="note" style="margin:0 0 12px">This is the only time it is shown. Print it or save it now and keep it somewhere safe — it opens the app if the PIN is forgotten.</p>
+    <div id="recKeyValue" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;font-weight:700;letter-spacing:1px;text-align:center;padding:14px 8px;border:2px dashed var(--field-border,#bbb);border-radius:10px;user-select:all;word-break:break-all">${escHtml(key)}</div>
+    <div style="display:flex;gap:8px;margin:12px 0"><button class="ghost" id="recKeyCopy" type="button" style="flex:1">Copy</button><button class="ghost" id="recKeyPrint" type="button" style="flex:1">Print</button><button class="ghost" id="recKeySave" type="button" style="flex:1">Save as text</button></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:12px"><input type="checkbox" id="recKeyOk" style="width:18px;height:18px"> I have saved this key</label>
+    <button class="primary" id="recKeyDone" type="button" style="width:100%" disabled>Done</button>
+  </div>`;
+  document.body.appendChild(el);
+  const $ = id => el.querySelector('#' + id);
+  $('recKeyOk').onchange = ()=>{ $('recKeyDone').disabled = !$('recKeyOk').checked; };
+  $('recKeyDone').onclick = ()=> el.remove(); // no click-outside dismiss: it must not vanish by accident
+  $('recKeyCopy').onclick = async ()=>{
+    try{ await navigator.clipboard.writeText(key); showToast('Recovery key copied', 3000); }
+    catch(e){ const r = document.createRange(); r.selectNodeContents($('recKeyValue')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); showToast('Select the key and copy it manually', 4000); }
+  };
+  $('recKeySave').onclick = ()=>{
+    try{
+      const url = URL.createObjectURL(new Blob([recoveryKeyText(key)], {type:'text/plain'}));
+      const a = document.createElement('a'); a.href = url; a.download = 'khata-recovery-key.txt';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=> URL.revokeObjectURL(url), 5000);
+    }catch(e){ showToast('Could not save the file — use Copy or Print instead', 5000); }
+  };
+  $('recKeyPrint').onclick = ()=>{
+    try{
+      const f = document.createElement('iframe');
+      f.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+      f.srcdoc = '<!doctype html><meta charset="utf-8"><title>Khata recovery key</title><body style="font-family:sans-serif;padding:24px"><h2>Khata recovery key</h2><p style="font:700 24px monospace;letter-spacing:1px">' + escHtml(key) + '</p><p>Opens the app if the PIN is forgotten: on the lock screen tap "Forgot PIN?", then "Use recovery key instead".</p><p>Keep this page somewhere safe and private. Creating a new key later makes this one stop working.</p></body>';
+      f.onload = ()=>{ try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){ showToast('Printing did not start — use Save as text instead', 5000); } setTimeout(()=> f.remove(), 60000); };
+      document.body.appendChild(f);
+    }catch(e){ showToast('Printing did not start — use Save as text instead', 5000); }
+  };
+}

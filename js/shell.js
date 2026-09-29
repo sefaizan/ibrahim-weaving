@@ -162,6 +162,7 @@ function switchTab(id){
   renderNav(id);
   refreshBackupStrip();
   updateWeekBadge();
+  if(typeof updateSyncBadge === 'function') updateSyncBadge();
   closeDrawer();
   const scroller = document.getElementById('panels');
   document.getElementById('panels').innerHTML = renderPanel(id);
@@ -468,8 +469,8 @@ function validateBackupData(obj){
 // undo a mistaken restore or a bad afternoon of edits. It does NOT replace real backups: it
 // lives on this phone and is wiped if the app's data is cleared or the phone is lost.
 const SNAP_DB = 'khata-safety-copies', SNAP_STORE = 'copies', SNAP_LAST_KEY = 'khata-last-safety-copy-at';
-const SNAP_KEEP = {auto:3, 'before-restore':3, manual:3};
-const SNAP_LABEL = {auto:'Automatic', 'before-restore':'Before a restore', manual:'Taken by you'};
+const SNAP_KEEP = {auto:3, 'before-restore':3, 'before-sync':3, manual:3};
+const SNAP_LABEL = {auto:'Automatic', 'before-restore':'Before a restore', 'before-sync':'Before a cloud sync', manual:'Taken by you'};
 function snapDb(){
   return new Promise((resolve, reject)=>{
     if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; }
@@ -702,7 +703,7 @@ const undoKeyLabel = k => UNDO_KEY_LABEL[k] || k;
 
 function undoParts(){
   const o = {};
-  for(const k of Object.keys(DATA)){ const s = JSON.stringify(DATA[k]); if(s !== undefined) o[k] = s; }
+  for(const k of Object.keys(DATA)){ if(k === 'deletedIds') continue; const s = JSON.stringify(DATA[k]); if(s !== undefined) o[k] = s; }
   return o;
 }
 function undoDescribeRec(rec){
