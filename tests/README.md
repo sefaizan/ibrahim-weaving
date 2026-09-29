@@ -23,6 +23,7 @@ All tests pass = every line prints `ok` and the summary ends with `# fail 0`.
 | `replacements.test.js` | Linking a replacing payment to a bounced cheque: what can be linked, what is refused, how cheque statuses follow the links, finding and matching older unlinked Replaced cheques |
 | `cheques.test.js` | How Pending / Cleared / Bounced / Replaced cheques count towards cash, received and bounced; Bounced and Pending lists; a cheque's life from Pending to Replaced |
 | `production-entry.test.js` | Which loom "Add & next loom" moves to (Settings order, last loom, unknown loom) |
+| `view-only.test.js` | View-only phones: who counts as view-only (owner and never-signed-in phones never do; signing out doesn't unlock), saving refused and undone, no pushing to the cloud, cloud copy still comes down, every Add / Edit / Delete / Save control is hidden and blocked |
 | `app-files.test.js` | File layout: scripts loaded + cached offline, no duplicate functions, calc.js stays page-free |
 | `cash.test.js` | Cash Position from the opening balance, and from a checkpoint (same-day time rules) |
 | `autobackup.test.js` | Automatic email backup: nothing sent until set up / when locked / when empty; sent at most once per day (at midnight if the app is open, else the first open after midnight) and only when the ledger changed; the exact envelope sent to the service; password-protected files; wrong key / wrong address / no internet messages; the saved key and password never written into the page |
