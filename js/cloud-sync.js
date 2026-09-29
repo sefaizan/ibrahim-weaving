@@ -219,8 +219,8 @@ async function cloudEnsureAccessRecord(db){
 
 // ---- Approving people (owner only) ---------------------------------------------------------------
 // Pure helpers first (they take a record and return a new one, touching nothing), then the read-change-save
-// step, then the Settings block. Everyone approved here is VIEW-ONLY (write:false); an entry that already
-// says write:true (set another way) keeps that when its date is changed. Write access comes with Release 2.
+// step, then the Settings block. Approve to view makes someone VIEW-ONLY (write:false); an entry that already
+// says write:true keeps that when its date is changed. Edit access is given with "Approve to edit" or the Allow edit button (Release 2).
 const CLOUD_EXTEND_DAYS = 30;
 const CLOUD_DEFAULT_APPROVAL_DAYS = 30;
 function cloudAccessNormEmail(raw){
@@ -283,12 +283,26 @@ function cloudAccessTouch(rec, approved, nowMs){
   return Object.assign({}, rec, { ownerEmail: CLOUD_OWNER_EMAIL, approved, updatedAt: new Date(nowMs || Date.now()).toISOString() });
 }
 // Approve someone to view until expiresAt, or change the date of someone already on the list.
-function cloudAccessApplyApprove(rec, email, expiresAt, nowMs){
+// write: true = may also edit until then (Approve to edit), false = view only, left out = keep what they had.
+function cloudAccessApplyApprove(rec, email, expiresAt, nowMs, write){
   const e = cloudAccessNormEmail(email);
   const approved = cloudAccessApproved(rec);
   const old = approved[e];
-  approved[e] = { expiresAt, write: !!(old && old.write === true), addedAt: (old && old.addedAt) || nowMs || Date.now() };
-  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, updated: !!old };
+  const w = write === undefined ? !!(old && old.write === true) : write === true;
+  approved[e] = { expiresAt, write: w, addedAt: (old && old.addedAt) || nowMs || Date.now() };
+  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, updated: !!old, write: w };
+}
+// Turn edit access on or off for someone already on the list; their end time is not touched, so edit access
+// always ends with the approval. Refused if they are not on the list or their approval has already ended.
+function cloudAccessApplySetWrite(rec, email, on, nowMs){
+  const e = String(email || '').trim().toLowerCase();
+  const now = nowMs || Date.now();
+  const approved = cloudAccessApproved(rec);
+  const old = approved[e];
+  if(!old) throw new Error('That person is no longer on the list.');
+  if(on && !(Number(old.expiresAt) > now)) throw new Error('Their approval has already ended - use Extend first, then allow editing.');
+  approved[e] = Object.assign({}, old, { write: on === true });
+  return { record: cloudAccessTouch(rec, approved, now), email: e, write: on === true, expiresAt: Number(old.expiresAt) || 0 };
 }
 // Move someone's end time. deltaMs > 0 extends (counted from the later of now and their end time, so an
 // expired approval restarts from now); deltaMs < 0 shortens (must still leave the approval running - to cut
@@ -395,6 +409,7 @@ function cloudPeopleListHtml(rec, nowMs){
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         <button class="ghost" type="button" data-cp-open="extend" data-cp-email="${em}">Extend</button>
         <button class="ghost" type="button" data-cp-open="shorten" data-cp-email="${em}"${r.expired ? ' disabled' : ''}>Shorten</button>
+        <button class="ghost" type="button" data-cp-write="${em}" data-cp-write-to="${r.write ? 'off' : 'on'}"${(!r.write && r.expired) ? ' disabled' : ''}>${r.write ? 'Stop edit' : 'Allow edit'}</button>
         <button class="ghost" type="button" data-cp-revoke="${em}">Revoke</button>
       </div>
       <div data-cp-panel="${em}" style="display:none;margin-top:8px">
@@ -413,7 +428,7 @@ function cloudPeopleListHtml(rec, nowMs){
 // The owner-only block, drawn inside the People card (Settings > People).
 function cloudPeopleHtml(){
   return `<div id="cloudPeople">
-    <p class="note" style="margin:0 0 8px">They create their own account first (Settings &gt; Cloud Sync &gt; Create account) and verify their email. Then approve that email here until a date. They can look at the ledger but never change it.</p>
+    <p class="note" style="margin:0 0 8px">They create their own account first (Settings &gt; Cloud Sync &gt; Create account) and verify their email. Then approve that email here until a date. "Approve to view" lets them look at the ledger only; "Approve to edit" also lets them change it, until the same end time. Edit access can be turned on or off later for each person, and it always ends with the approval.</p>
     <div id="cloudPeopleList"><p class="note" style="margin:0 0 8px">Loading\u2026</p></div>
     <input type="email" id="cloudPeopleEmail" placeholder="Their email" autocomplete="off" inputmode="email" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:8px">
     <label class="note" for="cloudPeopleAmount" style="display:block;margin:0 0 4px">Approved for</label>
@@ -426,7 +441,10 @@ function cloudPeopleHtml(){
     <div id="cloudPeopleUntilRow" style="display:none;margin-bottom:8px">
       <input type="datetime-local" id="cloudPeopleUntil" value="${cloudAccessDefaultDateTime()}" style="width:100%">
     </div>
-    <button class="ghost" id="cloudPeopleAddBtn" type="button" style="width:100%">Approve to view</button>
+    <div style="display:flex;gap:8px">
+      <button class="ghost" id="cloudPeopleAddBtn" type="button" style="flex:1">Approve to view</button>
+      <button class="ghost" id="cloudPeopleEditBtn" type="button" style="flex:1">Approve to edit</button>
+    </div>
     <p class="note" id="cloudPeopleMsg" role="status" style="margin:8px 0 0;color:var(--rust)"></p>
   </div>`;
 }
@@ -447,6 +465,7 @@ async function cloudPeopleRefresh(reconcile){
     box.querySelectorAll('[data-cp-open]').forEach(b => { b.onclick = () => cloudPeopleOpenPanel(box, b.getAttribute('data-cp-email'), b.getAttribute('data-cp-open')); });
     box.querySelectorAll('[data-cp-cancel]').forEach(b => { b.onclick = () => cloudPeopleClosePanel(box, b.getAttribute('data-cp-cancel')); });
     box.querySelectorAll('[data-cp-apply]').forEach(b => { b.onclick = () => cloudPeopleApplyPanel(box, b, b.getAttribute('data-cp-apply')); });
+    box.querySelectorAll('[data-cp-write]').forEach(b => { b.onclick = () => cloudPeopleSetWrite(b, b.getAttribute('data-cp-write'), b.getAttribute('data-cp-write-to') === 'on'); });
     box.querySelectorAll('[data-cp-revoke]').forEach(b => { b.onclick = () => cloudPeopleAct(b, 'revoke'); });
   }catch(e){ console.error(e); box.innerHTML = `<p class="note" style="margin:0 0 8px;color:var(--rust)">${escHtml(cloudPeopleErrorText(e))}</p>`; }
 }
@@ -515,16 +534,30 @@ async function cloudPeopleAdjust(email, mode, amount, unit){
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
   await cloudPeopleRefresh();
 }
-async function cloudPeopleAdd(){
-  const btn = document.getElementById('cloudPeopleAddBtn');
+// Allow edit / Stop edit for one person (their end time stays as it is).
+async function cloudPeopleSetWrite(btn, email, on){
+  btn.disabled = true; cloudPeopleSay('');
+  try{
+    const out = await cloudAccessEdit(rec => cloudAccessApplySetWrite(rec, email, on, Date.now()));
+    cloudPeopleSay(on
+      ? out.email + ' can now edit until ' + cloudPeopleDateTimeText(out.expiresAt) + '. Their phone switches to editing within a minute if the app is open, or when they tap Sync Now.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : '')
+      : out.email + ' is view only again. Their phone drops back within a minute if the app is open, and anything not yet synced is kept as a safety copy.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+  }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
+  await cloudPeopleRefresh();
+}
+// write === true: "Approve to edit". Anything else (including no argument): "Approve to view", which keeps
+// whatever edit access the person already had.
+async function cloudPeopleAdd(write){
+  const canEdit = write === true;
+  const btn = document.getElementById(canEdit ? 'cloudPeopleEditBtn' : 'cloudPeopleAddBtn');
   const val = id => (document.getElementById(id) || {}).value || '';
   if(btn) btn.disabled = true; cloudPeopleSay('');
   try{
     const now = Date.now();
     const email = val('cloudPeopleEmail'), until = cloudAccessExpiry(val('cloudPeopleUnit') || 'days', val('cloudPeopleAmount'), val('cloudPeopleUntil'), now);
-    const out = await cloudAccessEdit(rec => cloudAccessApplyApprove(rec, email, until, now));
+    const out = await cloudAccessEdit(rec => cloudAccessApplyApprove(rec, email, until, now, canEdit ? true : undefined));
     const box = document.getElementById('cloudPeopleEmail'); if(box) box.value = '';
-    cloudPeopleSay(out.email + (out.updated ? ' updated' : ' approved') + ' until ' + cloudPeopleDateTimeText(until) + '. Ask them to tap Sync Now on their phone.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+    cloudPeopleSay(out.email + (out.updated ? ' updated' : ' approved') + (canEdit ? ' to edit' : '') + ' until ' + cloudPeopleDateTimeText(until) + '.' + (!canEdit && out.write ? ' They can still edit (use Stop edit on their row to make them view only).' : '') + ' Ask them to tap Sync Now on their phone.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
   if(btn) btn.disabled = false;
   await cloudPeopleRefresh();
@@ -538,7 +571,9 @@ function cloudPeopleSyncUnit(){
 }
 function wireCloudPeople(){
   const add = document.getElementById('cloudPeopleAddBtn');
-  if(add) add.onclick = cloudPeopleAdd;
+  if(add) add.onclick = () => cloudPeopleAdd();
+  const addEdit = document.getElementById('cloudPeopleEditBtn');
+  if(addEdit) addEdit.onclick = () => cloudPeopleAdd(true);
   const unit = document.getElementById('cloudPeopleUnit');
   if(unit){ unit.onchange = cloudPeopleSyncUnit; cloudPeopleSyncUnit(); }
   if(document.getElementById('cloudPeopleList')) cloudPeopleRefresh(true);
@@ -710,10 +745,20 @@ function tombIdsNow(){
 }
 // ---- Edit stamps -------------------------------------------------------------------------------
 // When the SAME record was edited on both devices, a merge keeps the more recently edited one.
-// Every save stamps the records that changed since the previous save with _mt (edit time, ms).
+// Every save stamps the records that changed since the previous save with _mt (edit time, ms) and
+// _mb (who: the signed-in account's email). A record that is new since the previous save gets _ct
+// (added time, ms) and _cb (added by) instead. Only _mt takes part in a merge; _ct / _cb / _mb are
+// for display (the Info button on each row, see recStampText in panels-wages-receipts.js) and are
+// never counted as an edit of the record itself.
 // Records never edited since this feature arrived have no _mt; a stamped one beats an unstamped one,
 // and when neither (or both with equal times) can be told apart this device's copy wins, as before.
-let REC_BASE = null; // {listName: {id: JSON of the record without _mt}} as of the last save/load
+// The email is left off when no account is known on this phone (the time is still stamped).
+const REC_STAMP_KEYS = ['_mt', '_mb', '_ct', '_cb'];
+let REC_BASE = null; // {listName: {id: JSON of the record without its stamps}} as of the last save/load
+function recEditorEmail(){
+  try{ const u = typeof cloudUserNow === 'function' ? cloudUserNow() : null; return u && u.email ? String(u.email).trim().toLowerCase() : ''; }
+  catch(e){ return ''; }
+}
 function recSigsNow(){
   const o = {};
   Object.keys(DATA).forEach(k=>{
@@ -721,20 +766,21 @@ function recSigsNow(){
     if(k === 'deletedIds' || !Array.isArray(a)) return;
     if(!a.every(r=> r && typeof r === 'object' && r.id != null)) return;
     const m = o[k] = {};
-    a.forEach(r=>{ const c = Object.assign({}, r); delete c._mt; m[String(r.id)] = JSON.stringify(c); });
+    a.forEach(r=>{ const c = Object.assign({}, r); REC_STAMP_KEYS.forEach(x=>{ delete c[x]; }); m[String(r.id)] = JSON.stringify(c); });
   });
   return o;
 }
 function recStampEdits(){
   const now = recSigsNow();
   if(REC_BASE){
-    const t = Date.now();
+    const t = Date.now(), who = recEditorEmail();
     Object.keys(now).forEach(k=>{
       const base = REC_BASE[k];
       if(!base) return;
       DATA[k].forEach(r=>{
         const old = base[String(r.id)], cur = now[k][String(r.id)];
-        if(old !== undefined && old !== cur) r._mt = t; // existing record whose contents changed
+        if(old === undefined){ if(r._ct == null){ r._ct = t; if(who) r._cb = who; } }              // new since the previous save
+        else if(old !== cur){ r._mt = t; if(who) r._mb = who; else delete r._mb; } // existing record whose contents changed
       });
     });
   }

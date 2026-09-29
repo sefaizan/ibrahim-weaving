@@ -621,7 +621,8 @@ function paginationControls(pageKey, page, totalPages, totalCount){
 function recordMatchesSearch(rec, term){
   if(!term) return true;
   const t = term.toLowerCase();
-  return Object.values(rec).some(val=>{
+  return Object.entries(rec).some(([key, val])=>{
+    if(key === '_mt' || key === '_mb' || key === '_ct' || key === '_cb') return false; // edit stamps (who / when) are not part of what the entry says
     if(val == null || val === '') return false;
     if(typeof val === 'object') return JSON.stringify(val).toLowerCase().includes(t);
     return String(val).toLowerCase().includes(t);
@@ -695,7 +696,43 @@ function editBtn(key,id){ return `<button class="ghost rowbtn edit" data-edit="$
 // defined, so any panel render that hit a real row threw "actionBtns is not defined" and
 // aborted mid-render — leaving the old panel's HTML on screen while the nav still flipped to
 // the new tab as active (exactly what made "View Clients" look like it did nothing).
-function actionBtns(key,id){ return `<span class="row-actions">${editBtn(key,id)}${delBtn(key,id)}</span>`; }
+function actionBtns(key,id){ return `<span class="row-actions">${infoBtn(key,id)}${editBtn(key,id)}${delBtn(key,id)}</span>`; }
+// ---- Who added / last edited an entry (stamps written by recStampEdits in cloud-sync.js) -----------
+// The "i" button on every row opens a small sheet with those two lines. It only reads, so it also works
+// on a view-only phone. Entries from before the stamps existed simply say no history is recorded.
+const ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><line x1="12" y1="7.5" x2="12" y2="7.6"/></svg>';
+function infoBtn(key,id){ return `<button class="ghost rowbtn info" data-rec-info="${key}:${id}" aria-label="Who added or edited this" title="Who added or edited this"><span class="ic">${ICON_INFO}</span><span class="lbl">Info</span></button>`; }
+function recStampWhen(ms){
+  const n = Number(ms);
+  if(!(n > 0)) return '';
+  try{ return new Date(n).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true }); }
+  catch(e){ return new Date(n).toISOString(); }
+}
+// The lines shown for one entry: [ 'Added by x - date', 'Last edited by y - date' ] (or a single line when there is nothing recorded).
+function recStampLines(rec){
+  if(!rec) return ['This entry could not be found.'];
+  const line = (label, who, ms)=> label + (who ? ' by ' + who : '') + (recStampWhen(ms) ? ' \u00B7 ' + recStampWhen(ms) : '');
+  const added = Number(rec._ct) > 0 || rec._cb, edited = Number(rec._mt) > 0 || rec._mb;
+  if(!added && !edited) return ['No history recorded for this entry.'];
+  return [
+    added ? line('Added', rec._cb, rec._ct) : 'Added before history was recorded',
+    edited ? line('Last edited', rec._mb, rec._mt) : 'Not edited since it was added',
+  ];
+}
+let _recInfoTimer = null;
+function recInfoHide(){ const el = document.getElementById('recInfoSheet'); if(el) el.classList.remove('show'); clearTimeout(_recInfoTimer); }
+function recInfoShow(ref){
+  const i = String(ref).indexOf(':');
+  const key = String(ref).slice(0, i), id = String(ref).slice(i + 1);
+  const rec = Array.isArray(DATA[key]) ? DATA[key].find(r=> String(r.id) === id) : null;
+  let el = document.getElementById('recInfoSheet');
+  if(!el){ el = document.createElement('div'); el.id = 'recInfoSheet'; el.setAttribute('role','status'); document.body.appendChild(el); }
+  while(el.firstChild) el.removeChild(el.firstChild);
+  recStampLines(rec).forEach(t=>{ const d = document.createElement('div'); d.textContent = t; el.appendChild(d); }); // textContent: an email is never read as HTML
+  el.classList.add('show');
+  clearTimeout(_recInfoTimer);
+  _recInfoTimer = setTimeout(recInfoHide, 12000);
+}
 function receiptBtn(id){ return `<button class="ghost rowbtn receipt" data-receipt="${id}" aria-label="Print receipt" title="Print receipt"><span class="ic">${ICON_PRINT}</span><span class="lbl">Receipt</span></button>`; }
 function shareReceiptBtn(id){ return `<button class="ghost rowbtn share" data-share-receipt="${id}" aria-label="Share receipt" title="Share receipt"><span class="ic">${ICON_SHARE}</span><span class="lbl">Share</span></button>`; }
 function recoveryReceiptBtn(id){ return `<button class="ghost rowbtn receipt" data-recovery-receipt="${id}" aria-label="Print receipt" title="Print receipt"><span class="ic">${ICON_PRINT}</span><span class="lbl">Receipt</span></button>`; }

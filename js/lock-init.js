@@ -674,6 +674,12 @@ function wireScrollAwareFab(fabBackup){
     if(!btn) return;
     setSummaryOpen(btn.dataset.summaryToggle, !OPEN_SUMMARIES.has(btn.dataset.summaryToggle));
   });
+  // Row "Info" button (who added / last edited an entry) and tap-anywhere-else to close its sheet.
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest ? e.target.closest('[data-rec-info]') : null;
+    if(btn){ recInfoShow(btn.getAttribute('data-rec-info')); return; }
+    if(typeof recInfoHide === 'function') recInfoHide();
+  });
   // Card-heading info toggles (see .card-head / .info-btn in the stylesheet): delegated
   // since these get re-rendered constantly across every panel. Most buttons toggle the
   // [hidden] note immediately following the .card-head they sit in; a button can instead
