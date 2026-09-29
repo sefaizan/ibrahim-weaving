@@ -60,12 +60,30 @@ GOOD TO KNOW
   tap "I've verified". Sign-in, sign-out and Forgot password are all in that same card. The phone stays signed in, including
   offline; the ledger on the phone never depends on being signed in. Signing out only stops syncing on that phone.
 
-- View-only phones: a phone signed in (Settings > Cloud Sync) with an email that is NOT the owner's is view-only. It shows a
-  "View only" label in the header, hides every Add / Edit / Delete / Save / Restore control, refuses to save, never
-  sends anything to the cloud, and keeps itself up to date from the cloud copy automatically. Signing out does not unlock it
-  (only the owner signing in on that phone does). The owner's phone, and a phone that never signed in to another account,
-  behave exactly as before. To let someone view for now, add their verified email under approved in config/access in the
-  Firebase console (write:false, expiresAt in the future); an in-app way to approve people comes in the next step.
+- View-only phones (Release 1 - email login + view-only): a phone signed in (Settings > Cloud Sync) with a verified email
+  that is NOT the owner's is view-only. It shows a "View only" label in the header, hides every Add / Edit / Delete / Save /
+  Restore control, swallows any tap that would change something, refuses to save, never sends anything to the cloud, and
+  keeps itself up to date from the cloud copy automatically. Signing out does not unlock it (only the owner signing in on
+  that phone does). The owner's phone, and a phone that never signed in to another account, behave exactly as before.
+  Sign-in is always by email + password (never anonymous), and the email must be verified.
+
+  To let someone view (all from the owner's phone - the Firebase console is not needed for this):
+    1. They install the app, open Settings > Cloud Sync, tap Create account, open the verification email and tap
+       "I've verified".
+    2. On your phone (signed in as the owner) open Settings > Cloud Sync. The "People who can view" block lists everyone
+       approved, with the date each approval ends. Type their email, pick the "Approved until" date (it starts 30 days
+       ahead) and tap "Approve to view". You need a signal for this.
+    3. On their phone they tap Sync Now. The ledger comes down and the phone shows "View only".
+  In the same block: "+30 days" extends someone (from today if they have already expired), and "Remove" (tap twice) takes them
+  off. An approval ends at the end of the chosen day. Someone whose approval ended, or who was removed, sees "this account isn't
+  approved for this ledger", keeps the last copy they downloaded and stays view-only. Everyone approved this way is view-only;
+  time-limited write access comes with Release 2.
+  (Fallback only: the same list is the "approved" map in config/access in the Firebase console - a field per lowercase email
+  holding write: false, expiresAt: a number in milliseconds since 1970, addedAt: a number.)
+
+  What a viewer can see: for now, the whole ledger - everything the owner's phone shows, including family, expenses,
+  wages and loans. So approve only people you would trust with all of it. Limiting what a viewer sees (Business viewer,
+  Production operator) comes with the roles in Release 3.
 
 - Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
   output over its last 7 days and how much of their logged length your last finished beams actually wove),
