@@ -174,7 +174,7 @@ function showSyncNotice(msg){
     el = document.createElement('div');
     el.id = 'syncNotice';
     el.setAttribute('role', 'status');
-    el.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);max-width:min(92vw,420px);z-index:100000;background:#1F4E8C;color:#fff;border-radius:999px;padding:9px 16px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.3);font-size:13.5px;line-height:1.3;cursor:pointer';
+    el.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);max-width:min(92vw,420px);z-index:100000;background:#2F6F52;color:#fff;border-radius:999px;padding:9px 16px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 24px rgba(0,0,0,.3);font-size:13.5px;line-height:1.3;cursor:pointer';
     el.onclick = ()=> el.remove();
     document.body.appendChild(el);
   }
@@ -207,12 +207,13 @@ function cloudAskToApply(remote, mode){
   const el = document.createElement('div');
   el.id = 'cloudAskBar';
   el.setAttribute('role', 'status');
-  el.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top,0px));z-index:100000;background:#1F4E8C;color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px';
+  el.style.cssText = 'position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top,0px));z-index:100000;background:#B5541E;color:#fff;border-radius:12px;padding:16px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 28px rgba(0,0,0,.45);border:2px solid #fff;font-size:15px;font-weight:600';
   const msg = mode === 'merge'
     ? 'Another device has new changes too. Merge them with this device?'
     : 'New data from another device is available.';
-  el.innerHTML = '<span style="flex:1">' + msg + '</span><button type="button" id="cloudAskGo" style="background:#fff;color:#1F4E8C;border:0;border-radius:8px;padding:8px 14px;font-weight:700">' + (mode === 'merge' ? 'Merge' : 'Update') + '</button><button type="button" id="cloudAskLater" aria-label="Later" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">\u2715</button>';
+  el.innerHTML = '<span style="flex:1">' + msg + '</span><button type="button" id="cloudAskGo" style="background:#fff;color:#B5541E;border:0;border-radius:8px;padding:10px 18px;font-weight:800;font-size:15px">' + (mode === 'merge' ? 'Merge' : 'Update') + '</button><button type="button" id="cloudAskLater" aria-label="Later" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">\u2715</button>';
   document.body.appendChild(el);
+  try{ el.animate([{transform:'translateY(-120%)',opacity:0},{transform:'translateY(0)',opacity:1}], {duration:280, easing:'ease-out'}); }catch(_){}
   el.querySelector('#cloudAskLater').onclick = ()=> el.remove();
   el.querySelector('#cloudAskGo').onclick = async ()=>{
     el.remove();
