@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-30-approve-in-app">
+<meta name="app-build" content="2026-09-30-write-access-drop">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -765,7 +765,7 @@
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
     <div class="appbar-titles">
-      <div class="title-row"><h1 id="appbarTitle">Overview</h1><span class="view-badge" id="viewOnlyBadge" hidden>View only</span></div>
+      <div class="title-row"><h1 id="appbarTitle">Overview</h1><span class="view-badge" id="viewOnlyBadge" hidden>View only</span><span class="view-badge" id="writeBadge" hidden style="background:#2F6F52;color:#fff"></span></div>
       <div class="sub" id="statusLine">Loading…</div>
     </div>
     <button id="undoBtn" class="icon-btn" type="button" aria-label="Undo recent changes" title="Undo recent changes" style="display:none">
@@ -775,7 +775,7 @@
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
       <span class="sync-badge" id="syncBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.17.2</span>
+      <span class="app-version" id="appVersionTag">v3.17.6</span>
     </div>
   </header>
 
@@ -805,6 +805,7 @@
 <script src="./js/encryption.js"></script>
 <script src="./js/cloud-sync.js"></script>
 <script src="./js/view-only.js"></script>
+<script src="./js/write-access.js"></script>
 <script src="./js/autobackup.js"></script>
 <script src="./js/lock-init.js"></script>
 <script>

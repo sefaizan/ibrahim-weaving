@@ -70,14 +70,29 @@ GOOD TO KNOW
   To let someone view (all from the owner's phone - the Firebase console is not needed for this):
     1. They install the app, open Settings > Cloud Sync, tap Create account, open the verification email and tap
        "I've verified".
-    2. On your phone (signed in as the owner) open Settings > Cloud Sync. The "People who can view" block lists everyone
-       approved, with the date each approval ends. Type their email, pick the "Approved until" date (it starts 30 days
-       ahead) and tap "Approve to view". You need a signal for this.
+    2. On your phone (signed in as the owner) open Settings > People (shown only on the owner's phone). It lists everyone
+       approved, with the time left on each approval and the date it ends. Type their email, choose how long ("Approved for": a number of
+       minutes, hours or days - it starts at 30 days - or "until a date and time") and tap "Approve to view". You need a signal for this.
     3. On their phone they tap Sync Now. The ledger comes down and the phone shows "View only".
-  In the same block: "+30 days" extends someone (from today if they have already expired), and "Remove" (tap twice) takes them
-  off. An approval ends at the end of the chosen day. Someone whose approval ended, or who was removed, sees "this account isn't
-  approved for this ledger", keeps the last copy they downloaded and stays view-only. Everyone approved this way is view-only;
+  In the same card, each person has three buttons: "Extend" and "Shorten" (type a number and choose minutes, hours or days; Extend
+  counts from their end time, or from now if it has already ended; Shorten takes the time off and refuses if that would end it now)
+  and "Revoke" (tap twice). Revoke deletes the person from the permissions record, and Firebase's rules check that record on
+  every request, so they are locked out at their very next one; the app reads the record back to confirm before saying so. Their phone
+  keeps the last copy it downloaded but can no longer sync. Revoking needs a signal - offline, nothing is changed and you are told.
+  An approval ends at the exact moment chosen (at most 10 years ahead); approving the same email again replaces the time. Someone
+  whose approval ended, or who was revoked, sees "this account isn't approved for this ledger", keeps the last copy they downloaded and stays view-only. Everyone approved this way is view-only;
   time-limited write access comes with Release 2.
+  Edit access on the other phone (time-limited): when someone's entry has write: true, their phone learns of it from a small
+  note your phone keeps in step with the list (a document in the existing "sync" collection whose name is a hash of their
+  email, so viewers never see addresses; the current rules already cover it, so no rule change is needed - opening the People
+  card re-sends every note). While the grant is live their phone can edit and shows "Can edit - 2h 15m left" in the header and in
+  Settings > Cloud Sync. It drops back to view only by itself when the end time passes, when you shorten it, revoke it, or turn
+  edit access off (it notices on its next check - once a minute while the app is open, or when a push is refused), or when they sign
+  out. Before it does, anything not yet synced is saved as a Safety copy of type "Unsynced entries (access ended)" in Settings >
+  Backup & Restore (up to 10 are kept), and a red bar says so. Firebase itself refuses their writes the moment the grant ends, even
+  if their phone is offline or its clock is wrong - the phone's screen only follows that. Note: a view-only phone cannot use
+  "Restore" on that safety copy; it stays there for you or for the phone if it is given edit access again. The switch that gives
+  someone edit access from the People card is the next step; until then write: true can only be set by hand in the console.
   (Fallback only: the same list is the "approved" map in config/access in the Firebase console - a field per lowercase email
   holding write: false, expiresAt: a number in milliseconds since 1970, addedAt: a number.)
 
