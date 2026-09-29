@@ -4,13 +4,15 @@
  * once Cloud Sync is actually turned on, so the app keeps working fully offline for everyone
  * who never uses this — see cloudSdkReady() below.
  *
- * SECURITY NOTE: like any client-side Firebase app, this file's apiKey is not a secret — real
- * protection comes only from the Firestore security rule shown in cloudSyncSection() below and
- * from Anonymous Authentication being turned on for this project. Anyone who obtains a copy of
- * this app's files could in principle sign in anonymously the same way it does and read/write
- * the same document, so treat this as "safe as long as the app itself isn't shared publicly" —
- * for stronger protection later, swap the anonymous sign-in below for real email/password auth
- * and tighten the rule to a specific account.
+ * SIGN-IN: the person signs in with an email address and password (Firebase Authentication,
+ * Email/Password provider — see the account block in cloudSyncSection() below). Anonymous sign-in
+ * is gone: an old anonymous session found on a device is signed out and never used. Sign-up sends a
+ * verification email, and nothing syncs until the address is verified, because the Firestore rule
+ * (CLOUD_FIRESTORE_RULE) matches on the verified email — without that check anyone could register
+ * somebody else's address first. The Firebase login is kept by the SDK in the browser's own storage,
+ * so a phone that is signed in stays signed in offline; the ledger itself never depends on it and
+ * the whole app keeps working with no signal. The apiKey below is not a secret; the real protection
+ * is the Firestore rule plus who holds an account.
  *
  * Model: one shared Firestore document for the whole business (not one per device), holding
  * exactly what the local ledger holds — the same encrypted blob as local storage if Settings >
@@ -26,6 +28,8 @@ const CLOUD_LAST_SEEN_KEY = 'khata-cloud-last-seen';   // remote `savedAt` this 
 const CLOUD_LAST_OK_KEY = 'khata-cloud-last-ok';       // ms time of the last check/push that finished fine (drives "Synced 2 min ago")
 const CLOUD_CHECK_COOLDOWN_MS = 60000;                 // returning to the app re-checks the cloud at most this often
 const CLOUD_LAST_HASH_KEY = 'khata-cloud-last-hash';   // sha256 of the ledger JSON as of that same moment
+const CLOUD_USER_KEY = 'khata-cloud-user';             // {email, verified} of the signed-in account, so Settings can show it with no signal
+const CLOUD_MIN_PASSWORD = 8;
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyC6eHrkICkII0cSQdFEFQuWlYG2zKDRhdc",
   authDomain: "ibrahim-weaving.firebaseapp.com",
@@ -34,14 +38,58 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "846261203838",
   appId: "1:846261203838:web:2dda6670f93f80832af92f"
 };
+// The one account that owns this ledger: the only one that can read/write it and the only one that can edit the
+// access record below. The Firestore rule matches on this same address, so keep the two in step.
+const CLOUD_OWNER_EMAIL = 'se.muhammadfaizan@gmail.com';
+const CLOUD_ACCESS_OK_KEY = 'khata-cloud-access-ok';   // owner email the access record was last confirmed to exist for
+// Firestore rules to paste in the console (Build > Firestore Database > Rules). This is the final rule:
+// who may do what is DATA in config/access (below), so approving, expiring, or upgrading someone to
+// write access never needs a rule change. An entry counts only while its expiresAt is in the future
+// (a missing expiresAt means expired), and only entries with write:true may write.
 const CLOUD_FIRESTORE_RULE = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function me() {
+      return request.auth.token.email.lower();
+    }
+    function isOwner() {
+      return signedIn() && me() == '${CLOUD_OWNER_EMAIL}';
+    }
+
+    // config/access = { ownerEmail, approved: { "<lowercase email>": { expiresAt: <ms>, write: <true|false> } } }
+    function grants() {
+      return get(/databases/$(database)/documents/config/access).data.approved;
+    }
+    function isApproved() {
+      return signedIn() && me() in grants()
+        && grants()[me()].get('expiresAt', 0) > request.time.toMillis();
+    }
+    function mayWrite() {
+      return isApproved() && grants()[me()].get('write', false) == true;
+    }
+
+    // The ledger: the owner, and approved people while unexpired (view-only unless write is true).
     match /sync/{doc} {
-      allow read, write: if request.auth != null;
+      allow read: if isOwner() || isApproved();
+      allow create, update: if isOwner() || mayWrite();
+      allow delete: if isOwner();
+    }
+
+    // The permissions record: only the owner reads or edits it, and it can never be deleted.
+    match /config/access {
+      allow read: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.ownerEmail == '${CLOUD_OWNER_EMAIL}';
+      allow delete: if false;
     }
   }
 }`;
+
+
 
 function cloudSyncEnabled(){ try{ return localStorage.getItem(CLOUD_SYNC_ON_KEY) === '1'; }catch(e){ return false; } }
 
@@ -49,7 +97,11 @@ let CLOUD_STATUS = 'idle';    // 'idle' | 'syncing' | 'synced' | 'offline' | 'co
 let CLOUD_LAST_ERROR = '';
 let CLOUD_PENDING_REMOTE = null; // set when a genuine conflict needs the user to pick a side
 let CLOUD_PENDING_PULL = null;   // {remote, mode:'pull'|'merge'} — newer cloud data waiting for the person to approve
-let CLOUD_SDK_READY = null;      // Promise, set once loading/signing-in has started
+let CLOUD_SDK_LOAD = null;       // Promise, set once the Firebase scripts have started loading
+let CLOUD_USER = null;           // {email, verified} of the signed-in account, once known this session
+let CLOUD_AUTH_KNOWN = false;    // true once Firebase has restored (or failed to restore) the saved login
+let CLOUD_AUTH_MODE = 'signin';  // Settings account form: 'signin' | 'signup' | 'reset'
+let CLOUD_AUTH_DRAFT = '';       // the email typed so far, kept when the form switches mode
 
 function loadScriptOnce(src){
   return new Promise((resolve, reject)=>{
@@ -58,9 +110,19 @@ function loadScriptOnce(src){
     document.head.appendChild(s);
   });
 }
-async function cloudSdkReady(){
-  if(!CLOUD_SDK_READY){
-    CLOUD_SDK_READY = (async ()=>{
+function cloudErr(code, msg){ const e = new Error(msg); e.cloudCode = code; return e; }
+function cloudOffline(){ return typeof navigator !== 'undefined' && navigator.onLine === false; }
+function cloudStoredUser(){ try{ const u = JSON.parse(localStorage.getItem(CLOUD_USER_KEY) || 'null'); return u && u.email ? u : null; }catch(e){ return null; } }
+// The account this device is signed in as: this session's answer, else the one saved last time (works with no signal).
+function cloudUserNow(){ return CLOUD_USER || cloudStoredUser(); }
+function cloudSetUser(u){
+  CLOUD_USER = u ? { email: u.email || '', verified: !!u.emailVerified } : null;
+  try{ if(CLOUD_USER) localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(CLOUD_USER)); else localStorage.removeItem(CLOUD_USER_KEY); }catch(e){}
+}
+function cloudCanSync(){ const u = cloudUserNow(); return !!(u && u.verified); }
+function cloudLoadSdk(){
+  if(!CLOUD_SDK_LOAD){
+    CLOUD_SDK_LOAD = (async ()=>{
       if(typeof firebase === 'undefined'){
         const v = '10.12.2';
         await loadScriptOnce(`https://www.gstatic.com/firebasejs/${v}/firebase-app-compat.js`);
@@ -68,13 +130,87 @@ async function cloudSdkReady(){
         await loadScriptOnce(`https://www.gstatic.com/firebasejs/${v}/firebase-firestore-compat.js`);
       }
       if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-      if(!firebase.auth().currentUser) await firebase.auth().signInAnonymously();
-      return firebase.firestore();
-    })();
+      // Keeps the saved account note in step if the login ends elsewhere (password changed, account removed).
+      firebase.auth().onAuthStateChanged(u=>{
+        if(!CLOUD_AUTH_KNOWN) return; // the first answer is handled by cloudAuthRestore
+        cloudSetUser(u && !u.isAnonymous ? u : null);
+        updateSyncBadge();
+      });
+    })().catch(e=>{ CLOUD_SDK_LOAD = null; throw e; }); // a failed load (no signal) is retried next time, not remembered
   }
-  return CLOUD_SDK_READY;
+  return CLOUD_SDK_LOAD;
+}
+// Waits for Firebase to restore the saved login from the phone's storage (no network needed), then
+// hands back that user or null. An old anonymous session is signed out here and treated as signed out.
+async function cloudAuthRestore(){
+  await cloudLoadSdk();
+  const auth = firebase.auth();
+  if(!CLOUD_AUTH_KNOWN){
+    await new Promise(resolve=>{
+      let off = null, done = false;
+      const finish = ()=>{ if(done) return; done = true; try{ if(off) off(); }catch(e){} resolve(); };
+      off = auth.onAuthStateChanged(finish);
+      setTimeout(finish, 8000);
+    });
+    CLOUD_AUTH_KNOWN = true;
+  }
+  let user = auth.currentUser;
+  if(user && user.isAnonymous){ try{ await auth.signOut(); }catch(e){} user = null; }
+  return user;
+}
+// The Firestore handle for a signed-in, email-verified account — otherwise throws an error carrying
+// cloudCode 'signedout' or 'unverified', which cloudFail() turns into the matching status.
+async function cloudSdkReady(){
+  let user = await cloudAuthRestore();
+  if(user && !user.emailVerified && !cloudOffline()){
+    // The person may have just tapped the link in their email — pick that up (and a fresh token) now.
+    try{ await user.reload(); await user.getIdToken(true); user = firebase.auth().currentUser; }catch(e){}
+  }
+  cloudSetUser(user);
+  if(!user) throw cloudErr('signedout', 'not signed in — sign in under Settings > Cloud Sync');
+  if(!user.emailVerified) throw cloudErr('unverified', 'email not verified yet');
+  return firebase.firestore();
+}
+// One place that turns a failed cloud call into a status the person can act on.
+function cloudFail(e){
+  console.error(e);
+  if(e && e.cloudCode === 'signedout'){ setCloudStatus('signedout'); return; }
+  if(e && e.cloudCode === 'unverified'){ setCloudStatus('unverified'); return; }
+  if(e && (e.code === 'permission-denied' || /insufficient permissions/i.test(e.message || ''))){
+    setCloudStatus('error', "this account isn't approved for this ledger — ask the owner to approve your email"); return;
+  }
+  setCloudStatus('error', e && e.message ? e.message : 'unknown error');
 }
 const cloudDocRef = db => db.collection('sync').doc('ledger');
+
+// ---- Cloud permissions record ------------------------------------------------------------------
+// One Firestore document, config/access, that says who owns the ledger and who has been approved.
+//   { ownerEmail, approved: { "<lowercase email>": { expiresAt: <ms since 1970>, write: <true|false>, addedAt: <ms> } }, updatedAt }
+// `approved` is a map keyed by email (not an array) because Firestore rules can look a key up but cannot
+// search an array. It starts empty. Only the owner's verified account can read or change it (see
+// CLOUD_FIRESTORE_RULE). The rule reads it to decide who may view (an unexpired entry) and who may also
+// write (write:true); the app's own screens for approving people come in a later step.
+const cloudAccessRef = db => db.collection('config').doc('access');
+function cloudAccessNewRecord(nowMs){
+  return { ownerEmail: CLOUD_OWNER_EMAIL, approved: {}, updatedAt: new Date(nowMs || Date.now()).toISOString() };
+}
+// True only for the signed-in, email-verified owner account.
+function cloudIsOwner(){
+  const u = cloudUserNow();
+  return !!(u && u.verified && String(u.email || '').trim().toLowerCase() === CLOUD_OWNER_EMAIL);
+}
+// Owner only: makes sure the record exists (creates it empty the first time). Best effort and quiet — a
+// failure (rules not updated yet, no signal) never disturbs syncing and is simply tried again next start.
+async function cloudEnsureAccessRecord(db){
+  try{
+    if(!cloudIsOwner() || cloudOffline()) return;
+    if(localStorage.getItem(CLOUD_ACCESS_OK_KEY) === CLOUD_OWNER_EMAIL) return;
+    const ref = cloudAccessRef(db);
+    const snap = await ref.get();
+    if(!snap.exists) await ref.set(cloudAccessNewRecord());
+    localStorage.setItem(CLOUD_ACCESS_OK_KEY, CLOUD_OWNER_EMAIL);
+  }catch(e){ console.error(e); }
+}
 
 let CLOUD_LAST_CHECK_AT = 0;     // when a cloud check last started (start-up, Sync Now, or coming back to the app)
 function cloudLastOkMs(){ try{ const n = Number(localStorage.getItem(CLOUD_LAST_OK_KEY)); return n > 0 ? n : 0; }catch(e){ return 0; } }
@@ -108,6 +244,9 @@ function updateSyncBadge(){
     else if(CLOUD_STATUS === 'error'){ t = '\u26A0 Sync error'; warn = true; }
     else if(CLOUD_STATUS === 'conflict'){ t = '\u26A0 Conflict'; warn = true; }
     else if(CLOUD_STATUS === 'waiting'){ t = '\u25CF New data'; warn = true; }
+    else if(CLOUD_STATUS === 'signedout'){ t = '\u26A0 Sign in'; warn = true; }
+    else if(CLOUD_STATUS === 'unverified'){ t = '\u26A0 Verify email'; warn = true; }
+    else if(!cloudUserNow()){ t = '\u26A0 Sign in'; warn = true; }
     else t = ok ? ('\u2601 ' + cloudAgoShort(ok)) : '\u2601 Not synced';
     el.textContent = t;
     el.classList.toggle('warn', warn);
@@ -131,6 +270,8 @@ function cloudStatusText(){
   if(CLOUD_STATUS === 'waiting') return 'New data from another device is waiting — tap Sync Now to review it';
   if(CLOUD_STATUS === 'conflict') return "Another device has changes this device hasn't seen — pick which copy to keep below";
   if(CLOUD_STATUS === 'error') return 'Sync error: ' + CLOUD_LAST_ERROR;
+  if(CLOUD_STATUS === 'signedout') return 'Not signed in — sign in below to sync. The ledger on this phone works as usual.';
+  if(CLOUD_STATUS === 'unverified') return 'Email not verified yet — open the link we emailed you, then tap "I\'ve verified" below.';
   const ok = cloudLastOkMs();
   if(ok) return 'Synced ' + cloudAgoText(ok);
   let t = null; try{ t = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
@@ -149,7 +290,7 @@ if(typeof setInterval === 'function') setInterval(cloudRefreshAgo, 30000);
 // at most once a minute so flicking between apps doesn't spam reads. Skips while locked, while a
 // check is running, while an \"Update / Merge\" prompt or a conflict is waiting for the person.
 function cloudSyncOnForeground(){
-  if(!cloudSyncEnabled() || CLOUD_PENDING_PULL || CLOUD_STATUS === 'syncing' || CLOUD_STATUS === 'conflict') return;
+  if(!cloudSyncEnabled() || CLOUD_PENDING_PULL || CLOUD_STATUS === 'syncing' || CLOUD_STATUS === 'conflict' || CLOUD_STATUS === 'signedout') return; // signed out: nothing to check until the person signs in
   if(typeof encEnabled === 'function' && encEnabled() && !ENC_DEK) return;
   if(Date.now() - CLOUD_LAST_CHECK_AT < CLOUD_CHECK_COOLDOWN_MS) return;
   cloudSyncCheckOnStart();
@@ -164,6 +305,7 @@ let CLOUD_PUSH_TIMER = null;
 // push a few seconds after the user stops, not one push per keystroke/field.
 function cloudSyncSchedule(){
   if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return; // never auto-push over cloud data the person hasn't accepted yet
+  if(!cloudCanSync()) return; // signed out or email not verified: entries just stay on this phone until then
   clearTimeout(CLOUD_PUSH_TIMER);
   CLOUD_PUSH_TIMER = setTimeout(cloudPushNow, 4000);
 }
@@ -193,7 +335,7 @@ async function cloudPushNow(){
     try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, hash); }catch(e){}
     CLOUD_PENDING_REMOTE = null;
     setCloudStatus('synced');
-  }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+  }catch(e){ cloudFail(e); }
 }
 // Decrypts (or passes through) a remote doc's payload; used by both cloudApplyRemote and the
 // auto-merge path below. Returns {json} or {error} (never throws) so callers just check which.
@@ -498,6 +640,7 @@ async function cloudSyncCheckOnStart(){
   setCloudStatus('syncing');
   try{
     const db = await cloudSdkReady();
+    cloudEnsureAccessRecord(db); // owner only; runs alongside the sync check, never blocks it
     const snap = await cloudDocRef(db).get();
     if(!snap.exists){ await cloudPushNow(); return; } // nothing in the cloud yet — seed it from this device
     const remote = snap.data();
@@ -511,7 +654,7 @@ async function cloudSyncCheckOnStart(){
     // Both sides changed — offer to merge by record id (nothing either device added is dropped,
     // see mergeLedgers above), but only once the person agrees.
     cloudAskToApply(remote, 'merge');
-  }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+  }catch(e){ cloudFail(e); }
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; CLOUD_PENDING_PULL = null; await cloudPushNow(); }
 async function cloudResolveUseCloud(){
@@ -525,14 +668,49 @@ async function cloudResolveUseCloud(){
       remote = snap.data();
     }
     await cloudApplyRemote(remote);
-  }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+  }catch(e){ cloudFail(e); }
 }
 
 // --- Settings card ---
+function cloudAccountHtml(){
+  const u = cloudUserNow();
+  const link = 'background:none;border:0;padding:8px 0;color:inherit;text-decoration:underline;font-size:13px;cursor:pointer';
+  const msg = '<p class="note" id="cloudAuthMsg" role="status" style="margin:8px 0 0;color:var(--rust)"></p>';
+  const wrap = inner => `<div style="border-top:1px solid var(--field-border);padding-top:12px">${inner}</div>`;
+  const draft = escHtml(CLOUD_AUTH_DRAFT || '');
+  const emailField = `<input type="email" id="cloudAuthEmail" placeholder="Email" value="${draft}" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:8px">`;
+  if(u){
+    const verify = u.verified ? '' : `<p class="note" style="margin:0 0 8px">We emailed a verification link to this address. Open it, then tap below.</p>
+      <button class="ghost" id="cloudVerifiedBtn" type="button" style="width:100%;margin-bottom:8px">I've verified — continue</button>
+      <button class="ghost" id="cloudResendBtn" type="button" style="width:100%;margin-bottom:8px">Resend verification email</button>`;
+    const owner = cloudIsOwner() ? `<p class="note" style="margin:0 0 8px">Owner account${localStorage.getItem(CLOUD_ACCESS_OK_KEY) === CLOUD_OWNER_EMAIL ? ' — access list set up (no one approved yet).' : '.'}</p>` : '';
+    return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Signed in as ${escHtml(u.email)}</p>${owner}${verify}
+      <button class="ghost" id="cloudSignOutBtn" type="button" style="width:100%">Sign out</button>${msg}`);
+  }
+  if(CLOUD_AUTH_MODE === 'signup'){
+    return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Create an account</p>${emailField}
+      <input type="password" id="cloudAuthPw" placeholder="Password (at least ${CLOUD_MIN_PASSWORD} characters)" autocomplete="new-password" style="width:100%;margin-bottom:8px">
+      <input type="password" id="cloudAuthPw2" placeholder="Repeat password" autocomplete="new-password" style="width:100%;margin-bottom:8px">
+      <button class="ghost" id="cloudSignUpBtn" type="button" style="width:100%">Create account</button>
+      <button type="button" id="cloudToSignInBtn" style="${link}">I already have an account</button>${msg}`);
+  }
+  if(CLOUD_AUTH_MODE === 'reset'){
+    return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Reset password</p>${emailField}
+      <button class="ghost" id="cloudResetBtn" type="button" style="width:100%">Email me a reset link</button>
+      <button type="button" id="cloudToSignInBtn" style="${link}">Back to sign in</button>${msg}`);
+  }
+  return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Sign in to sync</p>${emailField}
+    <input type="password" id="cloudAuthPw" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:8px">
+    <button class="ghost" id="cloudSignInBtn" type="button" style="width:100%">Sign in</button>
+    <div style="display:flex;justify-content:space-between;gap:12px">
+      <button type="button" id="cloudToSignUpBtn" style="${link}">Create account</button>
+      <button type="button" id="cloudToResetBtn" style="${link}">Forgot password?</button>
+    </div>${msg}`);
+}
 function cloudSyncSection(){
   const on = cloudSyncEnabled();
   const head = `<div class="card-head"><h2>Cloud Sync</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-    <p class="note info-note" hidden>Keeps this ledger in sync with other devices through a private Firebase project set up just for this business. Two one-time steps are needed in that project's own console before this will work: turn on <b>Anonymous</b> sign-in (Build → Authentication → Sign-in method), and set the Firestore security rule below (Build → Firestore Database → Rules) so only a signed-in request can read or write it.</p>
+    <p class="note info-note" hidden>Keeps this ledger in sync with other devices through a private Firebase project set up just for this business. Two one-time steps are needed in that project's own console before this will work: turn on <b>Email/Password</b> sign-in (Build → Authentication → Sign-in method), and set the Firestore security rule below (Build → Firestore Database → Rules), so only the owner, and people the owner has approved (until their expiry), can use the ledger, and only the owner can change the approvals.</p>
     <pre class="info-note" hidden style="white-space:pre-wrap;background:var(--paper-dim);padding:10px;border-radius:8px;font-size:12px;margin:-4px 0 0">${escHtml(CLOUD_FIRESTORE_RULE)}</pre>`;
   return `<div class="card">${head}
     <label style="display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer">
@@ -540,7 +718,8 @@ function cloudSyncSection(){
       Enable Cloud Sync
     </label>
     <p class="note" id="cloudSyncStatus" style="margin-top:10px">${on ? cloudStatusText() : 'Off — this device only.'}</p>
-    <div id="cloudSyncActions" style="${on?'':'display:none'}">
+    <div id="cloudAccount" style="${on?'':'display:none'};margin-top:10px">${cloudAccountHtml()}</div>
+    <div id="cloudSyncActions" style="${on && cloudCanSync() ? '' : 'display:none'}">
       <button class="ghost" id="cloudSyncNowBtn" type="button" style="width:100%">Sync Now</button>
       <div id="cloudSyncConflict" style="${CLOUD_STATUS==='conflict'?'':'display:none'};margin-top:10px">
         <p class="note" style="margin:0 0 8px;color:var(--rust)">This device and another device both have changes the other hasn't seen. Pick which copy to keep — the other will be overwritten:</p>
@@ -559,7 +738,126 @@ function cloudSyncSection(){
     </div>
   </div>`;
 }
+// ---- Account actions (email + password) -----------------------------------------------------------
+function cloudAuthErrorText(e){
+  const c = e && e.code ? String(e.code) : '';
+  const map = {
+    'auth/invalid-email': 'That email address doesn\'t look right.',
+    'auth/missing-email': 'Enter your email address.',
+    'auth/user-not-found': 'Email or password is incorrect.',
+    'auth/wrong-password': 'Email or password is incorrect.',
+    'auth/invalid-credential': 'Email or password is incorrect.',
+    'auth/invalid-login-credentials': 'Email or password is incorrect.',
+    'auth/email-already-in-use': 'An account with this email already exists — sign in instead, or use Forgot password.',
+    'auth/weak-password': 'Choose a longer password (at least ' + CLOUD_MIN_PASSWORD + ' characters).',
+    'auth/too-many-requests': 'Too many attempts. Wait a few minutes and try again.',
+    'auth/user-disabled': 'This account has been disabled.',
+    'auth/network-request-failed': 'Could not reach the sign-in service. Check your connection and try again.',
+    'auth/operation-not-allowed': 'Email/Password sign-in is not switched on in the Firebase console yet (Authentication > Sign-in method).',
+  };
+  if(map[c]) return map[c];
+  if(e && /^Could not load /.test(e.message || '')) return 'Could not reach the sign-in service. Connect to the internet and try again.';
+  return e && e.message ? e.message : 'Something went wrong. Try again.';
+}
+async function cloudAuthSdk(){
+  if(cloudOffline()) throw cloudErr('offline', 'You are offline — connect to the internet and try again.');
+  await cloudAuthRestore();
+  return firebase.auth();
+}
+// A new login replaces whatever the last sync state was; the next check decides what to pull or push.
+function cloudAfterAuth(user){ cloudSetUser(user); CLOUD_AUTH_DRAFT = ''; CLOUD_AUTH_MODE = 'signin'; setCloudStatus('idle'); }
+async function cloudSignIn(email, password){
+  const auth = await cloudAuthSdk();
+  const cred = await auth.signInWithEmailAndPassword(email, password);
+  cloudAfterAuth(cred.user);
+}
+async function cloudSignUp(email, password){
+  const auth = await cloudAuthSdk();
+  const cred = await auth.createUserWithEmailAndPassword(email, password);
+  try{ await cred.user.sendEmailVerification(); }catch(e){ console.error(e); } // "Resend" is on the screen if this one fails
+  cloudAfterAuth(cred.user);
+}
+async function cloudResetPassword(email){
+  const auth = await cloudAuthSdk();
+  await auth.sendPasswordResetEmail(email);
+}
+async function cloudResendVerification(){
+  const auth = await cloudAuthSdk();
+  if(!auth.currentUser) throw cloudErr('signedout', 'Sign in first.');
+  await auth.currentUser.sendEmailVerification();
+}
+// Signing out only stops syncing on this phone: the ledger stays here, nothing is deleted anywhere.
+async function cloudSignOut(){
+  clearTimeout(CLOUD_PUSH_TIMER);
+  CLOUD_PENDING_PULL = null; CLOUD_PENDING_REMOTE = null;
+  const bar = document.getElementById('cloudAskBar'); if(bar) bar.remove();
+  await cloudAuthRestore(); // signing out is local, so it needs no signal once the SDK is on the phone's cache
+  await firebase.auth().signOut();
+  cloudSetUser(null);
+  setCloudStatus('signedout');
+}
+function wireCloudAccountCard(){
+  const $ = id => document.getElementById(id);
+  const val = id => ($(id) || {}).value || '';
+  const say = (t, ok)=>{ const el = $('cloudAuthMsg'); if(el){ el.textContent = t || ''; el.style.color = ok ? 'inherit' : 'var(--rust)'; } };
+  const run = async (btn, fn)=>{
+    if(btn) btn.disabled = true; say('');
+    try{ await fn(); }catch(e){ console.error(e); say(cloudAuthErrorText(e)); }
+    if(btn) btn.disabled = false;
+  };
+  const mode = m => ()=>{ CLOUD_AUTH_DRAFT = val('cloudAuthEmail').trim(); CLOUD_AUTH_MODE = m; switchTab('settings'); };
+  if($('cloudToSignUpBtn')) $('cloudToSignUpBtn').onclick = mode('signup');
+  if($('cloudToResetBtn')) $('cloudToResetBtn').onclick = mode('reset');
+  if($('cloudToSignInBtn')) $('cloudToSignInBtn').onclick = mode('signin');
+  const inBtn = $('cloudSignInBtn');
+  if(inBtn) inBtn.onclick = ()=> run(inBtn, async ()=>{
+    const email = val('cloudAuthEmail').trim(), pw = val('cloudAuthPw');
+    if(!email || !pw){ say('Enter your email and password.'); return; }
+    await cloudSignIn(email, pw);
+    await cloudSyncCheckOnStart();
+    switchTab('settings');
+  });
+  const upBtn = $('cloudSignUpBtn');
+  if(upBtn) upBtn.onclick = ()=> run(upBtn, async ()=>{
+    const email = val('cloudAuthEmail').trim(), pw = val('cloudAuthPw'), pw2 = val('cloudAuthPw2');
+    if(!email){ say('Enter your email address.'); return; }
+    if(pw.length < CLOUD_MIN_PASSWORD){ say('Choose a password of at least ' + CLOUD_MIN_PASSWORD + ' characters.'); return; }
+    if(pw !== pw2){ say("The two passwords don't match."); return; }
+    await cloudSignUp(email, pw);
+    await cloudSyncCheckOnStart();
+    switchTab('settings');
+  });
+  const resetBtn = $('cloudResetBtn');
+  if(resetBtn) resetBtn.onclick = ()=> run(resetBtn, async ()=>{
+    const email = val('cloudAuthEmail').trim();
+    if(!email){ say('Enter your email address.'); return; }
+    await cloudResetPassword(email);
+    say('If an account exists for that address, a reset link is on its way. Check your inbox (and spam).', true);
+  });
+  const verifiedBtn = $('cloudVerifiedBtn');
+  if(verifiedBtn) verifiedBtn.onclick = ()=> run(verifiedBtn, async ()=>{
+    await cloudSyncCheckOnStart(); // reloads the account and its token, then syncs if the address is now verified
+    if(CLOUD_STATUS === 'unverified'){ say("Not verified yet. Open the link in the email first, then tap again."); return; }
+    switchTab('settings');
+  });
+  const resendBtn = $('cloudResendBtn');
+  if(resendBtn) resendBtn.onclick = ()=> run(resendBtn, async ()=>{ await cloudResendVerification(); say('Verification email sent again.', true); });
+  const outBtn = $('cloudSignOutBtn');
+  if(outBtn){
+    let armed = null; // native confirm() is blocked in places, so: tap once to arm, tap again to sign out
+    outBtn.onclick = ()=>{
+      if(!armed){
+        outBtn.textContent = 'Tap again to sign out';
+        armed = setTimeout(()=>{ armed = null; outBtn.textContent = 'Sign out'; }, 4000);
+        return;
+      }
+      clearTimeout(armed); armed = null;
+      run(outBtn, async ()=>{ await cloudSignOut(); switchTab('settings'); });
+    };
+  }
+}
 function wireCloudSyncCard(){
+  wireCloudAccountCard();
   const toggle = document.getElementById('cloudSyncToggle');
   if(toggle) toggle.onchange = async ()=>{
     try{ localStorage.setItem(CLOUD_SYNC_ON_KEY, toggle.checked ? '1' : '0'); }catch(e){}
