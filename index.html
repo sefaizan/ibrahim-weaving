@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-29-sync-bar-prominent">
+<meta name="app-build" content="2026-09-29-sync-safety-point-undo">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -184,6 +184,9 @@
     font-size:10.5px; font-weight:700;
   }
   .week-badge[hidden]{ display:none; }
+  .sync-badge{ display:inline-block; padding:2px 8px; border-radius:20px; white-space:nowrap; letter-spacing:0.2px; background:rgba(255,255,255,0.16); color:#fff; font-size:9.5px; font-weight:700; }
+  .sync-badge.warn{ background:#B5541E; }
+  .sync-badge[hidden]{ display:none; }
   /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
      restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
      replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
@@ -756,7 +759,8 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.15.8</span>
+      <span class="sync-badge" id="syncBadge" hidden></span>
+      <span class="app-version" id="appVersionTag">v3.15.12</span>
     </div>
   </header>
 
