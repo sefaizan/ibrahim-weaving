@@ -172,6 +172,7 @@ function switchTab(id){
   // (e.g. pf_quality, sf_client, rf_client) get their value set here in JS rather than via a
   // `selected` attribute in the template, and enhanceSelects needs that settled first.
   enhanceSelects(document.getElementById('panels'));
+  if(typeof viewOnlyApply === 'function') viewOnlyApply(); // view-only phone: header label + hide every Add/Edit/Delete control
 }
 
 /* ---------------- Helpers for option lists ---------------- */
@@ -326,9 +327,9 @@ function loomAssignmentsSection(){
     <div class="card">
       <div class="card-head"><h2>Loom Assignments</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Set which two employees usually run each loom. Picking a loom in Log Production will auto-fill these two — still fully editable there. A 3rd employee (a fill-in for someone on leave, or an outside worker) is handled separately on the entry form as before, and isn't part of this assignment.</p>
-      <div class="group-label" style="margin-top:0">Quick Assign</div>
-      <div style="margin-bottom:10px">${loomChecks}</div>
-      <div class="grid cols-2">
+      <div class="group-label vo-hide" style="margin-top:0">Quick Assign</div>
+      <div class="vo-hide" style="margin-bottom:10px">${loomChecks}</div>
+      <div class="grid cols-2 vo-hide">
         ${employeeSelectField('Employee 1','la_qa_e1')}
         ${employeeSelectField('Employee 2','la_qa_e2')}
       </div>
@@ -891,16 +892,16 @@ function backupPanel(){
       <p class="note" id="lastBackupLine" style="margin:10px 0 0">${lastBackupStatusText()}</p>
       ${ledgerSizeLineHtml()}
       <div id="backupStatus" class="note" style="min-height:16px"></div>
-      <div class="group-label">Restore from a backup</div>
-      <div class="field" style="max-width:360px;margin-bottom:12px">
+      <div class="group-label vo-hide">Restore from a backup</div>
+      <div class="field vo-hide" style="max-width:360px;margin-bottom:12px">
         <label>Choose a backup file</label>
         <input type="file" id="restoreJsonFile" accept=".json,.txt,application/json,text/plain">
       </div>
-      <p class="note" style="margin-top:0">Picking a file above loads it into the box below — or just paste a backup directly instead.</p>
-      <div class="field"><textarea id="restoreJsonInput" rows="4" placeholder="Paste a previously copied/downloaded JSON backup here, or choose a file above"></textarea></div>
-      <div class="field" id="restorePwWrap" hidden style="max-width:360px"><label>This backup is password-protected — enter its password</label><input type="password" id="restorePw" autocomplete="off"></div>
-      <button class="ghost" id="restoreJsonBtn" type="button">Restore from Backup</button>
-      <div class="note">Restoring replaces ALL current data in this app with the pasted/loaded backup. You'll see what the backup contains before anything changes, and a safety copy of your current data is kept first (see below).</div>
+      <p class="note vo-hide" style="margin-top:0">Picking a file above loads it into the box below — or just paste a backup directly instead.</p>
+      <div class="field vo-hide"><textarea id="restoreJsonInput" rows="4" placeholder="Paste a previously copied/downloaded JSON backup here, or choose a file above"></textarea></div>
+      <div class="field vo-hide" id="restorePwWrap" hidden style="max-width:360px"><label>This backup is password-protected — enter its password</label><input type="password" id="restorePw" autocomplete="off"></div>
+      <button class="ghost vo-hide" id="restoreJsonBtn" type="button">Restore from Backup</button>
+      <div class="note vo-hide">Restoring replaces ALL current data in this app with the pasted/loaded backup. You'll see what the backup contains before anything changes, and a safety copy of your current data is kept first (see below).</div>
     </div>
     ${autoBackupCardHtml()}
     <div class="card">

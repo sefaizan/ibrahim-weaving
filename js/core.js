@@ -619,7 +619,9 @@ let UNDO_PREV_PARTS = null; // each top-level part of the ledger (as JSON text) 
 let UNDO_SUPPRESS = false; // set while an Undo's own save (or a restore) is running, so it isn't filed as a new change
 let NEXT_UNDO_LABEL = null; // a caller can set this just before save() to give the resulting Undo entry a friendly name
 async function save(){
+  if(typeof viewOnlySaveBlocked === 'function' && viewOnlySaveBlocked()) return; // view-only phone (view-only.js): nothing may be saved
   document.getElementById('statusLine').textContent = 'Saving…';
+  if(typeof tombRecordDeletions === 'function'){ try{ tombRecordDeletions(); }catch(e){ /* best effort — never block a save */ } } // notes deleted records so a cloud merge can't bring them back
   const json = JSON.stringify(DATA);
   let changed = null; // 'removed' | 'updated' | null — also read below to decide the save haptic
   let curParts = null;

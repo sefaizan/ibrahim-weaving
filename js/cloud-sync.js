@@ -91,6 +91,8 @@ service cloud.firestore {
 
 
 
+// True on a view-only phone (js/view-only.js, loaded after this file); false anywhere that file is absent.
+function cloudViewOnly(){ try{ return typeof viewOnly === 'function' && viewOnly(); }catch(e){ return false; } }
 function cloudSyncEnabled(){ try{ return localStorage.getItem(CLOUD_SYNC_ON_KEY) === '1'; }catch(e){ return false; } }
 
 let CLOUD_STATUS = 'idle';    // 'idle' | 'syncing' | 'synced' | 'offline' | 'conflict' | 'error'
@@ -118,6 +120,7 @@ function cloudUserNow(){ return CLOUD_USER || cloudStoredUser(); }
 function cloudSetUser(u){
   CLOUD_USER = u ? { email: u.email || '', verified: !!u.emailVerified } : null;
   try{ if(CLOUD_USER) localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(CLOUD_USER)); else localStorage.removeItem(CLOUD_USER_KEY); }catch(e){}
+  if(typeof viewOnlyNoteUser === 'function') viewOnlyNoteUser(u); // a verified non-owner account makes this phone view-only (view-only.js)
 }
 function cloudCanSync(){ const u = cloudUserNow(); return !!(u && u.verified); }
 function cloudLoadSdk(){
@@ -273,7 +276,7 @@ function cloudStatusText(){
   if(CLOUD_STATUS === 'signedout') return 'Not signed in — sign in below to sync. The ledger on this phone works as usual.';
   if(CLOUD_STATUS === 'unverified') return 'Email not verified yet — open the link we emailed you, then tap "I\'ve verified" below.';
   const ok = cloudLastOkMs();
-  if(ok) return 'Synced ' + cloudAgoText(ok);
+  if(ok) return 'Synced ' + cloudAgoText(ok) + (cloudViewOnly() ? ' (view only)' : '');
   let t = null; try{ t = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
   return t ? ('Last synced ' + new Date(t).toLocaleString()) : 'Not synced yet';
 }
@@ -305,12 +308,14 @@ let CLOUD_PUSH_TIMER = null;
 // push a few seconds after the user stops, not one push per keystroke/field.
 function cloudSyncSchedule(){
   if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return; // never auto-push over cloud data the person hasn't accepted yet
+  if(cloudViewOnly()) return; // a view-only phone only ever pulls
   if(!cloudCanSync()) return; // signed out or email not verified: entries just stay on this phone until then
   clearTimeout(CLOUD_PUSH_TIMER);
   CLOUD_PUSH_TIMER = setTimeout(cloudPushNow, 4000);
 }
 async function cloudPushNow(){
   if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return;
+  if(cloudViewOnly()) return; // a view-only phone never sends anything to the cloud
   // Encrypting the outgoing payload (encSeal) needs the vault unlocked — on a fresh install
   // this can be tapped (via Sync Now, or the debounced schedule below) before the person has
   // entered their PIN even once, which used to surface as the raw "Sync error: locked" from
@@ -642,6 +647,7 @@ async function cloudSyncCheckOnStart(){
     const db = await cloudSdkReady();
     cloudEnsureAccessRecord(db); // owner only; runs alongside the sync check, never blocks it
     const snap = await cloudDocRef(db).get();
+    if(cloudViewOnly()){ await cloudViewerCheck(snap); return; } // view-only phone: only ever bring the cloud copy down
     if(!snap.exists){ await cloudPushNow(); return; } // nothing in the cloud yet — seed it from this device
     const remote = snap.data();
     let lastSeen = null, lastHash = null;
@@ -655,6 +661,31 @@ async function cloudSyncCheckOnStart(){
     // see mergeLedgers above), but only once the person agrees.
     cloudAskToApply(remote, 'merge');
   }catch(e){ cloudFail(e); }
+}
+// View-only phone: there is nothing on it that could be lost or that the owner needs, so the cloud copy is
+// simply brought down whenever it is newer - no Update / Merge question, and never a push.
+async function cloudViewerCheck(snap){
+  if(!snap.exists){ setCloudStatus('error', 'nothing to show yet \u2014 the owner has not synced the ledger'); return; }
+  const remote = snap.data();
+  let lastSeen = null; try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
+  if(!remote.savedAt || remote.savedAt === lastSeen){ setCloudStatus('synced'); return; }
+  await cloudViewerApply(remote);
+}
+async function cloudViewerApply(remote){
+  const dec = await cloudDecryptRemote(remote);
+  if(dec.error){ setCloudStatus('error', dec.error); return; }
+  const parsed = JSON.parse(dec.json);
+  Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
+  Object.assign(DATA, parsed);
+  tombResetBaseline();
+  try{ await ensureDataDefaults(); }catch(e){ console.error(e); }
+  UNDO_SUPPRESS = true; UNDO_STACK.length = 0; if(typeof updateUndoButton === 'function') updateUndoButton();
+  await viewOnlyAllowSave(()=> save()); // the one save a view-only phone may make: storing the cloud copy
+  try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(dec.json)); }catch(e){}
+  CLOUD_PENDING_REMOTE = null;
+  setCloudStatus('synced');
+  switchTab(CURRENT_TAB || 'overview');
+  showSyncNotice('Updated from the cloud');
 }
 async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; CLOUD_PENDING_PULL = null; await cloudPushNow(); }
 async function cloudResolveUseCloud(){
@@ -683,7 +714,7 @@ function cloudAccountHtml(){
     const verify = u.verified ? '' : `<p class="note" style="margin:0 0 8px">We emailed a verification link to this address. Open it, then tap below.</p>
       <button class="ghost" id="cloudVerifiedBtn" type="button" style="width:100%;margin-bottom:8px">I've verified — continue</button>
       <button class="ghost" id="cloudResendBtn" type="button" style="width:100%;margin-bottom:8px">Resend verification email</button>`;
-    const owner = cloudIsOwner() ? `<p class="note" style="margin:0 0 8px">Owner account${localStorage.getItem(CLOUD_ACCESS_OK_KEY) === CLOUD_OWNER_EMAIL ? ' — access list set up (no one approved yet).' : '.'}</p>` : '';
+    const owner = cloudIsOwner() ? `<p class="note" style="margin:0 0 8px">Owner account${localStorage.getItem(CLOUD_ACCESS_OK_KEY) === CLOUD_OWNER_EMAIL ? ' — access list set up (no one approved yet).' : '.'}</p>` : (u.verified ? `<p class="note" style="margin:0 0 8px"><b>View only</b> — this phone shows the ledger and keeps it up to date from the cloud, but can\u2019t change it.</p>` : '');
     return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Signed in as ${escHtml(u.email)}</p>${owner}${verify}
       <button class="ghost" id="cloudSignOutBtn" type="button" style="width:100%">Sign out</button>${msg}`);
   }
