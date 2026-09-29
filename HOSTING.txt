@@ -80,25 +80,40 @@ GOOD TO KNOW
   every request, so they are locked out at their very next one; the app reads the record back to confirm before saying so. Their phone
   keeps the last copy it downloaded but can no longer sync. Revoking needs a signal - offline, nothing is changed and you are told.
   An approval ends at the exact moment chosen (at most 10 years ahead); approving the same email again replaces the time. Someone
-  whose approval ended, or who was revoked, sees "this account isn't approved for this ledger", keeps the last copy they downloaded and stays view-only. Everyone approved this way is view-only;
-  time-limited write access comes with Release 2.
-  Edit access on the other phone (time-limited): when someone's entry has write: true, their phone learns of it from a small
-  note your phone keeps in step with the list (a document in the existing "sync" collection whose name is a hash of their
-  email, so viewers never see addresses; the current rules already cover it, so no rule change is needed - opening the People
-  card re-sends every note). While the grant is live their phone can edit and shows "Can edit - 2h 15m left" in the header and in
-  Settings > Cloud Sync. It drops back to view only by itself when the end time passes, when you shorten it, revoke it, or turn
-  edit access off (it notices on its next check - once a minute while the app is open, or when a push is refused), or when they sign
-  out. Before it does, anything not yet synced is saved as a Safety copy of type "Unsynced entries (access ended)" in Settings >
-  Backup & Restore (up to 10 are kept), and a red bar says so. Firebase itself refuses their writes the moment the grant ends, even
-  if their phone is offline or its clock is wrong - the phone's screen only follows that. Note: a view-only phone cannot use
-  "Restore" on that safety copy; it stays there for you or for the phone if it is given edit access again. The switch that gives
-  someone edit access from the People card is the next step; until then write: true can only be set by hand in the console.
-  (Fallback only: the same list is the "approved" map in config/access in the Firebase console - a field per lowercase email
-  holding write: false, expiresAt: a number in milliseconds since 1970, addedAt: a number.)
+  whose approval ended, or who was revoked, sees "this account isn't approved for this ledger", keeps the last copy they downloaded and stays view-only.
 
-  What a viewer can see: for now, the whole ledger - everything the owner's phone shows, including family, expenses,
-  wages and loans. So approve only people you would trust with all of it. Limiting what a viewer sees (Business viewer,
-  Production operator) comes with the roles in Release 3.
+- Edit access on the other phone (Release 2 - time-limited, given from your phone). Approving someone with "Approve to view"
+  makes them view-only. To let them EDIT, either tap "Approve to edit" instead (same email box and "Approved for" choice), or,
+  for someone already on the list, tap "Allow edit" on their row (and "Stop edit" to make them view-only again). Edit access
+  always ends when their approval ends - "Allow edit" does not change the end time (use Extend / Shorten for that) and is
+  refused if the approval has already ended (Extend it first). "Approve to view" on someone who can already edit keeps their
+  edit access and says so; use "Stop edit" to take it away. Their row reads "Can edit - 2 days left (until ...)".
+  How their phone finds out: your phone keeps a small note for each person with edit access (a document in the existing "sync"
+  collection whose name is a hash of their email, so viewers never see addresses; the current rules already cover it, so no rule
+  change is needed - opening the People card re-sends every note). Their phone reads its note when they tap Sync Now and about
+  once a minute while the app is open. While the grant is live their phone can edit and shows "Can edit - 2h 15m left" in the
+  header and in Settings > Cloud Sync. It drops back to view only by itself when the end time passes, when you shorten it, revoke
+  it, or use Stop edit (it notices on its next check - once a minute while the app is open, or when a push is refused), or when
+  they sign out. Before it does, anything not yet synced is saved as a Safety copy of type "Unsynced entries (access ended)" in
+  Settings > Backup & Restore (up to 10 are kept), and a red bar says so. Firebase itself refuses their writes the moment the
+  grant ends, even if their phone is offline or its clock is wrong - the phone's screen only follows that. Note: a view-only phone
+  cannot use "Restore" on that safety copy; it stays there for you or for the phone if it is given edit access again.
+  Edit access on a phone is for the ledger's entries; only you (the owner) can approve, extend, revoke or give edit access, and
+  only on your own phone with a signal.
+  (Fallback only, if the People card is ever unavailable: the same list is the "approved" map in config/access in the Firebase
+  console - a field per lowercase email holding write: false (view only) or write: true (may edit), expiresAt: a number in milliseconds since 1970, addedAt: a number.)
+
+- Who added or changed an entry (Release 2): every entry added or changed from now on is stamped with the signed-in email and the
+  time. Each row in the logs has an "Info" button (the small "i") that shows "Added by ... " and "Last edited by ... " with the
+  date and time. It works on view-only phones too. Entries from before this version say "No history recorded for this entry"
+  until they are edited. The stamps travel with the ledger (cloud sync and backups) and never count as an edit themselves; when
+  the same entry was edited on two phones the later edit is still the one kept. A phone with no account signed in stamps the
+  time only. Tip: searching a log does not look at these stamps.
+
+  What a viewer or an editor can see: for now, the whole ledger - everything the owner's phone shows, including family, expenses,
+  wages and loans - and an editor can add, change and delete any of it while their edit access lasts. So approve only people you
+  would trust with all of it. Limiting what someone sees or may do (Business viewer, Production operator, per-action permissions)
+  comes with the roles in Release 3.
 
 - Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
   output over its last 7 days and how much of their logged length your last finished beams actually wove),
