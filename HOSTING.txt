@@ -60,6 +60,13 @@ GOOD TO KNOW
   tap "I've verified". Sign-in, sign-out and Forgot password are all in that same card. The phone stays signed in, including
   offline; the ledger on the phone never depends on being signed in. Signing out only stops syncing on that phone.
 
+- View-only phones: a phone signed in (Settings > Cloud Sync) with an email that is NOT the owner's is view-only. It shows a
+  "View only" label in the header, hides every Add / Edit / Delete / Save / Restore control, refuses to save, never
+  sends anything to the cloud, and keeps itself up to date from the cloud copy automatically. Signing out does not unlock it
+  (only the owner signing in on that phone does). The owner's phone, and a phone that never signed in to another account,
+  behave exactly as before. To let someone view for now, add their verified email under approved in config/access in the
+  Firebase console (write:false, expiresAt in the future); an in-app way to approve people comes in the next step.
+
 - Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
   output over its last 7 days and how much of their logged length your last finished beams actually wove),
   the Overview shows a "Beams ending soon" card, and a message appears when you open the app or save a

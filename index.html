@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-09-30-final-rules">
+<meta name="app-build" content="2026-09-30-view-only">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -187,6 +187,21 @@
   .sync-badge{ display:inline-block; padding:2px 8px; border-radius:20px; white-space:nowrap; letter-spacing:0.2px; background:rgba(255,255,255,0.16); color:#fff; font-size:9.5px; font-weight:700; }
   .sync-badge.warn{ background:#B5541E; }
   .sync-badge[hidden]{ display:none; }
+  .appbar-titles .title-row{ display:flex; align-items:center; gap:6px; min-width:0; }
+  .appbar-titles .title-row h1{ min-width:0; }
+  .view-badge{ flex:0 0 auto; display:inline-block; padding:2px 8px; border-radius:20px; white-space:nowrap; background:#F2C14E; color:#3A2A00; font-size:10px; font-weight:800; letter-spacing:0.3px; }
+  .view-badge[hidden]{ display:none; }
+  /* View-only phone (js/view-only.js): every control that adds, edits, deletes or saves ledger data is hidden. */
+  body.view-only .vo-hide, body.view-only .form-actions,
+  body.view-only [data-edit], body.view-only [data-del], body.view-only [data-finish], body.view-only [data-add], body.view-only [data-cancel],
+  body.view-only [data-toggle-active], body.view-only [data-move], body.view-only [data-cheque], body.view-only [data-replace-cheque],
+  body.view-only [data-link-replacement], body.view-only [data-rh-edit], body.view-only [data-rh-del],
+  body.view-only [data-l-ok], body.view-only [data-l-toggle], body.view-only [data-l-return], body.view-only [data-l-confirm], body.view-only [data-l-cancel], body.view-only [data-l-box],
+  body.view-only [data-toggle-form], body.view-only [data-form-body], body.view-only [data-snap-restore],
+  body.view-only [data-quick-add], body.view-only [data-undo-id], body.view-only #undoBtn, body.view-only #importProduction,
+  body.view-only #restoreJsonBtn, body.view-only #saveBusinessInfo, body.view-only #saveOpening, body.view-only #saveOpeningBalances,
+  body.view-only #saveRateCalc, body.view-only #saveRateChange, body.view-only #settleAllEmployees, body.view-only #la_apply,
+  body.view-only #r_addChequeRow{ display:none !important; }
   /* Off-canvas navigation drawer — the real <nav id="tabs"> element from the original build,
      restyled from a horizontal chip row into a Material modal drawer. renderNav() still just
      replaces its innerHTML with one button per TABS entry; only the container CSS changed. */
@@ -750,7 +765,7 @@
       <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
     </button>
     <div class="appbar-titles">
-      <h1 id="appbarTitle">Overview</h1>
+      <div class="title-row"><h1 id="appbarTitle">Overview</h1><span class="view-badge" id="viewOnlyBadge" hidden>View only</span></div>
       <div class="sub" id="statusLine">Loading…</div>
     </div>
     <button id="undoBtn" class="icon-btn" type="button" aria-label="Undo recent changes" title="Undo recent changes" style="display:none">
@@ -760,7 +775,7 @@
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
       <span class="sync-badge" id="syncBadge" hidden></span>
-      <span class="app-version" id="appVersionTag">v3.16.2</span>
+      <span class="app-version" id="appVersionTag">v3.17.0</span>
     </div>
   </header>
 
@@ -789,6 +804,7 @@
 <script src="./js/wiring.js"></script>
 <script src="./js/encryption.js"></script>
 <script src="./js/cloud-sync.js"></script>
+<script src="./js/view-only.js"></script>
 <script src="./js/autobackup.js"></script>
 <script src="./js/lock-init.js"></script>
 <script>
