@@ -27,6 +27,8 @@ All tests pass = every line prints `ok` and the summary ends with `# fail 0`.
 | `cash.test.js` | Cash Position from the opening balance, and from a checkpoint (same-day time rules) |
 | `autobackup.test.js` | Automatic email backup: nothing sent until set up / when locked / when empty; sent at most once per day (at midnight if the app is open, else the first open after midnight) and only when the ledger changed; the exact envelope sent to the service; password-protected files; wrong key / wrong address / no internet messages; the saved key and password never written into the page |
 | `encryption.test.js` | Encrypted ledger: only the right PIN / recovery answer opens the data key, the ledger round-trips (also short / non-English text), tampering is rejected, saving refuses while locked and never writes plain data next to an encrypted ledger |
+| `recovery-key.test.js` | Recovery key: format (20 characters, no look-alikes), only the right code opens the data key (any spacing/case), a new key replaces the old, refused when locked / wrong PIN, never stored, survives a PIN change |
+| `cloud-status.test.js` | Cloud Sync: "Synced 2 min ago" wording, foreground re-check (at most once a minute, never over a waiting prompt/conflict), merge notice counts (+new / updated / removed) |
 
 ## How it works
 
