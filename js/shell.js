@@ -173,6 +173,7 @@ function switchTab(id){
   // `selected` attribute in the template, and enhanceSelects needs that settled first.
   enhanceSelects(document.getElementById('panels'));
   if(typeof viewOnlyApply === 'function') viewOnlyApply(); // view-only phone: header label + hide every Add/Edit/Delete control
+  if(typeof waBadgeUpdate === 'function') waBadgeUpdate();  // other phone with time-limited edit access: "Can edit · 2h left"
 }
 
 /* ---------------- Helpers for option lists ---------------- */
@@ -215,7 +216,7 @@ function settingsPanel(){
     </label>
     <p class="note" style="margin-top:6px">Turn off to go back to the classic sideways-scrolling tables. Only affects small screens.</p>
   </div>
-  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + beamAlertSettingsCard() + `
+  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + beamAlertSettingsCard() + `
   <div class="card"><div class="card-head"><h2>Business Info</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>Shown on the header of printed Sale receipts (Sales Log → Receipt). Leave any of these blank to leave that line off the receipt.</p>
     <div class="grid cols-1">
@@ -470,8 +471,8 @@ function validateBackupData(obj){
 // undo a mistaken restore or a bad afternoon of edits. It does NOT replace real backups: it
 // lives on this phone and is wiped if the app's data is cleared or the phone is lost.
 const SNAP_DB = 'khata-safety-copies', SNAP_STORE = 'copies', SNAP_LAST_KEY = 'khata-last-safety-copy-at';
-const SNAP_KEEP = {auto:3, 'before-restore':3, 'before-sync':3, manual:3};
-const SNAP_LABEL = {auto:'Automatic', 'before-restore':'Before a restore', 'before-sync':'Before a cloud sync', manual:'Taken by you'};
+const SNAP_KEEP = {auto:3, 'before-restore':3, 'before-sync':3, manual:3, 'access-ended':10};
+const SNAP_LABEL = {auto:'Automatic', 'before-restore':'Before a restore', 'before-sync':'Before a cloud sync', manual:'Taken by you', 'access-ended':'Unsynced entries (access ended)'};
 function snapDb(){
   return new Promise((resolve, reject)=>{
     if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; }

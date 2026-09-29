@@ -180,6 +180,7 @@ function cloudFail(e){
   if(e && e.cloudCode === 'signedout'){ setCloudStatus('signedout'); return; }
   if(e && e.cloudCode === 'unverified'){ setCloudStatus('unverified'); return; }
   if(e && (e.code === 'permission-denied' || /insufficient permissions/i.test(e.message || ''))){
+    if(typeof waOnPermissionDenied === 'function') waOnPermissionDenied(); // a phone that thought it could edit checks whether that grant is gone
     setCloudStatus('error', "this account isn't approved for this ledger — ask the owner to approve your email"); return;
   }
   setCloudStatus('error', e && e.message ? e.message : 'unknown error');
@@ -193,7 +194,7 @@ const cloudDocRef = db => db.collection('sync').doc('ledger');
 // search an array. It starts empty. Only the owner's verified account can read or change it (see
 // CLOUD_FIRESTORE_RULE). The rule reads it to decide who may view (an unexpired entry) and who may also
 // write (write:true). The owner approves, extends and removes people from Settings > Cloud Sync (the
-// "People who can view" block, cloudPeople* below); the Firebase console is never needed for that.
+// People card in Settings, cloudPeople* below); the Firebase console is never needed for that.
 const cloudAccessRef = db => db.collection('config').doc('access');
 function cloudAccessNewRecord(nowMs){
   return { ownerEmail: CLOUD_OWNER_EMAIL, approved: {}, updatedAt: new Date(nowMs || Date.now()).toISOString() };
@@ -243,6 +244,40 @@ function cloudAccessDefaultDate(nowMs, days){
   const p = n => (n < 10 ? '0' : '') + n;
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
+// yyyy-mm-ddThh:mm for the date-and-time field: now + N days on this phone's clock.
+function cloudAccessDefaultDateTime(nowMs, days){
+  const d = new Date((nowMs || Date.now()) + (days || CLOUD_DEFAULT_APPROVAL_DAYS) * 86400000);
+  const p = n => (n < 10 ? '0' : '') + n;
+  return cloudAccessDefaultDate(nowMs, days) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+// How long an approval may last at most (10 years) - a typo like 999999 days is refused, not saved.
+const CLOUD_MAX_APPROVAL_DAYS = 3650;
+const CLOUD_UNIT_MS = { minutes: 60000, hours: 3600000, days: 86400000 };
+// "45", 'minutes' -> 2700000 (ms). Whole numbers of 1 or more only.
+function cloudAccessDuration(unit, amount){
+  const per = CLOUD_UNIT_MS[unit];
+  if(!per) throw new Error('Choose minutes, hours or days.');
+  const t = String(amount == null ? '' : amount).trim();
+  if(!/^\d+$/.test(t) || Number(t) < 1) throw new Error('Enter a whole number of ' + unit + ' (1 or more).');
+  return Number(t) * per;
+}
+// The owner's choice -> the moment the approval ends, in ms. unit is 'minutes' | 'hours' | 'days' (amount is
+// a whole number of them, counted from now) or 'until' (a date and time picked on this phone's clock).
+function cloudAccessExpiry(unit, amount, untilStr, nowMs){
+  const now = nowMs || Date.now();
+  const cap = now + CLOUD_MAX_APPROVAL_DAYS * 86400000;
+  let ms;
+  if(unit === 'until'){
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(String(untilStr || '').trim());
+    if(!m) throw new Error('Pick the date and time the approval ends.');
+    ms = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0).getTime();
+    if(!(ms > now)) throw new Error('The end time must be in the future.');
+  }else{
+    ms = now + cloudAccessDuration(unit, amount);
+  }
+  if(!(ms <= cap)) throw new Error('That is more than 10 years - choose a shorter time.');
+  return ms;
+}
 function cloudAccessApproved(rec){ return Object.assign({}, (rec && rec.approved) || {}); }
 function cloudAccessTouch(rec, approved, nowMs){
   return Object.assign({}, rec, { ownerEmail: CLOUD_OWNER_EMAIL, approved, updatedAt: new Date(nowMs || Date.now()).toISOString() });
@@ -255,16 +290,33 @@ function cloudAccessApplyApprove(rec, email, expiresAt, nowMs){
   approved[e] = { expiresAt, write: !!(old && old.write === true), addedAt: (old && old.addedAt) || nowMs || Date.now() };
   return { record: cloudAccessTouch(rec, approved, nowMs), email: e, updated: !!old };
 }
-// Add days to someone's approval, counted from the later of today and their current end date.
-function cloudAccessApplyExtend(rec, email, nowMs, days){
+// Move someone's end time. deltaMs > 0 extends (counted from the later of now and their end time, so an
+// expired approval restarts from now); deltaMs < 0 shortens (must still leave the approval running - to cut
+// access at once use Revoke). Their write flag and added-on time are kept.
+function cloudAccessApplyShift(rec, email, deltaMs, nowMs){
   const e = String(email || '').trim().toLowerCase();
+  const now = nowMs || Date.now();
   const approved = cloudAccessApproved(rec);
   const old = approved[e];
   if(!old) throw new Error('That person is no longer on the list.');
-  const from = Math.max(Number(old.expiresAt) || 0, nowMs || Date.now());
-  approved[e] = Object.assign({}, old, { expiresAt: from + (days || CLOUD_EXTEND_DAYS) * 86400000 });
-  return { record: cloudAccessTouch(rec, approved, nowMs), email: e };
+  const cur = Number(old.expiresAt) || 0;
+  let next;
+  if(deltaMs >= 0){
+    next = Math.max(cur, now) + deltaMs;
+    if(next > now + CLOUD_MAX_APPROVAL_DAYS * 86400000) throw new Error('That is more than 10 years - choose a shorter time.');
+  }else{
+    if(!(cur > now)) throw new Error('Their approval has already ended - there is nothing to shorten.');
+    next = cur + deltaMs;
+    if(!(next > now)) throw new Error('That would end it right now or sooner. Use Revoke to cut their access immediately.');
+  }
+  approved[e] = Object.assign({}, old, { expiresAt: next });
+  return { record: cloudAccessTouch(rec, approved, now), email: e, expiresAt: next };
 }
+// Add days to someone's approval (kept for the +30 days style calls).
+function cloudAccessApplyExtend(rec, email, nowMs, days){
+  return cloudAccessApplyShift(rec, email, (days || CLOUD_EXTEND_DAYS) * 86400000, nowMs);
+}
+// Revoke: the person's entry is deleted, so Firebase's rules stop letting them in at their very next request.
 function cloudAccessApplyRemove(rec, email, nowMs){
   const e = String(email || '').trim().toLowerCase();
   const approved = cloudAccessApproved(rec);
@@ -287,10 +339,25 @@ async function cloudAccessEdit(mutate){
   if(cloudOffline()) throw new Error('You are offline - connect to the internet and try again.');
   const db = await cloudSdkReady();
   const ref = cloudAccessRef(db);
-  const snap = await ref.get();
-  const out = mutate(snap.exists ? snap.data() : cloudAccessNewRecord());
-  await ref.set(out.record);
+  let out;
+  if(typeof db.runTransaction === 'function'){ // read + write as one step, so two owner phones can't overwrite each other's change (or a revoke)
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      out = mutate(snap.exists ? snap.data() : cloudAccessNewRecord());
+      tx.set(ref, out.record);
+    });
+  }else{
+    const snap = await ref.get();
+    out = mutate(snap.exists ? snap.data() : cloudAccessNewRecord());
+    await ref.set(out.record);
+  }
   try{ localStorage.setItem(CLOUD_ACCESS_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){}
+  // Keep the small note that tells that person's phone about its own edit access in step (write-access.js).
+  // The record above is the truth; if only the note fails, the caller is told (out.mirrorError).
+  if(typeof waMirrorGrant === 'function' && out.email){
+    try{ await waMirrorGrant(db, out.email, (out.record.approved || {})[out.email] || null); }
+    catch(e){ console.error(e); out.mirrorError = true; }
+  }
   return out;
 }
 async function cloudAccessRead(){
@@ -305,59 +372,146 @@ function cloudPeopleErrorText(e){
   return e && e.message ? e.message : 'Something went wrong. Try again.';
 }
 function cloudPeopleDateText(ms){ return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
+function cloudPeopleDateTimeText(ms){ return new Date(ms).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+// "12 days left", "5 hours left", "Expires within the hour" - how long an approval still has to run.
+function cloudPeopleTimeLeft(expiresAt, nowMs){
+  const left = (Number(expiresAt) || 0) - (nowMs || Date.now());
+  if(!(left > 0)) return 'Expired';
+  const HOUR = 3600000, DAYMS = 86400000;
+  if(left < HOUR) return 'Expires within the hour';
+  if(left < DAYMS){ const h = Math.floor(left / HOUR); return h + (h === 1 ? ' hour' : ' hours') + ' left'; }
+  const d = Math.floor(left / DAYMS);
+  return d + (d === 1 ? ' day' : ' days') + ' left';
+}
 function cloudPeopleListHtml(rec, nowMs){
   const rows = cloudAccessList(rec, nowMs);
   if(!rows.length) return '<p class="note" style="margin:0 0 8px">No one is approved yet.</p>';
   return rows.map(r => {
-    const what = r.expired ? ('Expired ' + cloudPeopleDateText(r.expiresAt)) : ((r.write ? 'Can edit' : 'View only') + ' \u00B7 until ' + cloudPeopleDateText(r.expiresAt));
+    const what = r.expired ? ('Expired ' + cloudPeopleDateText(r.expiresAt)) : ((r.write ? 'Can edit' : 'View only') + ' \u00B7 ' + cloudPeopleTimeLeft(r.expiresAt, nowMs) + ' (until ' + cloudPeopleDateTimeText(r.expiresAt) + ')');
     const em = escHtml(r.email);
-    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--field-border)">
-      <div style="flex:1;min-width:0"><div style="font-weight:500;overflow-wrap:anywhere">${em}</div><div class="note" style="margin:0${r.expired ? ';color:var(--rust)' : ''}">${what}</div></div>
-      <button class="ghost" type="button" data-cp-extend="${em}">+${CLOUD_EXTEND_DAYS} days</button>
-      <button class="ghost" type="button" data-cp-remove="${em}">Remove</button>
+    return `<div data-cp-row="${em}" style="padding:8px 0;border-bottom:1px solid var(--field-border)">
+      <div style="font-weight:500;overflow-wrap:anywhere">${em}</div>
+      <div class="note" style="margin:0 0 6px${r.expired ? ';color:var(--rust)' : ''}">${what}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="ghost" type="button" data-cp-open="extend" data-cp-email="${em}">Extend</button>
+        <button class="ghost" type="button" data-cp-open="shorten" data-cp-email="${em}"${r.expired ? ' disabled' : ''}>Shorten</button>
+        <button class="ghost" type="button" data-cp-revoke="${em}">Revoke</button>
+      </div>
+      <div data-cp-panel="${em}" style="display:none;margin-top:8px">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="number" data-cp-amount="${em}" min="1" step="1" value="1" inputmode="numeric" aria-label="How much" style="flex:1;min-width:0">
+          <select data-cp-unit="${em}" aria-label="Unit" style="flex:2;min-width:0"><option value="minutes">minutes</option><option value="hours">hours</option><option value="days" selected>days</option></select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="ghost" type="button" data-cp-apply="${em}" style="flex:1">Apply</button>
+          <button class="ghost" type="button" data-cp-cancel="${em}" style="flex:1">Cancel</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
-// The owner-only block inside the Cloud Sync card.
+// The owner-only block, drawn inside the People card (Settings > People).
 function cloudPeopleHtml(){
-  return `<div id="cloudPeople" style="margin:0 0 12px;padding-top:12px;border-top:1px solid var(--field-border)">
-    <p class="note" style="margin:0 0 4px;font-weight:500">People who can view</p>
+  return `<div id="cloudPeople">
     <p class="note" style="margin:0 0 8px">They create their own account first (Settings &gt; Cloud Sync &gt; Create account) and verify their email. Then approve that email here until a date. They can look at the ledger but never change it.</p>
     <div id="cloudPeopleList"><p class="note" style="margin:0 0 8px">Loading\u2026</p></div>
     <input type="email" id="cloudPeopleEmail" placeholder="Their email" autocomplete="off" inputmode="email" autocapitalize="off" spellcheck="false" style="width:100%;margin-bottom:8px">
-    <label class="note" for="cloudPeopleDate" style="display:block;margin:0 0 4px">Approved until</label>
-    <input type="date" id="cloudPeopleDate" value="${cloudAccessDefaultDate()}" style="width:100%;margin-bottom:8px">
+    <label class="note" for="cloudPeopleAmount" style="display:block;margin:0 0 4px">Approved for</label>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="number" id="cloudPeopleAmount" min="1" step="1" value="${CLOUD_DEFAULT_APPROVAL_DAYS}" inputmode="numeric" style="flex:1;min-width:0">
+      <select id="cloudPeopleUnit" aria-label="Unit" style="flex:2;min-width:0">
+        <option value="minutes">minutes</option><option value="hours">hours</option><option value="days" selected>days</option><option value="until">until a date and time</option>
+      </select>
+    </div>
+    <div id="cloudPeopleUntilRow" style="display:none;margin-bottom:8px">
+      <input type="datetime-local" id="cloudPeopleUntil" value="${cloudAccessDefaultDateTime()}" style="width:100%">
+    </div>
     <button class="ghost" id="cloudPeopleAddBtn" type="button" style="width:100%">Approve to view</button>
     <p class="note" id="cloudPeopleMsg" role="status" style="margin:8px 0 0;color:var(--rust)"></p>
   </div>`;
 }
-async function cloudPeopleRefresh(){
+// Its own card in Settings, shown only to the signed-in, email-verified owner (nobody else gets even the heading).
+function cloudPeopleSection(){
+  if(!cloudIsOwner()) return '';
+  const u = cloudUserNow();
+  if(!u || !u.verified) return '';
+  return `<div class="card"><div class="card-head"><h2>People</h2></div>${cloudPeopleHtml()}</div>`;
+}
+async function cloudPeopleRefresh(reconcile){
   const box = document.getElementById('cloudPeopleList');
   if(!box) return;
   try{
     const rec = await cloudAccessRead();
+    if(reconcile === true && typeof waMirrorAll === 'function') waMirrorAll(rec); // quietly re-sends each person's edit-access note (also covers entries set by hand)
     box.innerHTML = cloudPeopleListHtml(rec);
-    box.querySelectorAll('[data-cp-extend]').forEach(b => { b.onclick = () => cloudPeopleAct(b, 'extend'); });
-    box.querySelectorAll('[data-cp-remove]').forEach(b => { b.onclick = () => cloudPeopleAct(b, 'remove'); });
+    box.querySelectorAll('[data-cp-open]').forEach(b => { b.onclick = () => cloudPeopleOpenPanel(box, b.getAttribute('data-cp-email'), b.getAttribute('data-cp-open')); });
+    box.querySelectorAll('[data-cp-cancel]').forEach(b => { b.onclick = () => cloudPeopleClosePanel(box, b.getAttribute('data-cp-cancel')); });
+    box.querySelectorAll('[data-cp-apply]').forEach(b => { b.onclick = () => cloudPeopleApplyPanel(box, b, b.getAttribute('data-cp-apply')); });
+    box.querySelectorAll('[data-cp-revoke]').forEach(b => { b.onclick = () => cloudPeopleAct(b, 'revoke'); });
   }catch(e){ console.error(e); box.innerHTML = `<p class="note" style="margin:0 0 8px;color:var(--rust)">${escHtml(cloudPeopleErrorText(e))}</p>`; }
 }
+// Added to a message when the person's own phone could not be told (the record itself was saved).
+const CLOUD_MIRROR_WARNING = ' Warning: their phone could not be sent the change yet - it will still be refused by Firebase, and you can open this card again to retry.';
 function cloudPeopleSay(text, ok){
   const el = document.getElementById('cloudPeopleMsg');
   if(el){ el.textContent = text || ''; el.style.color = ok ? 'inherit' : 'var(--rust)'; }
 }
+// Revoke: tap once to arm, again to do it. The person's entry is deleted from the permissions record, and
+// Firebase's rules check that record on every request, so they are locked out at their very next one.
+// Afterwards the record is read back to make sure they really are gone.
 async function cloudPeopleAct(btn, what){
-  const email = btn.getAttribute(what === 'extend' ? 'data-cp-extend' : 'data-cp-remove');
-  if(what === 'remove' && !btn.__armed){ // native confirm() is blocked in places: tap once to arm, again to remove
-    btn.__armed = setTimeout(() => { btn.__armed = null; btn.textContent = 'Remove'; }, 4000);
+  const email = btn.getAttribute('data-cp-revoke');
+  if(!btn.__armed){ // native confirm() is blocked in places: tap once to arm, again to revoke
+    btn.__armed = setTimeout(() => { btn.__armed = null; btn.textContent = 'Revoke'; }, 4000);
     btn.textContent = 'Tap again';
     return;
   }
-  if(btn.__armed){ clearTimeout(btn.__armed); btn.__armed = null; }
+  clearTimeout(btn.__armed); btn.__armed = null;
   btn.disabled = true; cloudPeopleSay('');
   try{
+    const out = await cloudAccessEdit(rec => cloudAccessApplyRemove(rec, email, Date.now()));
+    const again = await cloudAccessRead();
+    if(again && again.approved && out.email in again.approved) throw new Error('Could not confirm the revoke - ' + out.email + ' still shows on the list. Check your signal and try again.');
+    cloudPeopleSay(out.email + ' revoked. Firebase stops letting them in from their next request. Their phone drops to view only by itself (within a minute if the app is open), keeps the last copy it downloaded, and files anything not yet synced as a safety copy.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+  }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
+  await cloudPeopleRefresh();
+}
+// Extend / Shorten: open the small panel under the person (number + unit), then Apply.
+// Find the element carrying attr="<email>" (compared as text, so odd characters in an address can't break a selector).
+function cloudPeopleFind(box, attr, email){
+  const all = box.querySelectorAll('[' + attr + ']');
+  for(let i = 0; i < all.length; i++) if(all[i].getAttribute(attr) === email) return all[i];
+  return null;
+}
+function cloudPeopleOpenPanel(box, email, mode){
+  const panel = cloudPeopleFind(box, 'data-cp-panel', email);
+  if(!panel) return;
+  panel.style.display = 'block'; panel.setAttribute('data-cp-mode', mode);
+  const amt = cloudPeopleFind(box, 'data-cp-amount', email), unit = cloudPeopleFind(box, 'data-cp-unit', email);
+  if(amt) amt.value = mode === 'extend' ? String(CLOUD_EXTEND_DAYS) : '1';
+  if(unit) unit.value = 'days';
+  const apply = cloudPeopleFind(box, 'data-cp-apply', email);
+  if(apply) apply.textContent = mode === 'extend' ? 'Extend' : 'Shorten';
+}
+function cloudPeopleClosePanel(box, email){
+  const panel = cloudPeopleFind(box, 'data-cp-panel', email);
+  if(panel) panel.style.display = 'none';
+}
+async function cloudPeopleApplyPanel(box, btn, email){
+  const panel = cloudPeopleFind(box, 'data-cp-panel', email);
+  const amt = cloudPeopleFind(box, 'data-cp-amount', email), unit = cloudPeopleFind(box, 'data-cp-unit', email);
+  btn.disabled = true;
+  await cloudPeopleAdjust(email, panel && panel.getAttribute('data-cp-mode') === 'shorten' ? 'shorten' : 'extend', amt ? amt.value : '', unit ? unit.value : 'days');
+  btn.disabled = false;
+}
+// mode 'extend' | 'shorten'; amount + unit as typed. Writes only if the change is valid.
+async function cloudPeopleAdjust(email, mode, amount, unit){
+  cloudPeopleSay('');
+  try{
     const now = Date.now();
-    const out = await cloudAccessEdit(rec => what === 'extend' ? cloudAccessApplyExtend(rec, email, now) : cloudAccessApplyRemove(rec, email, now));
-    cloudPeopleSay(what === 'extend' ? (out.email + ' extended by ' + CLOUD_EXTEND_DAYS + ' days.') : (out.email + ' removed. Their phone stays view-only but stops getting updates.'), true);
+    const ms = cloudAccessDuration(unit, amount);
+    const out = await cloudAccessEdit(rec => cloudAccessApplyShift(rec, email, mode === 'shorten' ? -ms : ms, now));
+    cloudPeopleSay(out.email + (mode === 'shorten' ? ' shortened' : ' extended') + ' by ' + String(amount).trim() + ' ' + unit + '. Now ends ' + cloudPeopleDateTimeText(out.expiresAt) + '.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
   await cloudPeopleRefresh();
 }
@@ -367,18 +521,27 @@ async function cloudPeopleAdd(){
   if(btn) btn.disabled = true; cloudPeopleSay('');
   try{
     const now = Date.now();
-    const email = val('cloudPeopleEmail'), until = cloudAccessParseDate(val('cloudPeopleDate'), now);
+    const email = val('cloudPeopleEmail'), until = cloudAccessExpiry(val('cloudPeopleUnit') || 'days', val('cloudPeopleAmount'), val('cloudPeopleUntil'), now);
     const out = await cloudAccessEdit(rec => cloudAccessApplyApprove(rec, email, until, now));
     const box = document.getElementById('cloudPeopleEmail'); if(box) box.value = '';
-    cloudPeopleSay(out.email + (out.updated ? ' updated' : ' approved') + ' until ' + cloudPeopleDateText(until) + '. Ask them to tap Sync Now on their phone.', true);
+    cloudPeopleSay(out.email + (out.updated ? ' updated' : ' approved') + ' until ' + cloudPeopleDateTimeText(until) + '. Ask them to tap Sync Now on their phone.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
   if(btn) btn.disabled = false;
   await cloudPeopleRefresh();
 }
+// "until a date and time" swaps the number box for a date-and-time box.
+function cloudPeopleSyncUnit(){
+  const unit = document.getElementById('cloudPeopleUnit'), amount = document.getElementById('cloudPeopleAmount'), row = document.getElementById('cloudPeopleUntilRow');
+  if(!unit || !amount || !row) return;
+  const until = unit.value === 'until';
+  amount.style.display = until ? 'none' : ''; row.style.display = until ? 'block' : 'none';
+}
 function wireCloudPeople(){
   const add = document.getElementById('cloudPeopleAddBtn');
   if(add) add.onclick = cloudPeopleAdd;
-  if(document.getElementById('cloudPeopleList')) cloudPeopleRefresh();
+  const unit = document.getElementById('cloudPeopleUnit');
+  if(unit){ unit.onchange = cloudPeopleSyncUnit; cloudPeopleSyncUnit(); }
+  if(document.getElementById('cloudPeopleList')) cloudPeopleRefresh(true);
 }
 
 let CLOUD_LAST_CHECK_AT = 0;     // when a cloud check last started (start-up, Sync Now, or coming back to the app)
@@ -812,6 +975,7 @@ async function cloudSyncCheckOnStart(){
   try{
     const db = await cloudSdkReady();
     cloudEnsureAccessRecord(db); // owner only; runs alongside the sync check, never blocks it
+    if(typeof waRefreshGrant === 'function') await waRefreshGrant(); // other phone: learn whether it may edit right now (may switch it to/from view-only)
     const snap = await cloudDocRef(db).get();
     if(cloudViewOnly()){ await cloudViewerCheck(snap); return; } // view-only phone: only ever bring the cloud copy down
     if(!snap.exists){ await cloudPushNow(); return; } // nothing in the cloud yet — seed it from this device
@@ -880,7 +1044,7 @@ function cloudAccountHtml(){
     const verify = u.verified ? '' : `<p class="note" style="margin:0 0 8px">We emailed a verification link to this address. Open it, then tap below.</p>
       <button class="ghost" id="cloudVerifiedBtn" type="button" style="width:100%;margin-bottom:8px">I've verified — continue</button>
       <button class="ghost" id="cloudResendBtn" type="button" style="width:100%;margin-bottom:8px">Resend verification email</button>`;
-    const owner = cloudIsOwner() ? `<p class="note" style="margin:0 0 8px">Owner account.</p>${u.verified ? cloudPeopleHtml() : ''}` : (u.verified ? `<p class="note" style="margin:0 0 8px"><b>View only</b> — this phone shows the ledger and keeps it up to date from the cloud, but can\u2019t change it.</p>` : '');
+    const owner = cloudIsOwner() ? `<p class="note" style="margin:0 0 8px">Owner account.</p>` : (u.verified ? (typeof waAccountNoteHtml === 'function' ? waAccountNoteHtml() : `<p class="note" style="margin:0 0 8px"><b>View only</b> — this phone shows the ledger and keeps it up to date from the cloud, but can\u2019t change it.</p>`) : '');
     return wrap(`<p class="note" style="margin:0 0 8px;font-weight:500">Signed in as ${escHtml(u.email)}</p>${owner}${verify}
       <button class="ghost" id="cloudSignOutBtn" type="button" style="width:100%">Sign out</button>${msg}`);
   }
@@ -907,7 +1071,7 @@ function cloudAccountHtml(){
 function cloudSyncSection(){
   const on = cloudSyncEnabled();
   const head = `<div class="card-head"><h2>Cloud Sync</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-    <p class="note info-note" hidden>Keeps this ledger in sync with other devices through a private Firebase project set up just for this business. Two one-time steps are needed in that project's own console before this will work: turn on <b>Email/Password</b> sign-in (Build → Authentication → Sign-in method), and set the Firestore security rule below (Build → Firestore Database → Rules), so only the owner, and people the owner has approved (until their expiry), can use the ledger, and only the owner can change the approvals. After that, approving, extending and removing people is done here in the app (the owner's "People who can view" block).</p>
+    <p class="note info-note" hidden>Keeps this ledger in sync with other devices through a private Firebase project set up just for this business. Two one-time steps are needed in that project's own console before this will work: turn on <b>Email/Password</b> sign-in (Build → Authentication → Sign-in method), and set the Firestore security rule below (Build → Firestore Database → Rules), so only the owner, and people the owner has approved (until their expiry), can use the ledger, and only the owner can change the approvals. After that, approving, extending and removing people is done here in the app (the owner's People card, just below Cloud Sync).</p>
     <pre class="info-note" hidden style="white-space:pre-wrap;background:var(--paper-dim);padding:10px;border-radius:8px;font-size:12px;margin:-4px 0 0">${escHtml(CLOUD_FIRESTORE_RULE)}</pre>`;
   return `<div class="card">${head}
     <label style="display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer">
@@ -986,6 +1150,7 @@ async function cloudResendVerification(){
 // Signing out only stops syncing on this phone: the ledger stays here, nothing is deleted anywhere.
 async function cloudSignOut(){
   clearTimeout(CLOUD_PUSH_TIMER);
+  if(typeof waGrantEnd === 'function') await waGrantEnd('signedout'); // signing out ends edit access here; unsynced entries are filed as a safety copy first
   CLOUD_PENDING_PULL = null; CLOUD_PENDING_REMOTE = null;
   const bar = document.getElementById('cloudAskBar'); if(bar) bar.remove();
   await cloudAuthRestore(); // signing out is local, so it needs no signal once the SDK is on the phone's cache

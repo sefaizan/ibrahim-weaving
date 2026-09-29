@@ -6,7 +6,7 @@
  * stays true after that account signs out (the flag below is kept until the owner signs in on this
  * phone), so signing out can never be used to unlock editing. A phone that has never signed in to a
  * non-owner account, and the owner's own phone, are never view-only: nothing changes for them.
- * (Release 1: every non-owner account is view-only. Release 2 adds time-limited write access.)
+ * (Every non-owner account is view-only, except while it holds a live time-limited write grant - js/write-access.js.)
  *
  * HOW IT IS ENFORCED, in three layers, so a missed button can never change the ledger:
  *   1. save() (core.js) refuses to run - see viewOnlySaveBlocked() - and puts the ledger back to what
@@ -25,6 +25,7 @@ let VIEW_BASELINE = null;                  // the ledger (JSON) as last drawn / 
 function viewOnly(){
   try{
     if(typeof cloudIsOwner === 'function' && cloudIsOwner()) return false;
+    if(typeof cloudWriteGrantActive === 'function' && cloudWriteGrantActive()) return false; // a live, time-limited write grant (write-access.js)
     const u = typeof cloudUserNow === 'function' ? cloudUserNow() : null;
     if(u && u.verified) return true;
     return localStorage.getItem(VIEW_ONLY_KEY) === '1';
