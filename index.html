@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-owner-loans">
+<meta name="app-build" content="2026-10-02-release3-overview-polish">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -512,6 +512,44 @@
     td, th{ white-space:nowrap; }
   }
   .empty{ padding:24px; text-align:center; color:var(--ink-soft); font-size:13.5px; }
+
+  /* ---- Overview polish (phones): the page used to be one very long single column of full-width tiles
+     and sideways-scrolling tables. Here the number tiles sit two per row, the summary tables are sized
+     to fit the screen, the banners and cards are tighter, and a four-number "At a glance" card leads
+     the page. Presentation only: scoped to .ov-page, no data or calculation is touched. ---- */
+  .ov-glance .ov-kpis{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .ov-glance .ov-kpi{ background:var(--paper-dim); border-radius:var(--shape-sm); padding:12px 14px; border-left:4px solid var(--rust); min-width:0; }
+  .ov-glance .ov-kpi.k-cash{ border-left-color:var(--gold); }
+  .ov-glance .ov-kpi.k-profit{ border-left-color:var(--green); }
+  .ov-glance .ov-kpi .label{ font-size:11px; color:var(--ink-soft); font-weight:600; }
+  .ov-glance .ov-kpi .value{ font-size:19px; font-weight:800; margin-top:3px; overflow-wrap:anywhere; line-height:1.15; }
+  .ov-glance .ov-kpi .value.neg{ color:var(--red); }
+  .ov-glance .ov-kpi .value.pos{ color:var(--green); }
+  .ov-glance .ov-sub{ font-size:11px; color:var(--ink-soft); margin-top:8px; }
+  @media (max-width:720px){
+    .ov-page .card{ padding:14px; margin-bottom:12px; }
+    .ov-page .card h2{ font-size:15px; margin-bottom:10px; }
+    .ov-page .card-head{ margin-bottom:10px; }
+    /* number tiles: two per row; a lone last tile spans the full row */
+    .ov-page .grid:has(> .stat){ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .ov-page .grid > .stat:last-child:nth-child(odd){ grid-column:1 / -1; }
+    .ov-page .stat{ padding:9px 11px; min-width:0; }
+    .ov-page .stat .label{ font-size:10.5px; line-height:1.25; }
+    .ov-page .stat .value{ font-size:16px; margin-top:2px; overflow-wrap:anywhere; line-height:1.2; }
+    .ov-page .stat.compact .value{ font-size:15px; }
+    .ov-page .legend{ font-size:11px; line-height:1.35; margin-top:8px; }
+    /* summary tables: fit the screen (long names wrap, numbers stay on one line) instead of swiping sideways */
+    .ov-page table{ width:100%; min-width:0; font-size:12.5px; }
+    .ov-page th, .ov-page td{ padding:8px 6px; }
+    .ov-page th{ font-size:11px; white-space:normal; line-height:1.2; vertical-align:bottom; }
+    .ov-page td:first-child, .ov-page th:first-child{ white-space:normal; overflow-wrap:break-word; word-break:normal; min-width:4.5em; padding-left:8px; }
+    .ov-page td .name{ font-size:13px; }
+    .ov-page .empty{ padding:14px 10px; font-size:13px; }
+    /* warning banners: shorter, buttons side by side */
+    .ov-page #banner-backup, .ov-page #banner-reminders, .ov-page #banner-beams{ padding:12px 14px; }
+    .ov-page #banner-backup .note{ font-size:12.5px; margin:0 0 10px !important; }
+    .ov-page #banner-backup > div:last-child button{ flex:1 1 0; }
+  }
   .stat{
     background:var(--paper-dim); border:none; border-left:4px solid var(--rust);
     border-radius:var(--shape-sm); padding:14px 16px;
@@ -802,7 +840,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.33</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.34</span></span>
     </div>
   </header>
 
