@@ -74,7 +74,7 @@ function wagesPanel(){
       </div>
       <table style="margin-top:14px">
         <thead><tr><th>Employee</th><th>Carry Forward (Rs)</th></tr></thead>
-        <tbody>${neverSettled.map(emp=>`<tr><td><span class="name">${escHtml(emp.name)}</span></td><td><input type="number" step="0.01" value="0" data-ob-emp="${escHtml(emp.name)}" style="max-width:150px"></td></tr>`).join('')}</tbody>
+        <tbody>${neverSettled.map(emp=>`<tr><td><span class="name">${escHtml(emp.name)}</span></td><td><input type="number" data-keep-keyboard step="0.01" value="0" data-ob-emp="${escHtml(emp.name)}" style="max-width:150px"></td></tr>`).join('')}</tbody>
       </table>
       <button class="primary" id="saveOpeningBalances" style="margin-top:14px">Save Opening Balances</button>
       </div>
@@ -82,7 +82,7 @@ function wagesPanel(){
   ` : '';
   const settleAllRows = relevantEmps.map(emp=>{
     const b = computeEmployeeWageBalance(emp.name);
-    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${fmtRs2(b.balance)}</td><td><input type="number" step="0.01" value="${Math.round(b.balance*100)/100}" data-sa-emp="${escHtml(emp.name)}" style="max-width:150px"></td></tr>`;
+    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${fmtRs2(b.balance)}</td><td><input type="number" data-keep-keyboard step="0.01" value="${Math.round(b.balance*100)/100}" data-sa-emp="${escHtml(emp.name)}" style="max-width:150px"></td></tr>`;
   }).join('');
   const settleAllCard = relevantEmps.length ? `
     <div class="card"><div class="card-head"><h2>Settle All Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-settleall" title="Info">i</button></div>
@@ -115,7 +115,7 @@ function wagesPanel(){
       <div class="form-above-log" ${formBodyOpen('rateChange')}>
       <div class="grid cols-3" style="margin-top:2px">
         <div class="field"><label>Quality</label><select id="rc_quality">${opts(DATA.qualities)}</select></div>
-        <div class="field"><label>New Rate (Rs/m)</label><input type="number" step="0.01" id="rc_rate"></div>
+        <div class="field"><label>New Rate (Rs/m)</label><input type="number" step="0.01" id="rc_rate" inputmode="decimal"></div>
         <div class="field"><label>Effective From</label><input type="date" id="rc_date" value="${todayStr()}"></div>
       </div>
       <div class="form-actions">
@@ -182,7 +182,7 @@ function wagesPanel(){
         ${field('Settled As Of','ws_date','date',`value="${todayStr()}"`)}
       </div>
       <div class="grid cols-2" style="margin-top:12px">
-        ${field('Carry Forward (Rs)','ws_carry','number','step="0.01" value="0"')}
+        ${field('Carry Forward (Rs)','ws_carry','number','data-keep-keyboard step="0.01" value="0"')}
         <div></div>
       </div>
       <div class="grid cols-1" style="margin-top:12px">
@@ -539,7 +539,7 @@ function ratecalcPanel(){
     <div class="card"><h2>Grey Cloth Rate Calculator</h2>
       <div class="grid cols-3">
         ${field('Label / Quality (optional)','rc_label','text','placeholder="e.g. 46 Picks 64 inch"')}
-        ${field('Thread Count (ends/inch) <span style="color:var(--rust);font-weight:800;text-transform:none;letter-spacing:0">(Kangi)</span>','rc_thread','number')}
+        ${field('Thread Count (ends/inch) <span style="color:var(--rust);font-weight:800;text-transform:none;letter-spacing:0">(Kangi)</span>','rc_thread','number','inputmode="numeric"')}
         ${field('Width (inches) <span style="color:var(--rust);font-weight:800;text-transform:none;letter-spacing:0">(Arz)</span>','rc_width','number')}
       </div>
       <div class="grid cols-2" style="margin-top:12px">
@@ -557,7 +557,7 @@ function ratecalcPanel(){
         ${field('Weft (Bana) Rate per lb (Rs)','rc_weftRate','number')}
       </div>
       <div class="grid cols-2" style="margin-top:12px">
-        ${field('No. of Picks (per inch)','rc_picks','number')}
+        ${field('No. of Picks (per inch)','rc_picks','number','inputmode="numeric"')}
         <div></div>
       </div>
       <div class="group-label">Additions</div>
@@ -614,7 +614,7 @@ function renderRateCalcResult(){
 function checkpointsPanel(){
   return `<div class="card"><h2>Opening Balance</h2>
     <div class="grid cols-2">
-      ${field('Opening Balance (Rs) — starting point if no checkpoint applies','ob','number', `value="${DATA.openingBalance||0}"`)}
+      ${field('Opening Balance (Rs) — starting point if no checkpoint applies','ob','number', `data-keep-keyboard value="${DATA.openingBalance||0}"`)}
     </div>
     <button class="primary" id="saveOpening">Save</button></div>
     <div class="card"><div class="card-head"><h2>Log a Cash Checkpoint</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
@@ -622,7 +622,7 @@ function checkpointsPanel(){
     <div class="grid cols-3">
       ${field('Date','cp_date','date',`value="${todayStr()}"`)}
       ${field('Time','cp_time','time',`value="${nowStr()}"`)}
-      ${field('Cash Balance (Rs)','cp_bal','number')}
+      ${field('Cash Balance (Rs)','cp_bal','number','data-keep-keyboard')}
     </div>
     <div class="grid cols-1" style="margin-top:12px">
       ${textareaField('Remarks','cp_rem')}

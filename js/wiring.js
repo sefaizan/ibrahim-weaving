@@ -438,7 +438,7 @@ function wirePanel(id){
       wrap.innerHTML = chequeRows.map((c,i)=>`
         <div data-cheque-row="${c.id}" style="margin-top:${i?'16px':'0'};padding-top:${i?'16px':'0'};${i?'border-top:1px dashed var(--line)':''}">
           <div class="grid cols-3">
-            <div class="field"><label>Amount</label><input type="number" step="0.01" data-cf="amount" value="${c.amount||''}"></div>
+            <div class="field"><label>Amount</label><input type="number" inputmode="decimal" step="0.01" data-cf="amount" value="${c.amount||''}"></div>
             <div class="field"><label>Cheque No (optional)</label><input type="text" data-cf="chequeNo" value="${escHtml(c.chequeNo||'')}"></div>
             <div class="field"><label>Bank (optional)</label><select data-cf="bank"><option value="">—</option>${opts(DATA.banks)}</select></div>
           </div>
@@ -512,7 +512,7 @@ function wirePanel(id){
         const part = c.owed < c.amount - 0.005 ? `<div class="note" style="margin:2px 0 0 26px">${fmtRs(c.owed)} of it is still owed.</div>` : '';
         return `<div data-rep="${key}" style="margin-top:10px">
           <label style="display:flex;align-items:flex-start;gap:8px"><input type="checkbox" data-rep-on style="width:auto;margin:3px 0 0"${st.on ? ' checked' : ''}><span>${label}</span></label>${part}
-          <div class="field" data-rep-amt-wrap style="margin:6px 0 0 26px"${st.on ? '' : ' hidden'}><label>How much of this payment replaces it (Rs)</label><input type="number" step="0.01" data-rep-amt value="${st.amount === '' ? '' : escHtml(String(st.amount))}"></div>
+          <div class="field" data-rep-amt-wrap style="margin:6px 0 0 26px"${st.on ? '' : ' hidden'}><label>How much of this payment replaces it (Rs)</label><input type="number" inputmode="decimal" step="0.01" data-rep-amt value="${st.amount === '' ? '' : escHtml(String(st.amount))}"></div>
         </div>`;
       }).join('');
       rowsEl.querySelectorAll('[data-rep]').forEach(rowEl=>{

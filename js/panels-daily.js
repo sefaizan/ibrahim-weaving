@@ -2,7 +2,11 @@
  * Family, Warp, Weft and Warp Beams. (Calculations for these live in calc.js.) */
 
 /* ---------------- Form field builders ---------------- */
+// Number fields open the phone's number pad (inputmode) — "decimal" by default, or whatever the caller
+// passes in `extra` (e.g. inputmode="numeric" for whole counts, or inputmode="text" is NOT needed: pass
+// data-keep-keyboard to leave a field on the default number keyboard, used where a minus sign is valid).
 function field(label, id, type='text', extra=''){
+  if(type==='number' && !/inputmode=|data-keep-keyboard/.test(extra)) extra = `inputmode="decimal" ${extra}`;
   return `<div class="field"><label>${label}</label><input id="${id}" type="${type}" ${extra}></div>`;
 }
 function textareaField(label, id, extra=''){
@@ -18,8 +22,8 @@ function selectField(label, id, arr, extra=''){
 function meterFracField(label, idWhole, idSixteenth, extra=''){
   return `<div class="field"><label>${label}</label>
     <div style="display:flex;gap:8px">
-      <input id="${idWhole}" type="number" placeholder="Whole" ${extra} style="flex:2;min-width:0">
-      <input id="${idSixteenth}" type="number" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
+      <input id="${idWhole}" type="number" inputmode="decimal" placeholder="Whole" ${extra} style="flex:2;min-width:0">
+      <input id="${idSixteenth}" type="number" inputmode="numeric" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
     </div>
   </div>`;
 }
@@ -378,11 +382,11 @@ function pendingLCardHtml(){
     const rate = r.rate ? Number(r.rate) : (r.qty ? (Number(r.amount)||0)/r.qty : 0);
     return [
       fmtDate(r.date), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), fmtRs2(rate), escHtml(r.dyeing||'—'),
-      `<div data-l-box="${r.id}" hidden><input type="number" min="0" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
+      `<div data-l-box="${r.id}" hidden><input type="number" inputmode="numeric" min="0" step="1" data-lcount-input="${r.id}" style="width:56px"></div>`,
       `<div class="l-shortage-box" data-l-box="${r.id}" hidden>
-        <input type="number" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px">
+        <input type="number" inputmode="decimal" min="0" step="1" data-lmeters-input="${r.id}" style="width:48px">
         <span aria-hidden="true">-</span>
-        <input type="number" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px">
+        <input type="number" inputmode="numeric" min="0" max="15" step="1" data-lmeters16-input="${r.id}" style="width:40px">
       </div>`,
       `<div class="chq-actions">
         <button class="ghost" data-l-ok="${r.id}">L (AIL) OK</button>
@@ -618,7 +622,7 @@ function warpPanel(){
     </div>
     <div class="group-label">Weight — by cartons (auto-converts to lbs)</div>
     <div class="grid cols-4">
-      ${field('Cartons','w_cartons','number','placeholder="e.g. 50"')}
+      ${field('Cartons','w_cartons','number','inputmode="numeric" placeholder="e.g. 50"')}
       ${field('Kg per Carton','w_kgPerCarton','number','placeholder="e.g. 36" step="0.01"')}
       ${field('Total Weight (lbs)','w_lbs','number','step="0.01"')}
       ${field('Rate per lb (Rs)','w_rate','number')}
@@ -656,7 +660,7 @@ function weftPanel(){
     </div>
     <div class="group-label">Weight — by bags (auto-calculates total lbs)</div>
     <div class="grid cols-4">
-      ${field('Number of Bags','wf_bags','number','placeholder="e.g. 20"')}
+      ${field('Number of Bags','wf_bags','number','inputmode="numeric" placeholder="e.g. 20"')}
       ${field('Lbs per Bag','wf_lbsPerBag','number','value="100" step="0.01"')}
       <div class="field"><label>Total Weight (lbs)</label><div class="value-label" id="wf_lbsLabel">—</div><input type="hidden" id="wf_lbs" value=""></div>
       ${field('Rate per lb (Rs)','wf_rate','number')}
