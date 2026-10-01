@@ -144,7 +144,11 @@ function i18nInit(){
   css.textContent =
     'html[lang="ur"] body,html[lang="ur"] button,html[lang="ur"] input,html[lang="ur"] select,html[lang="ur"] textarea{font-family:"Noto Naskh Arabic","Geeza Pro","Segoe UI",Tahoma,sans-serif}' +
     'html[lang="ur"] label,html[lang="ur"] h1,html[lang="ur"] h2,html[lang="ur"] h3,html[lang="ur"] p,html[lang="ur"] th,html[lang="ur"] .note,html[lang="ur"] .group-label,html[lang="ur"] .sub{unicode-bidi:plaintext}' +
-    '#langBtn{font-size:12px;line-height:16px;min-height:0;height:auto;padding:1px 10px;margin:0;border-radius:20px;pointer-events:auto}';
+    '#langBtn{position:relative;font-size:14px;font-weight:700;line-height:18px;min-height:0;height:auto;padding:2px 14px;margin:0;border-radius:20px;pointer-events:auto}' +
+    '#langBtn::after{content:"";position:absolute;inset:-10px -8px}' +
+    'html[lang=\"ur\"] label,html[lang=\"ur\"] p,html[lang=\"ur\"] th,html[lang=\"ur\"] td,html[lang=\"ur\"] .note,html[lang=\"ur\"] .legend,html[lang=\"ur\"] .chip,html[lang=\"ur\"] .stat .label,html[lang=\"ur\"] .ov-kpi .label{font-size:1.12em;line-height:1.9}' +
+    'html[lang=\"ur\"] h2,html[lang=\"ur\"] h3{line-height:1.7}' +
+    'html[lang=\"ur\"] input,html[lang=\"ur\"] select,html[lang=\"ur\"] textarea{font-size:1.08em;line-height:1.6}';
   document.head.appendChild(css);
   const meta = document.querySelector('.appbar-meta');
   if(meta){

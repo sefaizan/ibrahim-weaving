@@ -26,7 +26,8 @@ function wirePanel(id){
     const toSel = document.getElementById('ov_to_sel');
     const customWrap = document.getElementById('ov_custom');
     const chips = Array.from(document.querySelectorAll('#ov_chips .chip'));
-    const setActiveChip = (period)=> chips.forEach(c=> c.classList.toggle('active', c.dataset.period === period));
+    const stickySel = document.getElementById('ov_sticky_sel');
+    const setActiveChip = (period)=>{ chips.forEach(c=> c.classList.toggle('active', c.dataset.period === period)); if(stickySel) stickySel.value = period; };
     const combine = ()=>{
       // A custom From/To range takes priority over Month/Year whenever either date is set.
       if(fromSel.value || toSel.value) return `range:${fromSel.value}:${toSel.value}`;
@@ -47,12 +48,11 @@ function wirePanel(id){
     toSel.addEventListener('change', ()=>{ monthSel.value=''; yearSel.value=''; runCustom(); });
     // Quick chips cover the common cases in one tap; "Custom…" just reveals the existing
     // Month/Year/range controls instead of duplicating their logic.
-    chips.forEach(chip=>{
-      chip.onclick = ()=>{
-        const period = chip.dataset.period;
+    const applyPeriod = (period)=>{
         if(period === 'custom'){
           customWrap.hidden = false;
           setActiveChip('custom');
+          const pc = document.getElementById('ov_chips'); if(pc) pc.scrollIntoView({behavior:'smooth', block:'center'});
           return;
         }
         customWrap.hidden = true;
@@ -66,8 +66,9 @@ function wirePanel(id){
           val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         } else if(period === 'this-year') val = String(now.getFullYear());
         renderStats(val);
-      };
-    });
+    };
+    chips.forEach(chip=>{ chip.onclick = ()=> applyPeriod(chip.dataset.period); });
+    if(stickySel) stickySel.onchange = ()=> applyPeriod(stickySel.value);
     setActiveChip('');
     renderStats('');
   }
@@ -1701,6 +1702,62 @@ function v(id){ const el = document.getElementById(id); return el ? el.value : '
 // Stops a save when something essential is missing (a stray tap on Add used to store a blank row).
 // `checks` is a list of [ok, message, fieldId]; the first one that fails is shown as a toast and the
 // cursor is put on that field. Returns true when everything is filled in.
+// ---- Inline checks (#13): a warning right under the field for a far-off date, a duplicate entry,
+// or a sale above the stock available. Warnings only — they never block saving.
+function inlineWarn(fieldId, msg){
+  const f = document.getElementById(fieldId); if(!f) return;
+  const host = f.closest('.field') || f.parentElement; if(!host) return;
+  const id = 'iw_' + fieldId; let el = document.getElementById(id);
+  if(!msg){ if(el) el.remove(); return; }
+  if(!el){ el = document.createElement('div'); el.id = id; el.className = 'inline-warn'; el.setAttribute('role','status'); host.appendChild(el); }
+  el.textContent = '⚠ ' + msg;
+}
+function runInlineChecks(){
+  try{
+    const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+    // Dates far from today (more than a week ahead or two months back)
+    document.querySelectorAll('input[type="date"][id$="_date"]').forEach(inp=>{
+      if(!/^(s|r|p|ex|f|pex|ol|pl|w|wf|wb|wp|ws|lp|cp)_date$/.test(inp.id)) return;
+      let m = '';
+      if(inp.value){
+        const days = Math.round((new Date(inp.value+'T00:00:00') - new Date(new Date().toDateString())) / 86400000);
+        if(days > 7) m = `This date is ${days} days in the future.`;
+        else if(days < -60) m = `This date is ${-days} days ago.`;
+      }
+      inlineWarn(inp.id, m);
+    });
+    const editId = (key)=> (EDITING && EDITING.key === key) ? EDITING.id : null;
+    const dup = (key, pred)=> (DATA[key]||[]).some(r=> r.id !== editId(key) && pred(r));
+    if(document.getElementById('s_qty')){ // Sale: duplicate + stock
+      const qty = combineMtr16(val('s_qty'), val('s_qty_16')), q = val('s_quality');
+      const d = qty > 0 && val('s_date') && val('s_client') && q && dup('sale', r=> r.date===val('s_date') && r.client===val('s_client') && r.quality===q && Number(r.qty)===qty);
+      inlineWarn('s_qty', d ? 'A sale with the same date, client, quality and quantity already exists.' : '');
+      let stockMsg = '';
+      if(qty > 0 && q){
+        const row = (computeStats('').stockByQuality||[]).find(r=> r.name === q);
+        const ex = editId('sale') ? (DATA.sale.find(r=> r.id === editId('sale'))||{}) : {};
+        const avail = (row ? row.stock : 0) + (ex.quality === q ? Number(ex.qty)||0 : 0);
+        if(qty > avail + 0.0001) stockMsg = `Only ${fmtQtyMtr(Math.max(avail,0))} mtr of ${q} in stock; this sale is ${fmtQtyMtr(qty)} mtr.`;
+      }
+      inlineWarn('s_quality', stockMsg);
+    }
+    if(document.getElementById('p_qty')){ // Production duplicate
+      const qty = combineMtr16(val('p_qty'), val('p_qty_16'));
+      const d = qty > 0 && val('p_date') && val('p_loom') && dup('production', r=> r.date===val('p_date') && r.loom===val('p_loom') && r.quality===val('p_quality') && Number(r.qty)===qty);
+      inlineWarn('p_qty', d ? 'Production for this loom, date, quality and quantity already exists.' : '');
+    }
+    if(document.getElementById('r_bank')){ // Recovery duplicate (cash + bank)
+      const amt = Number(val('r_cash')||0) + Number(val('r_bank')||0);
+      const d = amt > 0 && val('r_date') && val('r_client') && dup('recovery', r=> r.date===val('r_date') && r.client===val('r_client') && Number(r.amount)===amt);
+      inlineWarn('r_bank', d ? 'A recovery from this client on this date for the same amount already exists.' : '');
+    }
+  }catch(e){ /* checks are advisory only */ }
+}
+(function(){
+  if(typeof document === 'undefined' || !document.addEventListener || window.__inlineChecks) return; window.__inlineChecks = true;
+  ['input','change'].forEach(ev=> document.addEventListener(ev, e=>{ const t = e.target; if(t && t.id && /^(s|r|p|ex|f|pex|ol|pl|w|wf|wb|wp|ws|lp|cp)_/.test(t.id)) runInlineChecks(); }));
+})();
+
 function requireFields(checks){
   for(const [ok, msg, fieldId] of checks){
     if(ok) continue;

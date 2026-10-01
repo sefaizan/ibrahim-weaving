@@ -746,7 +746,7 @@ function recordUndoEntry(prev, cur){
       const aById = new Map(a.map(r => [r.id, r])), bById = new Map(b.map(r => [r.id, r]));
       let structural = false;
       a.forEach((r, i)=>{ if(!bById.has(r.id)){ ops.push({t:'ins', key:k, index:i, rec:r, desc:undoDescribeRec(r)}); removed = true; structural = true; } });
-      b.forEach(r=>{ if(!aById.has(r.id)){ ops.push({t:'del', key:k, id:r.id}); added = true; structural = true; } });
+      b.forEach(r=>{ if(!aById.has(r.id)){ ops.push({t:'del', key:k, id:r.id, desc:undoDescribeRec(r)}); added = true; structural = true; } });
       a.forEach(r=>{
         const nb = bById.get(r.id);
         if(nb && JSON.stringify(nb) !== JSON.stringify(r)){ ops.push({t:'rev', key:k, id:r.id, rec:r, desc:undoDescribeRec(nb)}); updated = true; }
@@ -760,7 +760,9 @@ function recordUndoEntry(prev, cur){
       ops.push({t:'snap', key:k, prev: prev[k] === undefined ? null : prev[k]});
     }
   }
-  const kind = removed ? 'removed' : (added ? null : (updated ? 'updated' : null));
+  // A single new record (and nothing else) also gets an Undo toast: "Saved Sale: … — Undo".
+  const soloAdd = added && !removed && !updated && ops.length === 1 && ops[0].t === 'del';
+  const kind = removed ? 'removed' : (added ? (soloAdd ? 'added' : null) : (updated ? 'updated' : null));
   if(!kind) return null;
   const entry = {id: ++_undoSeq, kind, ops, at: Date.now(), label: undoEntryLabel(kind, ops)};
   try{ entry.size = JSON.stringify(ops).length; }catch(e){ entry.size = 0; }
@@ -773,6 +775,7 @@ function recordUndoEntry(prev, cur){
 }
 function undoEntryLabel(kind, ops){
   if(NEXT_UNDO_LABEL) return NEXT_UNDO_LABEL;
+  if(kind === 'added') return `Saved ${undoKeyLabel(ops[0].key)}${ops[0].desc ? ': ' + ops[0].desc : ''}`;
   if(kind === 'removed'){
     const ins = ops.filter(o => o.t === 'ins');
     if(ins.length === 1) return `Removed ${undoKeyLabel(ins[0].key)}${ins[0].desc ? ': ' + ins[0].desc : ''}`;

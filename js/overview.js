@@ -262,6 +262,7 @@ function overviewPanel(){
   const monthOpts = MONTH_NAMES.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
   const yearOpts = years.map(y=>`<option value="${y}">${y}</option>`).join('');
   return `<div class="ov-page">
+    <div class="ov-sticky"><span>Period</span><select id="ov_sticky_sel" aria-label="Period"><option value="">All Time</option><option value="this-month">This Month</option><option value="last-month">Last Month</option><option value="this-year">This Year</option><option value="custom">Custom…</option></select></div>
     ${(typeof permsCan === 'function' && !permsCan('sales','a') && !permsCan('recovery','a')) ? '' : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <button type="button" class="primary" data-quick-add="sale" style="margin:0">+ Add Sale</button>
       <button type="button" class="ghost" data-quick-add="recovery" style="margin:0">+ Add Recovery</button>
@@ -374,6 +375,11 @@ function renderStats(monthVal){
 
   const wrap = document.getElementById('statsWrap');
   const card = (label, value, extra='', cls='') => `<div class="stat ${cls}"><div class="label">${label}</div><div class="value ${value<0?'neg':''}">${extra||value}</div></div>`;
+  // Colour with meaning: a negative Receivable is an advance (amber, "Advance Rs X"), not a problem; positive cash is green.
+  const recvCard = () => s.receivable < -0.0001
+    ? `<div class="stat balance compact"><div class="label">Advance (received ahead)</div><div class="value adv">${fmtRs(-s.receivable)}</div></div>`
+    : card('Receivable (Outstanding)', s.receivable, fmtRs(s.receivable), 'balance compact');
+  const cashCard = () => `<div class="stat balance compact"><div class="label">Cash Position</div><div class="value ${s.cash<0?'neg':(s.cash>0?'pos':'')}">${fmtRs2(s.cash)}</div></div>`;
 
   // The statement form sits inside this re-rendered area: keep whatever was picked/typed.
   const keepStmt = {};
@@ -381,7 +387,29 @@ function renderStats(monthVal){
 
   wrap.innerHTML = `
     ${(()=>{ // "At a glance": the four numbers an owner checks first (each shown only if the role may see it)
-      const k = (cls, label, val) => `<div class="ov-kpi ${cls}"><div class="label">${label}</div><div class="value ${val<0?'neg':(cls==='k-profit'&&val>0?'pos':'')}">${fmtRs(val)}</div></div>`;
+      // Trend under Sales, Cash and Profit: this period vs the one before it (no trend for custom ranges).
+      const trends = (()=>{
+        if(monthVal && monthVal.startsWith('range:')) return {};
+        const now = new Date(), pad = n=>String(n).padStart(2,'0');
+        const ym = (y,m)=>{ const d = new Date(y, m, 1); return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; };
+        let cur, prevKey, lbl;
+        if(!monthVal){ cur = computeStats(ym(now.getFullYear(), now.getMonth())); prevKey = ym(now.getFullYear(), now.getMonth()-1); lbl = 'this month vs last month'; }
+        else if(monthVal.length === 4){ cur = s; prevKey = String(Number(monthVal)-1); lbl = 'vs last year'; }
+        else { const [y,m] = monthVal.split('-').map(Number); cur = s; prevKey = ym(y, m-2); lbl = 'vs last month'; }
+        const p = computeStats(prevKey);
+        const t = (a,b)=>{
+          if(!b) return '';
+          const pct = Math.round((a-b)/Math.abs(b)*100);
+          if(!pct) return `<div class="ov-trend">▬ no change ${lbl}</div>`;
+          return `<div class="ov-trend ${pct>0?'up':'down'}">${pct>0?'▲':'▼'} ${Math.abs(pct)}% ${lbl}</div>`;
+        };
+        return { 'k-sales': t(cur.salesAmtMonth, p.salesAmtMonth), 'k-profit': t(cur.profitMonth, p.profitMonth), 'k-cash': t(!monthVal ? s.cash : cur.cash, p.cash) };
+      })();
+      const fmtShort = typeof fmtRsShort === 'function' ? fmtRsShort : fmtRs;
+      const kv = v => `data-s="${fmtShort(v)}" data-f="${fmtRs(v)}" title="Tap for full figure" onclick="var t=this.textContent;this.textContent=t===this.dataset.f?this.dataset.s:this.dataset.f" style="cursor:pointer"`;
+      const k = (cls, label, val) => cls==='k-recv' && val<0
+        ? `<div class="ov-kpi ${cls}"><div class="label">Advance (received ahead)</div><div class="value adv" ${kv(-val)}>${fmtShort(-val)}</div></div>`
+        : `<div class="ov-kpi ${cls}"><div class="label">${label}</div><div class="value ${val<0?'neg':((cls==='k-profit'||cls==='k-cash')&&val>0?'pos':'')}" ${kv(val)}>${fmtShort(val)}</div>${trends[cls]||''}</div>`;
       const tiles = [
         ovCardOn('cash_position') ? k('k-cash','Cash Position', s.cash) : '',
         ovCardOn('sales_receivables') ? k('k-recv','Receivable (Outstanding)', s.receivable) : '',
@@ -408,7 +436,7 @@ function renderStats(monthVal){
         ${card('Produced (mtr)', s.producedCum, fmtQtyMtr(monthVal?s.producedMonth:s.producedCum), 'compact')}
         ${card('Sold (mtr)', s.soldCum, fmtQtyMtr(monthVal?s.soldMonth:s.soldCum), 'compact')}
         ${card('In Stock (mtr)', s.stock, fmtQtyMtr(s.stock), 'balance compact')}
-        ${ovCardOn('cash_position') ? card('Cash Position', s.cash, fmtRs2(s.cash), 'balance compact') : ''}
+        ${ovCardOn('cash_position') ? cashCard() : ''}
       </div>
       <div class="legend">${monthVal ? `Produced/Sold shown for the selected period. In Stock${ovCardOn('cash_position') ? ' and Cash Position are' : ' is'} cumulative as of the end of that period.` : 'All figures shown are all-time totals.'}</div>
     </div>` : ''}
@@ -452,10 +480,10 @@ function renderStats(monthVal){
       <div class="grid cols-3">
         ${card('Sales Amount', s.salesAmtCum, fmtRs(monthVal?s.salesAmtMonth:s.salesAmtCum), 'compact')}
         ${card('Amount Received', s.receivedCum, fmtRs(monthVal?s.receivedMonth:s.receivedCum), 'compact')}
-        ${card('Receivable (Outstanding)', s.receivable, fmtRs(s.receivable), 'balance compact')}
+        ${recvCard()}
       </div>
     </div>` : ''}
-    ${ovCardOn('warp_usage') ? `<div class="card"><div class="card-head"><h2>Warp Usage (Last 2 Months)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    ${ovCardOn('warp_usage') ? `<div class="card" data-fold="warp_usage"><div class="card-head"><h2>Warp Usage (Last 2 Months)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Warp purchases from the last 2 months — same cutoff used when logging a new beam. Woven comes straight from Production entries. For older purchases and the full per-beam breakdown, see the Warp (Tana) Beam tab.</p>
       ${(()=>{
         // Same "last 2 months" cutoff as warpPurchaseSelectField, so this card and the beam-log
@@ -477,14 +505,14 @@ function renderStats(monthVal){
       })()}
       <button type="button" class="ghost" style="margin-top:12px" onclick="switchTab('warpbeams')">View All Purchases</button>
     </div>` : ''}
-    ${ovCardOn('receivables_aging') ? `<div class="card"><div class="card-head"><h2>Receivables Aging</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    ${ovCardOn('receivables_aging') ? `<div class="card" data-fold="receivables_aging"><div class="card-head"><h2>Receivables Aging</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Always as of today, regardless of the period selected above — payments are applied against each client's oldest unpaid sale first, so this shows how old the outstanding money actually is, not just how much.</p>
       ${aging.rows.length ? `
       <div class="grid cols-4">
         ${card('0–30 Days', aging.totals.d0_30, fmtRs(aging.totals.d0_30))}
         ${card('31–60 Days', aging.totals.d31_60, fmtRs(aging.totals.d31_60))}
         ${card('61–90 Days', aging.totals.d61_90, fmtRs(aging.totals.d61_90))}
-        ${card('90+ Days', aging.totals.d90plus, fmtRs(aging.totals.d90plus), aging.totals.d90plus>0?'balance':'')}
+        ${`<div class="stat ${aging.totals.d90plus>0?'balance':''}"><div class="label">90+ Days (overdue)</div><div class="value ${aging.totals.d90plus>0?'neg':''}">${fmtRs(aging.totals.d90plus)}</div></div>`}
       </div>
       <div class="group-label">By Client (oldest first)</div>
       <div class="log-scroll">${table(
@@ -496,7 +524,7 @@ function renderStats(monthVal){
       )}</div>
       ` : `<div class="empty">Nothing outstanding right now.</div>`}
     </div>` : ''}
-    ${ovCardOn('client_quality') ? `<div class="card"><div class="card-head"><h2>Clients Breakdown by Quality</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    ${ovCardOn('client_quality') ? `<div class="card" data-fold="client_quality"><div class="card-head"><h2>Clients Breakdown by Quality</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Quantity (mtr) sold to each client, split by quality.</p>
       <div class="log-scroll">${(()=>{
         if(!s.clientQualityBreakdown.length) return `<div class="empty">No sales yet</div>`;
@@ -522,7 +550,7 @@ function renderStats(monthVal){
       </div>
       <div class="legend">${monthVal ? 'Put In / Paid Back shown for the selected period; Owed to You and Cash are cumulative as of the end of that period.' : 'All figures shown are all-time totals.'}</div>
     </div>` : ''}
-    ${ovCardOn('expenses_material') ? `<div class="card"><h2>Expenses & Material Cost</h2>
+    ${ovCardOn('expenses_material') ? `<div class="card" data-fold="expenses_material"><h2>Expenses & Material Cost</h2>
       <div class="grid cols-4">
         ${card('Business Expenses', s.bizExpCum, `${fmtRs(monthVal?s.bizExpMonth:s.bizExpCum)} (incl. ${fmtRs(monthVal?s.wagesPaidMonth:s.wagesPaidCum)} wages)`)}
         ${card('Family Expenses', s.famExpCum, fmtRs(monthVal?s.famExpMonth:s.famExpCum))}
@@ -560,6 +588,23 @@ function renderStats(monthVal){
   // per-element (not delegated like the cheque status buttons), so re-wire on every rebuild
   // of this wrap, same as switchTab('sale') used to do for it.
   wireLConfirm();
+  wireFoldCards(wrap);
+}
+
+// Warp Usage, Receivables Aging, Clients Breakdown and Expenses fold down; the choice is remembered.
+function wireFoldCards(root){
+  if(!root || typeof root.querySelectorAll !== 'function') return;
+  let st = {}; try{ st = JSON.parse(localStorage.getItem('ov_folded')||'{}'); }catch(e){}
+  root.querySelectorAll('.card[data-fold]').forEach(c=>{
+    const key = c.dataset.fold, head = c.querySelector('.card-head') || c.querySelector('h2');
+    if(!head) return;
+    c.classList.add('foldable'); c.classList.toggle('folded', !!st[key]);
+    head.addEventListener('click', e=>{
+      if(e.target.closest('button')) return;
+      const f = c.classList.toggle('folded'); st[key] = f ? 1 : 0;
+      try{ localStorage.setItem('ov_folded', JSON.stringify(st)); }catch(err){}
+    });
+  });
 }
 
 /* ---------------- Graphs (trends over time) ----------------

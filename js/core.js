@@ -126,6 +126,11 @@ function setSummaryOpen(key, open){
 }
 function formBodyOpen(key){ return `data-form-body="${key}" style="display:${OPEN_FORMS.has(key)?'block':'none'}"`; }
 const fmtRs = n => 'Rs ' + (Math.round((n||0))).toLocaleString('en-IN');
+// Short money for tiles: 5.07 lakh / 1.25 Cr; under a lakh stays in full.
+const fmtRsShort = n => { const a = Math.abs(Math.round(n||0)), sg = (n<0 && a) ? '-' : '';
+  if(a >= 10000000) return sg + 'Rs ' + (a/10000000).toFixed(2) + ' Cr';
+  if(a >= 100000) return sg + 'Rs ' + (a/100000).toFixed(2) + ' lakh';
+  return fmtRs(n); };
 const fmtRs2 = n => 'Rs ' + (n||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmtNum = n => (Math.round((n||0)*100)/100).toLocaleString('en-IN');
 // Receipt-only quantity format: the trade convention here is quarters expressed as
