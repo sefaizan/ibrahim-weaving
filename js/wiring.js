@@ -1018,6 +1018,7 @@ function wirePanel(id){
     };
     wireRateHistory();
     renderWages();
+    wagesUiWire(); // tabs, period chips, employee cards, Pay buttons and the quick-entry sheet (js/wages-ui.js)
 
     const obBtn = document.getElementById('saveOpeningBalances');
     if(obBtn){
@@ -1100,31 +1101,9 @@ function wirePanel(id){
     // Wage Period (earned minus already paid in that same range), plus a note if the employee
     // currently has a credit (paid ahead) balance, so nothing is hidden.
     const updateWagePaymentHelper = ()=>{
-      const emp = v('wp_emp');
       const helperEl = document.getElementById('wp_helper');
       if(!helperEl) return;
-      if(!emp){ helperEl.textContent = ''; return; }
-      const {earned, paid, net: stillDue} = computeEmployeeWageNetForPeriod(emp, v('wg_from')||null, v('wg_to')||null);
-      const amt = Number(v('wp_amt')||0);
-      const diff = stillDue - amt;
-      const paidNote = paid > 0.004 ? ` (${fmtRs2(paid)} already paid for this period)` : '';
-      let msg;
-      if(diff > 0.004){
-        msg = `${fmtRs2(diff)} of the ${fmtRs2(stillDue)} still due for the selected period won't be paid this time. Earned in period: ${fmtRs2(earned)}${paidNote}.`;
-      } else if(diff < -0.004){
-        msg = `This pays ${fmtRs2(Math.abs(diff))} more than the ${fmtRs2(stillDue)} still due for the selected period. Earned in period: ${fmtRs2(earned)}${paidNote}.`;
-      } else if(stillDue > 0){
-        msg = `This pays the full ${fmtRs2(stillDue)} still due for the selected period.${paidNote}`;
-      } else if(paid > 0.004){
-        msg = `Nothing left due for this period — ${fmtRs2(paid)} already paid against ${fmtRs2(earned)} earned.`;
-      } else {
-        msg = '';
-      }
-      const b = computeEmployeeWageBalance(emp);
-      if(b.balance < -0.004){
-        msg += (msg ? ' ' : '') + `They also have a credit of ${fmtRs2(Math.abs(b.balance))} from being paid ahead of wages earned.`;
-      }
-      helperEl.textContent = msg;
+      helperEl.textContent = wagePaymentHelperMsg(v('wp_emp'), Number(v('wp_amt')||0), v('wg_from'), v('wg_to'));
     };
     document.getElementById('wp_emp').addEventListener('change', ()=>{ fillWageAmount(); updateWagePaymentHelper(); });
     document.getElementById('wp_amt').addEventListener('input', updateWagePaymentHelper);

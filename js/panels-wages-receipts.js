@@ -101,16 +101,18 @@ function wagesPanel(){
     </div>
   ` : '';
   return `
-    <div class="card"><h2>Wage Period & Quality Rates</h2>
-      <div class="grid cols-2">
-        ${field('From Date','wg_from','date',`value="${from}"`)}
-        ${field('To Date','wg_to','date',`value="${to}"`)}
-      </div>
-      <table style="margin-top:14px">
+    <div class="wg-root" id="wagesRoot">
+    ${wagesTopBarHtml(from, to)}
+    <div class="${wagesPaneCls('sum')}" data-wpane="sum"><div id="wagesWrap"></div></div>
+    <div class="${wagesPaneCls('rates')}" data-wpane="rates">
+    <div class="card"><div class="card-head"><h2>Quality Rates</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-qualityrates" title="Info">i</button></div>
+      <p class="note info-note" id="info-qualityrates" hidden>Wages = meters produced (own logged meters + their share of any unassigned Difference) × the rate in effect on that production's own date — so changing a rate below only affects entries from its effective date onward; already-settled wages stay locked in. Bonuses are logged per employee in the Payments tab instead of a flat period amount. The rates shown are the ones in effect on the To date of the selected period.</p>
+      <table>
         <thead><tr><th>Quality</th><th>Current Rate (Rs/m)</th><th>Effective</th></tr></thead>
         <tbody id="wg_rateRowsBody">${rateRows || '<tr><td colspan="3" class="empty">Add qualities in the settings tab first</td></tr>'}</tbody>
       </table>
-      <div class="note">Wages = meters produced (own logged meters + their share of any unassigned Difference) × the rate in effect on that production's own date — so changing a rate below only affects entries from its effective date onward; already-settled wages stay locked in. Bonuses are logged per employee below instead of a flat period amount.</div>
+    </div>
+    <div class="card">
       <div class="card-head rate-head"><div class="group-label" style="margin:0;padding:0;border:0">Rate History</div>${formToggleBtn('rateChange','Change a Rate',true)}</div>
       <div class="form-above-log" ${formBodyOpen('rateChange')}>
       <div class="grid cols-3" style="margin-top:2px">
@@ -127,7 +129,10 @@ function wagesPanel(){
       <div class="rate-warn" id="rh_delNote" role="alert" hidden></div>
       <div id="wg_rateHistoryWrap">${rateHistoryBlockHtml()}</div>
     </div>
-    <div id="wagesWrap"></div>
+    </div>
+    <div class="${wagesPaneCls('pay')}" data-wpane="pay">
+    ${wagesLogSwitchHtml()}
+    <div class="${wagesSubCls('pay')}" data-wsub="pay">
     <div class="card"><div class="card-head"><h2>Wage Payments Log</h2><span class="head-actions"><button type="button" class="info-btn" data-info-toggle data-info-target="info-wagepayment" title="Info">i</button>${formToggleBtn('wagePayments','Form',true)}</span></div>
       <div class="form-above-log" ${formBodyOpen('wagePayments')}>
       <p class="note info-note" id="info-wagepayment" hidden>Picking an Employee auto-fills the Amount with wages + bonus owed for this period only. For money advanced to an employee separate from wages, use the Loans tab instead.</p>
@@ -152,6 +157,8 @@ function wagesPanel(){
         DATA.wagePayments.slice().reverse(),
         r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
       )}</div>
+    </div>
+    <div class="${wagesSubCls('bonus')}" data-wsub="bonus">
     <div class="card"><div class="card-head"><h2>Bonus Log</h2>${formToggleBtn('wageBonuses','Form',true)}</div>
       <div class="form-above-log" ${formBodyOpen('wageBonuses')}>
       <div class="grid cols-3">
@@ -172,6 +179,9 @@ function wagesPanel(){
         DATA.wageBonuses.slice().reverse(),
         r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wageBonuses',r.id)]
       )}</div>
+    </div>
+    </div>
+    <div class="${wagesPaneCls('settle')}" data-wpane="settle">
     ${openingBalanceCard}
     ${settleAllCard}
     <div class="card"><div class="card-head"><h2>Settlements Log</h2><span class="head-actions"><button type="button" class="info-btn" data-info-toggle data-info-target="info-settlement" title="Info">i</button>${formToggleBtn('wageSettlements','Form',true)}</span></div>
@@ -198,81 +208,12 @@ function wagesPanel(){
         DATA.wageSettlements.slice().reverse(),
         r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, r.carryForward?fmtRs2(r.carryForward):'0.00', escHtml(r.remarks||'—'), actionBtns('wageSettlements',r.id)]
       )}</div>
-  `;
-}
-function renderWages(){
-  const from = v('wg_from'), to = v('wg_to');
-  const rows = computeWages(from, to);
-  const qualities = DATA.qualities;
-  const wrap = document.getElementById('wagesWrap');
-  if(!qualities.length || !DATA.employees.length){
-    wrap.innerHTML = `<div class="card"><div class="empty">Add employees and qualities in the settings tab to see wages.</div></div>`;
-    return;
-  }
-  const showNum = n => n ? fmtQtyMtr(n) : '';
-  const showRs2 = n => n ? fmtRs2(n) : '';
-  const totalMeters = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].meters,0));
-  const totalWages = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].wages,0));
-  // Only show a quality's column on each table if someone actually has meters/wages
-  // logged against it in this period — an all-zero quality just clutters the table.
-  const meterIdx = qualities.map((q,i)=>i).filter(i=>totalMeters[i] !== 0);
-  const wageIdx = qualities.map((q,i)=>i).filter(i=>totalWages[i] !== 0);
-  const meterHead = meterIdx.map(i=>`<th>${escHtml(qualities[i].name)}</th>`).join('');
-  const wageHead = wageIdx.map(i=>`<th>${escHtml(qualities[i].name)} (Rs)</th>`).join('');
-  // Diff, broken out per quality (each quality's own rate applies to its own diff share —
-  // see computeWageMeters/computeWages — this just surfaces that per-quality split in the
-  // table instead of folding it into one combined figure).
-  const diffMetersByQ = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].diffMeters,0));
-  const diffWagesByQ = qualities.map((q,i)=>rows.reduce((s,r)=>s+r.byQuality[i].diffWages,0));
-  const meterDiffHead = meterIdx.map(i=>`<th>${escHtml(qualities[i].name)} Diff</th>`).join('');
-  const wageDiffHead = wageIdx.map(i=>`<th>${escHtml(qualities[i].name)} Diff (Rs)</th>`).join('');
-  const meterRows = rows.map(r=>`<tr><td><span class="name">${escHtml(r.employee)}</span></td>${meterIdx.map(i=>`<td>${showNum(r.byQuality[i].meters)}</td>`).join('')}${meterIdx.map(i=>`<td class="mono">${showNum(r.byQuality[i].diffMeters)}</td>`).join('')}<td class="mono">${showNum(r.totalMeters - r.totalDiffMeters)}</td><td class="mono"><b>${showNum(r.totalMeters)}</b></td></tr>`).join('');
-  const wageRows = rows.map(r=>`<tr><td><span class="name">${escHtml(r.employee)}</span></td>${wageIdx.map(i=>`<td>${showRs2(r.byQuality[i].wages)}</td>`).join('')}${wageIdx.map(i=>`<td class="mono">${showRs2(r.byQuality[i].diffWages)}</td>`).join('')}<td class="mono">${showRs2(r.totalWagesNoBonus - r.totalDiffWages)}</td><td class="mono"><b>${showRs2(r.totalWagesNoBonus)}</b></td><td>${showRs2(r.bonus)}</td><td class="mono"><b>${showRs2(r.totalWages)}</b></td></tr>`).join('');
-  const grandMeters = totalMeters.reduce((a,b)=>a+b,0);
-  const grandDiffMeters = rows.reduce((s,r)=>s+r.totalDiffMeters,0);
-  const grandBonus = rows.reduce((s,r)=>s+r.bonus,0);
-  const grandDiffWages = rows.reduce((s,r)=>s+r.totalDiffWages,0);
-  const grandWagesNoBonus = totalWages.reduce((a,b)=>a+b,0);
-  const grandWages = grandWagesNoBonus + grandBonus;
-  // A signed amount rendered the same way everywhere on this page: positive still owed
-  // (rust), negative paid ahead / a credit (green), exactly zero in plain bold.
-  const signedCell = (amount, owedWord, creditWord)=> amount > 0.004
-    ? `<span style="color:var(--rust)"><b>${fmtRs(amount)}</b>${owedWord?' '+owedWord:''}</span>`
-    : amount < -0.004
-      ? `<span style="color:var(--green)"><b>${fmtRs(Math.abs(amount))}</b>${creditWord?' '+creditWord:''}</span>`
-      : `<b>${fmtRs(0)}</b>`;
-  const balanceRows = wageRelevantEmployees().map(emp=>{
-    const b = computeEmployeeWageBalance(emp.name);
-    const n = computeEmployeeWageNetForPeriod(emp.name, from, to);
-    const carryCell = b.carryForward
-      ? (b.carryForward > 0 ? `${fmtRs2(b.carryForward)} owed` : `${fmtRs2(Math.abs(b.carryForward))} credit`)
-      : '—';
-    return `<tr><td><span class="name">${escHtml(emp.name)}</span></td><td>${carryCell}</td>`
-      + `<td>${fmtRs2(n.earned)}</td><td>${n.paid?fmtRs2(n.paid):'—'}</td><td>${signedCell(n.net,'still due','paid ahead')}</td>`
-      + `<td>${signedCell(b.balance,'owed','credit')}</td><td>${b.lastSettled?fmtDate(b.lastSettled):'Never'}</td></tr>`;
-  }).join('');
-  wrap.innerHTML = `
-    <div class="card"><div class="card-head"><h2>Meters by Quality (${fmtDate(from)} to ${fmtDate(to)})</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Diff = each employee's share of unassigned loom output (Qty − logged employee meters) on that quality's entries, already folded into their totals — shown per quality here so you can verify it, and so it carries that quality's own rate in the wages table below.</p>
-      <table><thead><tr><th>Employee</th>${meterHead}${meterDiffHead}<th>Total (Excl. Diff)</th><th>Total Meters</th></tr></thead>
-      <tbody>${meterRows || '<tr><td class="empty" colspan="99">No employees yet</td></tr>'}</tbody>
-      <tfoot><tr><td><b>Total</b></td>${meterIdx.map(i=>`<td><b>${showNum(totalMeters[i])}</b></td>`).join('')}${meterIdx.map(i=>`<td><b>${showNum(diffMetersByQ[i])}</b></td>`).join('')}<td><b>${showNum(grandMeters - grandDiffMeters)}</b></td><td><b>${showNum(grandMeters)}</b></td></tr></tfoot>
-      </table>
     </div>
-    <div class="card"><h2>Wages by Quality (Rs)</h2>
-      <table><thead><tr><th>Employee</th>${wageHead}${wageDiffHead}<th>Total (Excl. Diff)</th><th>Total (No Bonus)</th><th>Bonus (Rs)</th><th>Total Wages</th></tr></thead>
-      <tbody>${wageRows || '<tr><td class="empty" colspan="99">No employees yet</td></tr>'}</tbody>
-      <tfoot><tr><td><b>Total</b></td>${wageIdx.map(i=>`<td><b>${showRs2(totalWages[i])}</b></td>`).join('')}${wageIdx.map(i=>`<td><b>${showRs2(diffWagesByQ[i])}</b></td>`).join('')}<td><b>${showRs2(grandWagesNoBonus - grandDiffWages)}</b></td><td><b>${showRs2(grandWagesNoBonus)}</b></td><td><b>${showRs2(grandBonus)}</b></td><td><b>${showRs2(grandWages)}</b></td></tr></tfoot>
-      </table>
-    </div>
-    <div class="card"><div class="card-head"><h2>Employee Wage Balances</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>"Earned" and "Paid" are scoped to the Wage Period selected above only — "Paid (This Period)" is payments dated inside that same range, so "Net (This Period)" reaches exactly 0 once you've paid what was earned there. If you later change a rate for a date inside that period, Earned (and Net) recompute — Paid does not, so Net shows exactly what's newly due. "Balance" is the separate running total since the employee's last settlement (or all-time if never settled), regardless of which period is selected — use that one to see everything currently owed. "Credit" means paid ahead of wages earned. Employee loans are tracked separately in the Loans tab.</p>
-      <div class="log-scroll"><table><thead><tr><th>Employee</th><th>Carried Forward</th><th>Earned (This Period)</th><th>Paid (This Period)</th><th>Net (This Period)</th><th>Balance</th><th>Last Settled</th></tr></thead>
-      <tbody>${balanceRows || '<tr><td class="empty" colspan="7">No employees yet</td></tr>'}</tbody>
-      </table></div>
+    ${wagesSheetHtml()}
     </div>
   `;
 }
+// renderWages() (the Summary tab) lives in js/wages-ui.js together with the rest of the Wages screen.
 
 /* ---------------- Loans (Employee) ---------------- */
 // A simple, dedicated ledger for cash advanced to employees outside of wages — separate
