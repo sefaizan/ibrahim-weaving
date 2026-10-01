@@ -184,6 +184,28 @@ describe('Production operator', () => {
   });
 });
 
+describe('At a Glance: In Stock by Quality', () => {
+  const withStock = rows => { run(`computeStats = () => Object.assign(${JSON.stringify({})}, { stockByQuality: ${JSON.stringify(rows)}, receivablesByClient: [], clientQualityBreakdown: [], qualityNames: [], checkpoint: null, cash: 0, stock: 0, profitCum: 0, profitMonth: 0 })`); run('renderStats("")'); return wrap.innerHTML; };
+  test('lists only qualities with stock above zero; zero and negative are left out', () => {
+    load({ perms: ALL });
+    const html = withStock([{ name: 'Cambric', stock: 315 }, { name: 'Poplin', stock: 0 }, { name: 'Voile', stock: -4 }, { name: 'Lawn', stock: 12.5 }]);
+    const glance = html.match(/<div class="card ov-glance">[\s\S]*?<div class="ov-sub">/)[0];
+    assert.match(glance, /Cambric/); assert.match(glance, /Lawn/);
+    assert.doesNotMatch(glance, /Poplin/); assert.doesNotMatch(glance, /Voile/);
+  });
+  test('no stock anywhere: the section is not drawn at all', () => {
+    load({ perms: ALL });
+    const glance = withStock([{ name: 'Cambric', stock: 0 }]).match(/<div class="card ov-glance">[\s\S]*?<div class="ov-sub">/)[0];
+    assert.doesNotMatch(glance, /In Stock by Quality/);
+  });
+  test('a role without the Stock card never sees stock in At a Glance', () => {
+    load({ perms: Object.assign({}, ALL, { production: undefined }) });
+    const html = withStock([{ name: 'Cambric', stock: 315 }]);
+    assert.equal(run(`permsCardAllowed('stock')`), false);
+    assert.doesNotMatch(html.match(/<div class="card ov-glance">[\s\S]*?<div class="ov-sub">/)?.[0] || '', /Cambric/);
+  });
+});
+
 describe('a role that may view everything sees every card', () => {
   test('all sections viewable: At a Glance plus all fourteen data cards and the Cash Position tile', () => {
     load({ perms: ALL });
