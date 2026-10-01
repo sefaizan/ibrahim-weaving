@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and offers a "Reload" bar — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v164';
+const CACHE_VERSION = 'v165';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
@@ -34,6 +34,7 @@ const APP_FILES = [
   './js/shell.js',
   './js/panels-daily.js',
   './js/panels-wages-receipts.js',
+  './js/wages-ui.js',
   './js/overview.js',
   './js/wiring.js',
   './js/encryption.js',

@@ -260,3 +260,15 @@ GOOD TO KNOW
       Production page; everything else stays English for now (pop-up messages, PDFs, receipts, CSV files, the lock
       screen, Wages / Sale / Recovery). Nothing you typed is ever translated, and nothing in the ledger changes.
       No Firebase change is needed. New file: js/i18n.js (add more words there).
+
+    - Wages page redesign (version 3.17.38): no Firebase change, no new setting, no wage calculation changed. The Wages page now has a
+      period bar at the top (This week / Last week / This month / Custom plus the From and To dates) and four tabs:
+      Summary (what is still owed, one card per employee, the period by quality), Payments (the payment log and the bonus log, switch at
+      the top), Rates (current rates, change a rate, rate history) and Settle (opening balances, settle all, settlements log).
+      Tap an employee's name for the breakdown by quality: own meters, Diff share, the rate and the wages, then bonus, carried forward and
+      last settled. "Full tables" on the Summary tab keeps the old wide Meters and Wages tables. Each employee card has a Pay button, and a
+      floating "+" opens one quick-entry sheet for Payment, Bonus or Settle (amount chips: period due, full balance, last paid; after a
+      payment it moves to the next person who is still due). The old forms and the Edit / Remove buttons work as before. The new
+      buttons follow the same rules as the old ones (hidden on view-only phones and where a role may not add in Wages; a change that needs
+      approval becomes a proposal). New file: js/wages-ui.js. TO GO BACK: put the 3.17.37 copies of index.html, service-worker.js,
+      js/panels-wages-receipts.js, js/wiring.js and js/view-only.js back and delete js/wages-ui.js.
