@@ -246,11 +246,20 @@ function renderWages(){
   const wRows = rows.map(r => `<tr><td><span class="name">${escHtml(r.employee)}</span></td>${act.map(i => `<td>${showRs2(r.byQuality[i].wages)}</td>`).join('')}${act.map(i => `<td class="mono">${showRs2(r.byQuality[i].diffWages)}</td>`).join('')}<td class="mono">${showRs2(r.totalWagesNoBonus - r.totalDiffWages)}</td><td class="mono"><b>${showRs2(r.totalWagesNoBonus)}</b></td><td>${showRs2(r.bonus)}</td><td class="mono"><b>${showRs2(r.totalWages)}</b></td></tr>`).join('');
   const gDiffW = rows.reduce((s, r) => s + r.totalDiffWages, 0);
 
+  // Production by quality for the period, laid out like "In Stock by Quality" in Overview's At a Glance card
+  // (quality on the left, meters on the right) plus a share bar and a total. Diff meters are included.
+  const prodRows = act.filter(i => tMeters[i] > 0.0001);
+  const prodHtml = prodRows.length ? `<div class="wg-prod"><div class="wg-prod-title">Production by Quality (mtr)</div>${prodRows.map(i => {
+      const pct = gM > 0 ? Math.max(3, Math.round(tMeters[i] / gM * 100)) : 0;
+      return `<div class="wg-prod-row"><span class="q">${escHtml(qualities[i].name)}</span><span class="m">${fmtQtyMtr(tMeters[i])}</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
+    }).join('')}${prodRows.length > 1 ? `<div class="wg-prod-row tot"><span class="q">Total production</span><span class="m">${fmtQtyMtr(gM)}</span></div>` : ''}</div>` : '';
+
   wrap.innerHTML = `
     <div class="card wg-hero"><div class="wg-hero-l">Still owed to employees (running balance)</div><div class="wg-hero-big">${fmtRs(owed)}</div>
       ${credit > 0.004 ? `<div class="wg-hero-sub">Paid ahead (credit): ${fmtRs(credit)}</div>` : ''}
       <div class="wg-hero-row"><span>Earned <b>${fmtRs(earned)}</b></span><span>Paid <b>${fmtRs(paid)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span></div>
-      <div class="wg-hero-sub">Earned, paid and bonus are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
+      ${prodHtml}
+      <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
       <p class="note info-note" id="info-wgemps" hidden>Tap a name for the breakdown by quality: own meters, the share of unassigned Difference, the rate and the wages. "Earned" and "Paid" are for the selected period only (earned includes bonus), and "Net" reaches 0 once you have paid what was earned there. "Owed" is the running balance since the employee's last settlement, whatever period is selected. "Credit" means paid ahead of wages earned. Advances to employees are in the Employee Loans page.</p>
       ${data.map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No employees yet</div>'}</div>
