@@ -1247,6 +1247,16 @@ function cloudApprovalKnown(){
 function cloudApprovalSave(map){ try{ localStorage.setItem(CLOUD_APPROVAL_KEY, JSON.stringify(cloudNeedsApprovalClean(map))); }catch(e){} }
 function cloudApprovalClear(){ try{ localStorage.removeItem(CLOUD_APPROVAL_KEY); }catch(e){} }
 function cloudNeedsApproval(sec){ return !cloudIsOwner() && cloudApprovalKnown()[sec] === true; }
+// ---- Sections wiped from THIS phone because another (limited) account signed in on it ---------------------
+// permsPurgeHidden (view-only.js) empties the sections a limited account may not see. If the owner then signs in
+// on the same phone, those empty sections look like the owner's own changes - and would be sent up over the real
+// data. So the wiped sections are remembered here: they are never sent while listed, and the owner's next check
+// brings them back from the cloud (cloudSectionsCheck), which also takes them off the list.
+const CLOUD_PURGED_KEY = 'khata-purged-sections';
+function cloudPurgedList(){ try{ const a = JSON.parse(localStorage.getItem(CLOUD_PURGED_KEY) || '[]'); return Array.isArray(a) ? a.filter(x=> typeof x === 'string') : []; }catch(e){ return []; } }
+function cloudPurgedSave(a){ try{ if(a.length) localStorage.setItem(CLOUD_PURGED_KEY, JSON.stringify(a)); else localStorage.removeItem(CLOUD_PURGED_KEY); }catch(e){} }
+function cloudPurgedAdd(sec){ const a = cloudPurgedList(); if(a.indexOf(sec) < 0){ a.push(sec); cloudPurgedSave(a); } }
+function cloudPurgedClear(secs){ cloudPurgedSave(cloudPurgedList().filter(s=> secs.indexOf(s) < 0)); }
 function cloudSectionPerm(sec){
   if(cloudIsOwner()) return 'vaed';
   const p = cloudPermsKnown();
@@ -1340,7 +1350,9 @@ async function cloudPushNow(force){
     if(typeof auditFlush === 'function') await auditFlush(db); // the audit entries go first: a change never reaches the cloud ahead of its log entry (a connection failure stops the push here)
     const who = recEditorEmail();
     const denied = []; let newest = null;
+    const purged = cloudPurgedList();
     for(const sec of writable){
+      if(purged.indexOf(sec) >= 0) continue; // emptied on this phone by another account's sign-in: never send it, it would wipe the real data
       if(!owner && !seen[sec]) continue; // never received: don't overwrite the cloud copy with an empty one
       const json = JSON.stringify(parts[sec]);
       const hash = await sha256Hex(json);
@@ -1874,8 +1886,14 @@ async function cloudSectionsCheck(db){
   if(!cloudIsOwner() && !readable.some(r=> r.snap.exists)){ setCloudStatus('error', 'nothing to show yet \u2014 the owner has not synced the ledger'); return; }
   const seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY), parts = cloudSplit(DATA);
   const silent = [], ask = []; let push = false;
+  const purged = cloudIsOwner() ? cloudPurgedList() : [];
   for(const r of readable){
     const sec = r.sec, mine = !viewer && cloudCanWriteSection(sec);
+    if(purged.indexOf(sec) >= 0){ // emptied here while another account was signed in: bring the real copy back, never send this one
+      if(r.snap.exists) silent.push({ sec, remote: r.snap.data(), mode: 'pull' });
+      else cloudPurgedClear([sec]); // nothing in the cloud to bring back
+      continue;
+    }
     if(!r.snap.exists){ if(mine && cloudIsOwner()) push = true; continue; } // owner: seed a section the cloud does not have yet
     const remote = r.snap.data();
     const remoteChanged = !!remote.savedAt && remote.savedAt !== seen[sec];
@@ -1885,7 +1903,7 @@ async function cloudSectionsCheck(db){
     else if(remoteChanged && localChanged) ask.push({ sec, remote, mode: 'merge' });
     else if(localChanged) push = true;
   }
-  if(silent.length) await cloudViewerApply(silent);
+  if(silent.length){ const ok = await cloudViewerApply(silent); if(ok !== false) cloudPurgedClear(silent.map(x=> x.sec)); }
   if(ask.length){ cloudAskToApply(ask, ask.some(a=> a.mode === 'merge') ? 'merge' : 'pull'); return; }
   if(push){ await cloudPushNow(); return; }
   if(!silent.length) setCloudStatus('synced');

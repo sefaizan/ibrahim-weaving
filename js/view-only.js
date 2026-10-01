@@ -386,13 +386,17 @@ async function permsPurgeHidden(){
   for(const sec of hidden){
     const sc = (typeof CLOUD_SECTIONS !== 'undefined' ? CLOUD_SECTIONS : []).find(x=> x.id === sec);
     if(!sc) continue;
+    let wiped = false;
     sc.keys.forEach(k=>{
       const v = DATA[k];
-      if(Array.isArray(v) && v.length){ DATA[k] = []; did = true; }
-      else if(typeof v === 'number' && v !== 0){ DATA[k] = 0; did = true; }
-      else if(typeof v === 'string' && v !== ''){ DATA[k] = ''; did = true; }
-      else if(v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length){ DATA[k] = {}; did = true; }
+      if(Array.isArray(v) && v.length){ DATA[k] = []; did = true; wiped = true; }
+      else if(typeof v === 'number' && v !== 0){ DATA[k] = 0; did = true; wiped = true; }
+      else if(typeof v === 'string' && v !== ''){ DATA[k] = ''; did = true; wiped = true; }
+      else if(v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length){ DATA[k] = {}; did = true; wiped = true; }
     });
+    // Remember it: the owner signing in on this same phone later must bring this section back from the cloud,
+    // and must never send this emptied copy up over the real one (cloud-sync.js: cloudPurgedAdd / cloudPurgedList).
+    if(wiped && typeof cloudPurgedAdd === 'function') cloudPurgedAdd(sec);
   }
   if(!did) return false;
   try{ if(typeof tombResetBaseline === 'function') tombResetBaseline(); }catch(e){}
