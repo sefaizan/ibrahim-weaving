@@ -19,6 +19,7 @@ const ICONS = {
   account_balance_wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v11a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2Z"/><circle cx="16.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/></svg>',
   calculate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="7.5" y1="11" x2="10" y2="11"/><line x1="8.75" y1="9.75" x2="8.75" y2="12.25"/><line x1="14" y1="11" x2="16.5" y2="11"/><line x1="7.5" y1="16" x2="10" y2="16"/><line x1="14" y1="16" x2="16.5" y2="16"/></svg>',
   savings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12c0-3.5 3.1-6 7.5-6 3 0 5.2 1.1 6.5 3h2l1 2.5-2 1V15l-2 2v3h-3v-2H10v2H7v-3.3C5.2 15.6 4 13.9 4 12Z"/><circle cx="9.5" cy="11" r="1" fill="currentColor" stroke="none"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
   monitoring: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="10" y1="21" x2="10" y2="9"/><line x1="16" y1="21" x2="16" y2="12"/><polyline points="3 8 9 4 14 7 21 3"/></svg>',
   inventory_2: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"/><path d="M3 8.5V17l9 4.5 9-4.5V8.5"/><line x1="12" y1="13" x2="12" y2="21.5"/></svg>',
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-1.8-1L15 3h-4l-.3 2.9a7.6 7.6 0 0 0-1.8 1l-2.3-.9-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 1.8 1l.3 2.9h4l.3-2.9a7.6 7.6 0 0 0 1.8-1l2.3.9 2-3.4Z"/></svg>',
@@ -43,6 +44,8 @@ const TABS = [
   {id:'warpbeams', label:'Warp (Tana) Beam', icon:'inventory_2', group:'Materials'},
   {id:'checkpoints', label:'Cash Checkpoints', icon:'savings', group:'Tools'},
   {id:'graphs', label:'Graphs', icon:'monitoring', group:'Tools'},
+  {id:'inbox', label:'Approvals', icon:'inbox', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
+  {id:'audit', label:'Audit', icon:'monitoring', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
   {id:'settings', label:'Settings', icon:'settings', group:'Tools'},
   {id:'backup', label:'Backup & Restore', icon:'backup', group:'Tools'},
 ];
@@ -619,11 +622,14 @@ let UNDO_PREV_PARTS = null; // each top-level part of the ledger (as JSON text) 
 let UNDO_SUPPRESS = false; // set while an Undo's own save (or a restore) is running, so it isn't filed as a new change
 let NEXT_UNDO_LABEL = null; // a caller can set this just before save() to give the resulting Undo entry a friendly name
 async function save(){
-  if(typeof viewOnlySaveBlocked === 'function' && viewOnlySaveBlocked()) return; // view-only phone (view-only.js): nothing may be saved
+  if(typeof proposalsWouldHold === 'function'){ const held = proposalsWouldHold(); if(held && await proposalsHold(held)) return false; } // a person who needs approval (proposals.js): the change is kept as a proposal, the ledger is not touched
+  if(typeof viewOnlySaveBlocked === 'function' && viewOnlySaveBlocked()) return false; // view-only phone (view-only.js): nothing may be saved
   document.getElementById('statusLine').textContent = 'Saving…';
   if(typeof tombRecordDeletions === 'function'){ try{ tombRecordDeletions(); }catch(e){ /* best effort — never block a save */ } } // notes deleted records so a cloud merge can't bring them back
+  if(typeof auditCommit === 'function'){ try{ await auditCommit(); }catch(e){ console.error(e); } } // the audit entries are kept on this phone BEFORE the ledger change is stored (js/audit.js)
   const json = JSON.stringify(DATA);
   let changed = null; // 'removed' | 'updated' | null — also read below to decide the save haptic
+  let saveOk = false; // true only when the ledger really reached this phone's storage (read by the owner's Accept, proposals.js)
   let curParts = null;
   try{ curParts = undoParts(); }catch(e){ curParts = null; }
   if(UNDO_PREV_PARTS && curParts && !UNDO_SUPPRESS){
@@ -638,14 +644,14 @@ async function save(){
     if(!window.storage || encEnabled()) throw new Error('window.storage unavailable');
     await window.storage.set(STORAGE_KEY, json);
     document.getElementById('statusLine').textContent = 'Saved';
-    clearSaveFailure(); noteLedgerSize(json.length);
+    clearSaveFailure(); noteLedgerSize(json.length); saveOk = true;
   }catch(e){
     // Fall back to the browser's own localStorage so data still persists even
     // when this file is opened outside a Claude artifact (window.storage missing).
     try{
       await ledgerToLocalStorage(json); // plain or encrypted, depending on Settings > Encrypt Data
       document.getElementById('statusLine').textContent = 'Saved (local backup)';
-      clearSaveFailure(); noteLedgerSize(json.length);
+      clearSaveFailure(); noteLedgerSize(json.length); saveOk = true;
     }catch(e2){
       if(e2 && e2.message === 'locked'){
         // Encrypted and not unlocked (or its stored copy couldn't be read): refuse to write, so nothing is ever overwritten.
@@ -661,6 +667,7 @@ async function save(){
   if(typeof updateWeekBadge === 'function') updateWeekBadge(); // header "Week Rs …" pill follows every change
   if(typeof autoBackupSchedule === 'function') autoBackupSchedule(); // emails a backup shortly after changes (Backup & Restore > Automatic email backup)
   if(typeof cloudSyncSchedule === 'function') cloudSyncSchedule(); // pushes to Cloud Sync shortly after changes, if turned on (Settings > Cloud Sync)
+  return saveOk;
 }
 async function load(){
   if(encEnabled()){

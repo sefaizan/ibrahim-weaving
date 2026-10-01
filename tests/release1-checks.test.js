@@ -173,8 +173,8 @@ describe('version, cache and notes stay in step', () => {
   });
   test('HOSTING.txt explains view-only phones, how to approve someone, and what a viewer can see', () => {
     const h = read('HOSTING.txt');
-    assert.match(h, /View-only phones/); assert.match(h, /config\/access/); assert.match(h, /expiresAt/); assert.match(h, /write:\s*false/); assert.match(h, /People who can view/); assert.match(h, /Approve to view/);
-    assert.match(h, /whole ledger|everything/i);
+    assert.match(h, /View-only phones/); assert.match(h, /config\/access/); assert.match(h, /expiresAt/); assert.match(h, /write:\s*false/); assert.match(h, /Settings > People/); assert.match(h, /Approve to view/);
+    assert.match(h, /Who sees what/);
   });
   test('the tests README lists the view-only and cloud sign-in test files', () => {
     const r = read('tests/README.md');

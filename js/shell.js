@@ -3,6 +3,8 @@
  * health, CSV export, quick add, new-version prompt, undo, Backup & Restore. */
 
 /* ---------------- Nav ---------------- */
+// Release 3: a tab the signed-in account's role does not include is left out of the drawer (view-only.js decides).
+function navTabAllowed(id){ return typeof permsTabAllowed === 'function' ? permsTabAllowed(id) : true; }
 function renderNav(active){
   const nav = document.getElementById('tabs');
   const head = `<div class="drawer-head"><div class="mark"><img src="${APP_MARK_PNG}" alt=""></div><div class="appname">Ibrahim Weaving</div><div class="appsub">Power Loom Ledger</div></div>`;
@@ -11,11 +13,11 @@ function renderNav(active){
   // but keeps this from silently dropping one if TABS and NAV_GROUPS ever drift) falls back
   // to a single ungrouped section at the end.
   const body = NAV_GROUPS.map(g=>{
-    const tabs = TABS.filter(t=>t.group===g);
+    const tabs = TABS.filter(t=>t.group===g && navTabAllowed(t.id));
     if(!tabs.length) return '';
     return `<div class="drawer-group-label">${g}</div>` + tabs.map(t=>`<button data-tab="${t.id}" class="${t.id===active?'active':''}"><span class="icon">${ICONS[t.icon]||''}</span>${t.label}</button>`).join('');
   }).join('');
-  const leftover = TABS.filter(t=>!NAV_GROUPS.includes(t.group));
+  const leftover = TABS.filter(t=>!NAV_GROUPS.includes(t.group) && navTabAllowed(t.id));
   const leftoverHtml = leftover.length ? leftover.map(t=>`<button data-tab="${t.id}" class="${t.id===active?'active':''}"><span class="icon">${ICONS[t.icon]||''}</span>${t.label}</button>`).join('') : '';
   nav.innerHTML = head + body + leftoverHtml;
   nav.querySelectorAll('button[data-tab]').forEach(b=> b.onclick = ()=> switchTab(b.dataset.tab));
@@ -157,6 +159,7 @@ function updateWeekBadge(){
 }
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) updateWeekBadge(); });
 function switchTab(id){
+  if(typeof permsTabAllowed === 'function' && !permsTabAllowed(id)) id = permsFirstTab(); // a page this role cannot open: go to the first one it can
   CURRENT_TAB = id;
   rememberTab(id);
   renderNav(id);
@@ -216,7 +219,7 @@ function settingsPanel(){
     </label>
     <p class="note" style="margin-top:6px">Turn off to go back to the classic sideways-scrolling tables. Only affects small screens.</p>
   </div>
-  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + beamAlertSettingsCard() + `
+  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + (typeof auditCardHtml === 'function' ? auditCardHtml() : '') + beamAlertSettingsCard() + `
   <div class="card"><div class="card-head"><h2>Business Info</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>Shown on the header of printed Sale receipts (Sales Log → Receipt). Leave any of these blank to leave that line off the receipt.</p>
     <div class="grid cols-1">

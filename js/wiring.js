@@ -10,11 +10,15 @@ function renderPanel(id){
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
     loans: loansPanel, ratecalc: ratecalcPanel,
     checkpoints: checkpointsPanel, settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
+    inbox: typeof proposalsInboxPanel === 'function' ? proposalsInboxPanel : () => '', // owner only (js/proposals.js)
+    audit: typeof auditPanel === 'function' ? auditPanel : () => '', // owner only (js/audit.js)
   };
   return `<div class="panel active">${map[id]()}</div>`;
 }
 
 function wirePanel(id){
+  if(id==='inbox' && typeof wireProposalsInbox === 'function') wireProposalsInbox();
+  if(id==='audit' && typeof wireAuditPanel === 'function') wireAuditPanel();
   if(id==='overview'){
     const monthSel = document.getElementById('ov_month_sel');
     const yearSel = document.getElementById('ov_year_sel');
@@ -1418,6 +1422,7 @@ function wirePanel(id){
       EDITING = null;
       await ensureDataDefaults();
       UNDO_SUPPRESS = true; UNDO_STACK.length = 0; updateUndoButton();
+            if(typeof tombResetBaseline === 'function') tombResetBaseline(); // a restore swaps the whole ledger — not deletions
       await save();
       switchTab('backup');
       showToast('Backup restored ✓');
@@ -1459,6 +1464,7 @@ function wirePanel(id){
             EDITING = null;
             await ensureDataDefaults();
             UNDO_SUPPRESS = true; UNDO_STACK.length = 0; updateUndoButton();
+            if(typeof tombResetBaseline === 'function') tombResetBaseline(); // a restore swaps the whole ledger — not deletions
             await save();
             switchTab('backup');
             showToast('Restored from safety copy ✓');
@@ -1575,6 +1581,10 @@ function wirePanel(id){
         if(clash){ showToast(`"${name}" is already in this list.`, 5000); return; }
         if(editingRec){
           const oldName = editingRec.name;
+          if(oldName !== name && typeof permsRenameBlocked === 'function'){
+            const blocked = permsRenameBlocked(key); // Release 3: a rename reaches other sections (a quality's wage rates too); only a role that may edit all of them can do it
+            if(blocked){ showToast('Not allowed \u2014 renaming \u201C' + oldName + '\u201D also changes ' + PERM_SECTION_NAME(blocked.sec) + ', which your role can\u2019t edit.', 6000); return; }
+          }
           editingRec.name = name;
           const changed = (oldName !== name) ? cascadeMasterRename(key, oldName, name) : 0;
           EDITING = null;

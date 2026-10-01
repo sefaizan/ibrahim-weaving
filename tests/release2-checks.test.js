@@ -26,7 +26,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 function phone(email, docs){
   const store = new Map([['khata-cloud-sync-on', '1']]);
   const page = {
-    cloudPeopleEmail: { value: '' }, cloudPeopleAmount: { value: '30', style: {} }, cloudPeopleUnit: { value: 'days' }, cloudPeopleUntil: { value: '' },
+    cloudPeopleEmail: { value: '' }, cloudPeopleAmount: { value: '30', style: {} }, cloudPeopleUnit: { value: 'days' }, cloudPeopleUntil: { value: '' }, cloudPeopleRole: { value: 'business_viewer' },
     cloudPeopleUntilRow: { style: {} }, cloudPeopleAddBtn: { disabled: false }, cloudPeopleEditBtn: { disabled: false },
     cloudPeopleMsg: { textContent: '', style: {} }, cloudPeopleList: { innerHTML: '', querySelectorAll: () => [] },
     writeBadge: { hidden: true, textContent: '' },
@@ -72,12 +72,12 @@ describe('People card: giving edit access', () => {
     assert.match(p.page.cloudPeopleMsg.textContent, /worker@example\.com approved to edit until/);
     assert.equal(p.page.cloudPeopleEditBtn.disabled, false);
   });
-  test('Approve to view saves view only and sends no note', async () => {
+  test('Approve to view saves view only and sends a view-only note (Release 3: every approved person has a note)', async () => {
     const { docs, p } = ownerWith();
     p.page.cloudPeopleEmail.value = WORKER;
     await p.run('cloudPeopleAdd()');
     assert.equal(docs.get('config/access').approved[WORKER].write, false);
-    assert.equal(docs.has(noteId(WORKER)), false);
+    assert.equal(docs.get(noteId(WORKER)).write, false);
     assert.match(p.page.cloudPeopleMsg.textContent, /approved until/); assert.doesNotMatch(p.page.cloudPeopleMsg.textContent, /to edit|can still edit/);
   });
   test('Approve to view on someone who can edit keeps their edit access and says so', async () => {
@@ -115,13 +115,13 @@ describe('People card: Allow edit / Stop edit', () => {
     assert.equal(docs.get(noteId(WORKER)).write, true);
     assert.match(p.page.cloudPeopleMsg.textContent, /can now edit until/);
   });
-  test('Stop edit turns it off, keeps them approved to view, and removes the note', async () => {
+  test('Stop edit turns it off, keeps them approved to view, and the note stays but no longer allows editing', async () => {
     const rec = ent(2 * DAY, true), { docs, p } = ownerWith({ [WORKER]: rec });
     docs.set(noteId(WORKER), { write: true, expiresAt: rec.expiresAt });
     await p.run(`cloudPeopleSetWrite(${JSON.stringify(btn)}, '${WORKER}', false)`);
     const saved = docs.get('config/access').approved[WORKER];
     assert.equal(saved.write, false); assert.equal(saved.expiresAt, rec.expiresAt);
-    assert.equal(docs.has(noteId(WORKER)), false);
+    assert.equal(docs.get(noteId(WORKER)).write, false);
     assert.match(p.page.cloudPeopleMsg.textContent, /view only again/);
   });
   test('an ended approval cannot be switched to edit (Extend first); someone not on the list is refused; nothing is written', async () => {
@@ -161,6 +161,7 @@ describe('the whole hand-over between two phones', () => {
     const worker = phone(WORKER, docs);
     assert.equal(worker.run('viewOnly()'), true, 'view only to begin with');
     owner.page.cloudPeopleEmail.value = WORKER; owner.page.cloudPeopleAmount.value = '2'; owner.page.cloudPeopleUnit.value = 'hours';
+    owner.page.cloudPeopleRole.value = 'production_operator'; // Business viewer has no A/E/D letters, so the edit switch alone would change nothing
     await owner.run('cloudPeopleAdd(true)');
     assert.equal(await worker.run('waRefreshGrant()'), 'active');
     assert.equal(worker.run('viewOnly()'), false, 'may edit now');
@@ -198,8 +199,8 @@ describe('version, cache and notes stay in step (Release 2)', () => {
   test('HOSTING.txt no longer says the edit switch is still to come', () => {
     assert.doesNotMatch(hosting, /is the next step/); assert.doesNotMatch(hosting, /comes with Release 2/); assert.doesNotMatch(hosting, /Everyone approved this way is view-only/);
   });
-  test('HOSTING.txt still says what a viewer or editor can see, and that roles come in Release 3', () => {
-    assert.match(hosting, /whole ledger|everything/i); assert.match(hosting, /Release 3/);
+  test('HOSTING.txt says what each role can see (Release 3)', () => {
+    assert.match(hosting, /Who sees what/); assert.match(hosting, /Release 3/);
   });
   test('the tests README lists the Release 2 test files', () => {
     ['write-access.test.js', 'edit-stamps.test.js', 'release2-checks.test.js'].forEach(f => assert.ok(readme.includes('`' + f + '`'), f));

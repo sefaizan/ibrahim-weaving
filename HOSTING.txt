@@ -110,13 +110,153 @@ GOOD TO KNOW
   the same entry was edited on two phones the later edit is still the one kept. A phone with no account signed in stamps the
   time only. Tip: searching a log does not look at these stamps.
 
-  What a viewer or an editor can see: for now, the whole ledger - everything the owner's phone shows, including family, expenses,
-  wages and loans - and an editor can add, change and delete any of it while their edit access lasts. So approve only people you
-  would trust with all of it. Limiting what someone sees or may do (Business viewer, Production operator, per-action permissions)
-  comes with the roles in Release 3.
+- Who sees what (Release 3): every approved person has a ROLE, chosen when you approve them (Settings > People) and changeable
+  from their row. A role says, for each section of the ledger (Production, Employees / looms / qualities, Sales & clients,
+  Recovery & cheques, Expenses, Wages, Employee loans, Family & personal, and so on), which of four letters it allows:
+  V view, A add, E edit, D delete. Add, edit and delete always include view. Two roles are built in:
+    - Business viewer: Production, Sales and Cheques only (plus the lists and business name those pages need), view only.
+      No family, personal, expenses, wages or loans.
+    - Production operator: Production with view, add and edit (no delete); employees, looms and qualities view only;
+      quantities only, no wage rates; nothing about money.
+  The edit switch (Approve to edit / Allow edit / Stop edit, with an end time) still decides WHEN the add / edit / delete
+  letters count: with it off, or after the time is up, every role is view only. A Business viewer has no A / E / D letters, so
+  the switch changes nothing for that role. The owner (you) is never limited.
+    - Changing one person: Settings > People > their row > pick a role, or tick the letters per section and press "Save access"
+      (only the differences from the role are kept, so later changes to the role still reach everyone you have not adjusted).
+      "Reset to role" puts them back exactly on the role.
+    - Needs approval: Settings > People > their row > Sections > "Needs my approval" shows one tick box per section. Tick a
+      section to say that every add, edit or delete this person makes there is to wait for your OK. It is saved with "Save access"
+      (same button as the letters), kept when you change their role, end time or edit switch, and left alone by "Reset to role".
+      Their row shows "Needs your approval: ..." while any are on, and their phone learns it from the same small note as the
+      permissions. It never changes what they may see or do, and needs nothing in the Firebase console. You are never asked to
+      approve your own changes.
+    - Proposals: when a person with "Needs my approval" ticked for a section adds, edits or deletes there, the ledger is NOT changed.
+      Their phone keeps a proposal instead - what they did (add / edit / delete), the section, the record, the values before and
+      after, who, and when - puts the screen back as it was, and tells them it is waiting for you (their Settings > Cloud Sync
+      note shows how many). An edit keeps the old and the new value; a delete is a proposal too and the record stays. One save is
+      one action: if it touches a section that needs approval, everything in that save waits (a rename of a quality or employee
+      changes records in several sections, and letting half of it through would leave the ledger inconsistent). A change their
+      role does not allow at all is refused as before, not proposed. If a proposal cannot be kept (phone storage full, locked, or
+      500 already waiting) nothing is changed and they are told. With Encrypt Data on, what a proposal holds is sealed on the phone.
+      Proposals are kept on the person's phone, outside the ledger: they are not synced, not in a backup of the ledger, and you
+      cannot see them on their own phone alone: each one is also SENT to you (see Approvals below).
+      On their phone (Settings > Cloud Sync > "Your changes") each proposal shows "Waiting for approval"; they can Withdraw one
+      (tap twice) and it is gone, nothing else changes. Once you have answered, it shows "Accepted" or "Rejected" with your note
+      and can no longer be withdrawn; they can Clear it from the list.
+    - Approvals (owner only, Tools > Approvals): every proposal is sent from the person's phone to the cloud (right away, or at the next
+      Sync check when there is no signal; sealed with the section's key when Encrypt Data is on, never as readable text next to an
+      encrypted ledger). A small \"N to approve\" badge next to the title shows how many are waiting; tap it to open the screen. Each
+      entry shows who, when, the section and record, and what it was before and what it would become. Accept puts the change into
+      your ledger (an edit or delete is only applied if the record is still exactly as the person saw it; otherwise it stays
+      waiting and you can Reject it), Reject leaves the ledger as it is; the note box is optional and goes to the person either
+      way. \"Accept all\" (tap twice) takes everything waiting from one person, oldest first; any that no longer fit stay waiting.
+      Whichever phone answers first wins; a second phone is told it was already answered. The person's phone learns the answer at
+      its next Sync check and shows Accepted or Rejected with your note; a person can withdraw one only while it is waiting (it is
+      taken back from the cloud, which needs a connection). You need to paste the updated rules once (below) before anything is sent.
+    - Your own roles: Settings > People > "New role" > name + letters per section > "Create role". You can also "Edit" a built-in
+      role (an edited built-in can be reset to the original) or delete a role you made (refused while anyone has it). Saving a
+      role updates everyone who has it.
+    - On the other phone: only the tabs, cards and buttons the role allows are shown; Edit / Delete / Add controls the role lacks
+      are hidden, a tap that slips through is stopped with a message, and saving refuses any change outside the role (last
+      layer). Sections a role may not view are not kept on the phone at all. Firebase's rules enforce the same view / change
+      split per section on the server.
+    - Honest limits: Firebase's rules cannot tell an add from an edit from a delete inside one section document, so on the server
+      they enforce "may view" and "may change (any of A / E / D)" per section; the app itself enforces the three letters
+      separately. Data a person already downloaded stays on their phone after a role is narrowed or revoked.
+  Approve only people you trust with what their role shows.
+
+- Wage rates stay in Wages (Release 3): the rate history for each quality (which rate applies from which date) is kept in the
+  Wages section together with the wage payments, bonuses and settlements. The Production page, the Warp beams page and the
+  Settings lists of qualities, employees and looms hold names and meters only - no rate, no earning per entry. So a Production
+  operator sees quality names and quantities only; the rates are never downloaded to their phone (a phone whose role cannot view
+  Wages keeps none, and empties any it had from an earlier, wider role). Only the owner, or a role you give Wages, sees a rate.
+  One consequence: renaming a quality or an employee in Settings also rewrites the records that use the name in other sections
+  (for a quality, its rate history in Wages too). A person can do that only if their role may EDIT every section it reaches;
+  otherwise the app refuses with a message, so the rates are never left behind under the old name. Rename on your own phone.
+
+- Overview by role (Release 3): every Overview card and banner is tagged with the sections whose figures it shows, and a
+  role sees it only if it may VIEW ALL of them (the tags are PERM_OVERVIEW_CARDS in js/view-only.js). Business viewer sees
+  the Production, Sales and Cheques cards only: Awaiting L (AIL), Pending and Bounced Cheques, Stock Position (stock by
+  quality, Produced / Sold / In Stock), Client Statement, Sales & Receivables, Receivables Aging, Clients Breakdown by
+  Quality, the "Beams ending soon" banner and the Reminders banner. It does not see Cash Position, Warp Usage, Expenses &
+  Material Cost, Profit / Loss or the backup reminder. The Reminders banner is checked row by row: the overdue / due-soon
+  cheque rows need Recovery; the "clients quiet 30+ days" row needs Sales and Recovery; with no row allowed there is no
+  banner (and dismissing it only counts the rows that person can see). The Overview page opens for a role only if at least
+  one real card (not just a banner) is allowed, so a Production operator starts on Production. Cash Position needs every
+  money section, so it stays on the owner's phone unless you give a role all of them. Graphs still needs every section.
+  A card that is not tagged is never shown to anyone but the owner, so a card added later cannot leak by accident.
+
+- Section keys (Release 3): with Encrypt Data on, what a person may not view is also unreadable to them. Each cloud section
+  (Production, Sales, Wages, Family ...) is encrypted with its own key, and a person's phone is given only the keys for the
+  sections their role may VIEW. So even if Firebase's rules were ever wrong, or someone copied a section document, a Business
+  viewer cannot open Wages, Family, Expenses or Loans - there is no key for them on their phone. The older single key that sealed
+  every section is no longer used for the cloud, and your PIN-locked key no longer travels with every section document; it
+  lives only in a document only you can read (keys/<your email>).
+    - Giving a person their keys: Settings > People > their row > Access code. The app shows a 20-character code (and Copy /
+      WhatsApp buttons). Send it to them privately. On their phone they turn Encrypt Data on (Settings) if it is not on, then
+      type the code once under Settings > Cloud Sync > Access code > Unlock my sections. The code is worked out from a secret on
+      your phone, so you can open the same box again any time and see the same code. Their phone keeps it (sealed) to fetch
+      newer keys by itself later.
+    - "New code" (tap twice) on that box makes the old code stop working; they must type the new one. Use it if a code was
+      seen by the wrong person.
+    - Changing someone's role or sections, or approving more sections, updates their keys at once. Taking a section away,
+      revoking someone, or an approval running out replaces that section's key and seals the cloud copy again with the new
+      key (from the copy already in the cloud - nothing is uploaded from your phone for this, so it can never overwrite newer
+      data). Keys are replaced the next time your phone is open and online: when you change access, when you open the People
+      card, and at app start. They never wait on anything the other person does.
+    - Honest limits: (1) what a person already downloaded stays readable on their phone - only new data is protected, exactly
+      as with any revoke. (2) If Encrypt Data is off on your phone, sections are sent as plain text and only Firebase's rules
+      protect them; the People card then says no code is needed. (3) A person's phone needs Encrypt Data (a PIN) on to keep
+      the keys; without it the app tells them. (4) The first sync after this update re-sends every section once, sealed with
+      the new keys. People who were approved before need a code (open People > their row > Access code); until they type it
+      they see "enter your access code" instead of the encrypted sections. (5) "Join Encrypted Sync" (second phone of yours)
+      is now owner-only; it still asks for the PIN used on your first phone.
+    - Rules to paste (Settings > Cloud Sync > i, shown there in full; also pasted as-is into Firebase console > Firestore
+      Database > Rules > Publish). One-time. This version's rules add: ledger/<section> (read needs V on that section, write
+      needs A / E / D and the edit switch; an encrypted section can never be sent back as plain text; only you delete),
+      keys/<email> (you; and each person for their own address only), and they narrow sync/ so an approved person can read
+      only their own small access note (the old whole-ledger document sync/ledger is yours alone). Add / edit / delete are
+      three letters on screen and in the app's save check; Firebase's rules cannot tell an edit from a delete inside one
+      section document, so they enforce view (read) and change (any of A / E / D) per section.
+    - Rules for Approvals (version 3.17.24): ONE new block, proposals/<id>: a person may send their own (status pending), read their own
+      back, and delete their own only while still pending; only you answer (set status and note) or delete. Paste the rules from
+      Settings > Cloud Sync > i again (Firebase console > Firestore Database > Rules > Publish). Until you do, proposals stay on
+      the person's phone and are sent as soon as the rules are in; nothing is lost. Answered proposals stay in the cloud (you can
+      delete them in the Firebase console, collection \"proposals\"); they are not counted or shown again.
+    - Accepted changes (version 3.17.25): no new Firebase rule. When you Accept, the change goes through the app's normal save, so Undo, sync,
+      merge and deleted-entry tracking work as for any change. The row's Info button and the Audit screen show the person who proposed it
+      (as who added / edited it) and that you approved it; Undo of it is logged as your own change.
+    - Changed-since proposals (version 3.17.26): no new Firebase rule. If the record was changed after the proposal was made, Approvals shows both versions
+      (what they saw, what is there now, what they want) and you choose Accept anyway (only their changed fields go on top of the record as it is
+      now), Edit (your own final values) or Reject. Two proposals for one record warn each other; accepting one makes the other ask you again.
+    - Pending proposals, offline and ended access (version 3.17.27): no new Firebase rule. A proposal made with no connection stays on the person's
+      phone ("Not sent yet") and goes out by itself when the connection is back. When edit access ends or is revoked, nothing is deleted: proposals
+      already sent stay in your Approvals inbox for you to accept or reject (the person's name is on them); ones not sent stay on their phone, marked
+      "Not sent \u2014 your access has ended", and go out only if you give them access again (the rule accepts proposals made before their end time).
+      Rejected proposals are never cleared from the person's list: they keep your note and what was typed. The person can still withdraw a waiting one.
+    - Proposals (final checks) (version 3.17.28): no new Firebase rule and no new setting. Every action is now covered by a whole hand-over test
+      between the person's phone and yours: add, edit and delete (the ledger stays as it was until you accept), accept (the change goes in through
+      the normal save, stamped as their work approved by you), reject (nothing changes; they keep your note and what they typed), stale (the record
+      changed since: plain Accept is refused, Accept anyway puts only their changed fields on top, a record deleted since can only be rejected),
+      offline (kept as "Not sent yet", sent once when the connection is back; your own phone applies nothing without a connection) and revoked
+      (already-sent ones stay in your inbox for you to answer; unsent ones stay on their phone and go out only if you give access again).
+    - Approvals fixes (version 3.17.29): PASTE THE UPDATED FIREBASE RULES AGAIN (Settings > Cloud Sync > i, then Firebase console > Firestore Database >
+      Rules > Publish). What changed: (1) the cloud now refuses a person's own write to a section you marked \"Needs my approval\" for them; only your
+      phone writes there, when you accept; (2) audit entries and proposals need the letter that fits (a to add, e to edit, d to delete), view alone is no
+      longer enough. Until you paste them nothing breaks; the old rules simply stay as loose as before. In the app: if an Accept cannot be stored on your
+      phone (storage full, locked, an error) the change is taken back and the proposal goes back to waiting; a rejected proposal is now kept in the
+      Audit screen (Rejected, with the person, what they wanted and your note); a proposal that was sent while the connection dropped is no longer shown as
+      \"your access has ended\" once you answered it; one audit entry the cloud refuses no longer holds back the others; the inbox says when more than
+      200 are waiting.
 
 - Beam forecast: the Warp Beam page shows when each beam on a loom is expected to finish (from the loom's
   output over its last 7 days and how much of their logged length your last finished beams actually wove),
   the Overview shows a "Beams ending soon" card, and a message appears when you open the app or save a
   Production entry if a beam has 3 days or less left (change or turn off under Settings > Beam Alerts).
   Each beam is announced once a day. It is a guide, not a promise: it moves as the looms' output changes.
+
+    - Urdu display language (version 3.17.30): a small "اردو" / "English" button in the header switches the screen text on
+      that phone only (kept in the phone's own storage, never synced or backed up). It covers the menu, the header and the
+      Production page; everything else stays English for now (pop-up messages, PDFs, receipts, CSV files, the lock
+      screen, Wages / Sale / Recovery). Nothing you typed is ever translated, and nothing in the ledger changes.
+      No Firebase change is needed. New file: js/i18n.js (add more words there).

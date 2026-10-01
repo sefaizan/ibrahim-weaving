@@ -94,9 +94,9 @@ describe('the rules text', () => {
     assert.match(rule(), /email_verified == true/);
     assert.match(rule(), /request\.auth\.token\.email\.lower\(\)/);
   });
-  test('ledger: owner or approved-and-unexpired may read; owner or approved with write may create/update; only owner deletes', () => {
-    assert.match(rule(), /match \/sync\/\{doc\}[\s\S]*?allow read: if isOwner\(\) \|\| isApproved\(\);/);
-    assert.match(rule(), /allow create, update: if isOwner\(\) \|\| mayWrite\(\);/);
+  test('ledger sections: owner, or approved with v on that section, may read; owner, or approved with the edit switch and a / e / d, may create/update; only owner deletes (details in section-keys.test.js)', () => {
+    assert.match(rule(), /match \/ledger\/\{sec\}[\s\S]*?allow read: if isOwner\(\) \|\| canSee\(sec\);/);
+    assert.match(rule(), /allow create, update: if isOwner\(\) \|\| \(canChange\(sec\) && !needsApproval\(sec\) && keepsEncryption\(\)\);/);
     assert.match(rule(), /allow delete: if isOwner\(\);/);
   });
   test('approval means present in the map AND expiresAt in the future (missing = expired); write needs write:true', () => {

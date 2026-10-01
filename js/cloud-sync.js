@@ -14,7 +14,8 @@
  * the whole app keeps working with no signal. The apiKey below is not a secret; the real protection
  * is the Firestore rule plus who holds an account.
  *
- * Model: one shared Firestore document for the whole business (not one per device), holding
+ * Model: shared Firestore documents for the whole business (not one per device) - since Release 3
+ * one document per SECTION in the "ledger" collection, see "Sections" below - together holding
  * exactly what the local ledger holds — the same encrypted blob as local storage if Settings >
  * Encrypt Data is on, plain JSON otherwise (see ledgerToLocalStorage in encryption.js for the
  * matching local-storage logic). Every save() schedules a debounced push (cloudSyncSchedule);
@@ -43,9 +44,13 @@ const FIREBASE_CONFIG = {
 const CLOUD_OWNER_EMAIL = 'se.muhammadfaizan@gmail.com';
 const CLOUD_ACCESS_OK_KEY = 'khata-cloud-access-ok';   // owner email the access record was last confirmed to exist for
 // Firestore rules to paste in the console (Build > Firestore Database > Rules). This is the final rule:
-// who may do what is DATA in config/access (below), so approving, expiring, or upgrading someone to
-// write access never needs a rule change. An entry counts only while its expiresAt is in the future
-// (a missing expiresAt means expired), and only entries with write:true may write.
+// who may do what is DATA in config/access (below), so approving, expiring, or changing someone's role or
+// sections never needs a rule change. An entry counts only while its expiresAt is in the future (a missing
+// expiresAt means expired). Per section (Release 3): a person may read a section only if their `perms` for it
+// contain v, and write it only if they contain a, e or d AND the entry has write:true (the edit switch).
+// The owner's own vault and the people's key bundles (keys/...) are readable by the owner and, for a bundle,
+// by that one person; only the owner writes them. The old whole-ledger document (sync/ledger) is the
+// owner's alone: an approved person can read only their own small note (sync/grant-...).
 const CLOUD_FIRESTORE_RULE = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -60,7 +65,8 @@ service cloud.firestore {
       return signedIn() && me() == '${CLOUD_OWNER_EMAIL}';
     }
 
-    // config/access = { ownerEmail, approved: { "<lowercase email>": { expiresAt: <ms>, write: <true|false> } } }
+    // config/access = { ownerEmail, approved: { "<lowercase email>": { expiresAt: <ms>, write: <true|false>,
+    //                   perms: { "<section>": "<letters v a e d>" } } } }
     function grants() {
       return get(/databases/$(database)/documents/config/access).data.approved;
     }
@@ -71,11 +77,79 @@ service cloud.firestore {
     function mayWrite() {
       return isApproved() && grants()[me()].get('write', false) == true;
     }
+    function grantPerms() {
+      return grants()[me()].get('perms', {});
+    }
+    function canSee(sec) {
+      return isApproved() && grantPerms().get(sec, '').matches('.*v.*');
+    }
+    function canChange(sec) {
+      return mayWrite() && grantPerms().get(sec, '').matches('.*[aed].*');
+    }
+    // Version 3.17.29: a section the owner marked \"Needs my approval\" for this person can only change through the owner (who applies an accepted\n    // proposal with their own save), so the cloud now refuses the person's own direct write there, whatever their phone believes.
+    function needsApproval(sec) {
+      return grants()[me()].get('needsApproval', {}).get(sec, false) == true;
+    }
+    // A section that is encrypted in the cloud can never be sent back as plain text by an approved person.
+    function keepsEncryption() {
+      return resource == null
+        || resource.data.get('encrypted', false) == false
+        || request.resource.data.get('encrypted', false) == true;
+    }
 
-    // The ledger: the owner, and approved people while unexpired (view-only unless write is true).
+    // The ledger, one document per section (production, sales, wages ...). ledger/manifest and any section a
+    // person has no letters for stay the owner's alone.
+    match /ledger/{sec} {
+      allow read: if isOwner() || canSee(sec);
+      allow create, update: if isOwner() || (canChange(sec) && !needsApproval(sec) && keepsEncryption());
+      allow delete: if isOwner();
+    }
+
+    // Encryption keys: the owner's vault (keys/<owner email>) and one bundle per approved person, holding
+    // only the keys of the sections their role may view, sealed with their access code.
+    match /keys/{email} {
+      allow read: if isOwner() || (isApproved() && me() == email);
+      allow write: if isOwner();
+    }
+
+    // The old whole-ledger copy and the small notes that tell a phone about its own edit access.
     match /sync/{doc} {
-      allow read: if isOwner() || isApproved();
-      allow create, update: if isOwner() || mayWrite();
+      allow read: if isOwner() || (isApproved() && doc.matches('grant-.*'));
+      allow create, update, delete: if isOwner();
+    }
+
+    // The audit trail: one document per change, written by the person who made it (or by the owner). Only the owner
+    // reads it. Nobody can edit an entry - sending the very same entry again (after a dropped connection) is the
+    // only update allowed - and only the owner can delete one. Entries are accepted for a person who is on the
+    // list even if their access has just ended (their phone may only be getting its queue out), but never dated
+    // after that access ended, never in the future and never more than a year back.
+    // Version 3.17.29: only someone who has a letter to ADD / EDIT / DELETE in that section (view alone is not enough) may send an entry or proposal,\n    // and the letter must fit the action.
+    function mayLog(sec, action) {
+      return signedIn() && me() in grants()
+        && ((action == 'add' && grantPerms().get(sec, '').matches('.*a.*'))
+         || (action == 'edit' && grantPerms().get(sec, '').matches('.*e.*'))
+         || (action == 'delete' && grantPerms().get(sec, '').matches('.*d.*')));
+    }
+    function loggedBeforeEnd() {
+      return request.resource.data.ct <= grants()[me()].get('expiresAt', 0) + 600000;
+    }
+    match /audit/{id} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        || (mayLog(request.resource.data.section, request.resource.data.action)
+            && request.resource.data.by == me()
+            && loggedBeforeEnd()
+            && request.resource.data.keys().hasOnly(['by','ct','section','action','list','recId','encrypted','kv','payload'])
+            && request.resource.data.ct is number
+            && request.resource.data.ct <= request.time.toMillis() + 300000
+            && request.resource.data.ct > request.time.toMillis() - 31622400000
+            && request.resource.data.action in ['add','edit','delete']
+            && request.resource.data.list is string
+            && request.resource.data.recId is string
+            && request.resource.data.payload is string
+            && request.resource.data.payload.size() < 200000);
+      allow update: if isOwner()
+        || (signedIn() && resource.data.by == me() && request.resource.data == resource.data);
       allow delete: if isOwner();
     }
 
@@ -85,6 +159,31 @@ service cloud.firestore {
       allow create, update: if isOwner()
         && request.resource.data.ownerEmail == '${CLOUD_OWNER_EMAIL}';
       allow delete: if false;
+    }
+
+    // Proposals: a change by a person who needs the owner's approval, kept until the owner answers. The person who made it
+    // sends it (status pending) and can read it back, and withdraw it while it is still pending. Only the owner answers
+    // (sets the status and a note) or deletes one. Nobody else can read it.
+    match /proposals/{id} {
+      allow read: if isOwner() || (signedIn() && (resource == null || resource.data.by == me()));
+      allow create: if isOwner()
+        || (mayLog(request.resource.data.section, request.resource.data.action)
+            && request.resource.data.by == me()
+            && request.resource.data.status == 'pending'
+            && loggedBeforeEnd()
+            && request.resource.data.keys().hasOnly(['by','ct','section','action','list','recId','status','encrypted','kv','payload'])
+            && request.resource.data.ct is number
+            && request.resource.data.ct <= request.time.toMillis() + 300000
+            && request.resource.data.ct > request.time.toMillis() - 31622400000
+            && request.resource.data.action in ['add','edit','delete']
+            && request.resource.data.list is string
+            && request.resource.data.recId is string
+            && request.resource.data.payload is string
+            && request.resource.data.payload.size() < 200000);
+      allow update: if isOwner()
+        || (signedIn() && resource.data.by == me() && request.resource.data == resource.data);
+      allow delete: if isOwner()
+        || (signedIn() && (resource == null || (resource.data.by == me() && resource.data.status == 'pending')));
     }
   }
 }`;
@@ -284,13 +383,107 @@ function cloudAccessTouch(rec, approved, nowMs){
 }
 // Approve someone to view until expiresAt, or change the date of someone already on the list.
 // write: true = may also edit until then (Approve to edit), false = view only, left out = keep what they had.
-function cloudAccessApplyApprove(rec, email, expiresAt, nowMs, write){
+function cloudAccessApplyApprove(rec, email, expiresAt, nowMs, write, role){
   const e = cloudAccessNormEmail(email);
   const approved = cloudAccessApproved(rec);
   const old = approved[e];
   const w = write === undefined ? !!(old && old.write === true) : write === true;
-  approved[e] = { expiresAt, write: w, addedAt: (old && old.addedAt) || nowMs || Date.now() };
-  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, updated: !!old, write: w };
+  const roles = cloudRolesOf(rec);
+  if(role !== undefined && !roles[role]) throw new Error('Choose a role for them.');
+  const patch = { expiresAt, write: w, addedAt: (old && old.addedAt) || nowMs || Date.now() };
+  if(role !== undefined && (!old || old.role !== role)){ patch.role = role; patch.overrides = null; } // a different role starts clean
+  approved[e] = cloudAccessBuildEntry(old && { role: old.role, overrides: old.overrides, needsApproval: old.needsApproval, kc: old.kc }, patch, roles); // kc = version of their access code (js/section-keys.js), kept; needsApproval = the owner's per-section switches, kept
+  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, updated: !!old, write: w, role: approved[e].role };
+}
+// A new access code for someone (js/section-keys.js): the old code stops opening their keys. Nothing else changes.
+function cloudAccessApplyNewCode(rec, email, nowMs){
+  const e = String(email || '').trim().toLowerCase();
+  const approved = cloudAccessApproved(rec);
+  const old = approved[e];
+  if(!old) throw new Error('That person is no longer on the list.');
+  approved[e] = Object.assign({}, old, { kc: (Number(old.kc) > 0 ? Math.floor(Number(old.kc)) : 1) + 1 });
+  return { record: cloudAccessTouch(rec, approved, nowMs), email: e };
+}
+// Change someone's role. Their overrides are cleared (the new role applies as it is); edit switch and end time stay.
+function cloudAccessApplySetRole(rec, email, role, nowMs){
+  const e = String(email || '').trim().toLowerCase();
+  const roles = cloudRolesOf(rec);
+  if(!roles[role]) throw new Error('Choose a role for them.');
+  const approved = cloudAccessApproved(rec);
+  const old = approved[e];
+  if(!old) throw new Error('That person is no longer on the list.');
+  approved[e] = cloudAccessBuildEntry(old, { role, overrides: null }, roles);
+  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, role, roleLabel: roles[role].label };
+}
+// Set what someone may do in each section (the full map from the screen). Only the differences from their
+// role are kept as overrides, so later changes to the preset still reach everyone who hasn't been adjusted.
+// `approval` (optional): the "Needs approval" switches from the same screen, {section: true/false}; left out = unchanged.
+function cloudAccessApplySetPerms(rec, email, wanted, nowMs, approval){
+  const e = String(email || '').trim().toLowerCase();
+  const approved = cloudAccessApproved(rec);
+  const old = approved[e];
+  if(!old) throw new Error('That person is no longer on the list.');
+  if(!old.role) throw new Error('Choose a role for them first.');
+  Object.keys(wanted || {}).forEach(id=>{ if(cloudSectionIds().indexOf(id) < 0) throw new Error('Unknown section: ' + id); });
+  const roles = cloudRolesOf(rec);
+  const base = cloudPermsFor(old.role, null, roles), want = cloudPermsClean(wanted), overrides = {};
+  cloudSectionIds().forEach(id=>{ if((want[id] || '') !== (base[id] || '')) overrides[id] = want[id] || ''; });
+  const patch = { overrides };
+  if(approval !== undefined){
+    Object.keys(approval || {}).forEach(id=>{ if(cloudSectionIds().indexOf(id) < 0) throw new Error('Unknown section: ' + id); });
+    patch.needsApproval = cloudNeedsApprovalClean(approval);
+  }
+  approved[e] = cloudAccessBuildEntry(old, patch, roles);
+  return { record: cloudAccessTouch(rec, approved, nowMs), email: e, perms: approved[e].perms, overrides, needsApproval: approved[e].needsApproval || {} };
+}
+// ---- Creating, editing and deleting roles (owner) --------------------------------------------------------
+// A role is a name plus what it allows in each section. Saving a role recomputes the stored permissions of
+// everyone who has it (their overrides stay on top), and returns their emails so their notes are re-sent.
+const CLOUD_ROLE_NAME_MAX = 40;
+function cloudAccessRecompute(approved, roles, roleId){
+  const emails = [];
+  Object.keys(approved).forEach(e=>{
+    if(approved[e] && approved[e].role === roleId){ approved[e] = cloudAccessBuildEntry(approved[e], {}, roles); emails.push(e); }
+  });
+  return emails;
+}
+function cloudRoleSlug(label){ return String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'role'; }
+// id null = create a new role; otherwise edit that one (built-in presets too: the edit is kept in the record and can be reset).
+function cloudAccessApplyRoleSave(rec, id, label, perms, nowMs){
+  const name = String(label || '').trim();
+  if(!name) throw new Error('Give the role a name.');
+  if(name.length > CLOUD_ROLE_NAME_MAX) throw new Error('Keep the role name under ' + CLOUD_ROLE_NAME_MAX + ' letters.');
+  Object.keys(perms || {}).forEach(k=>{ if(cloudSectionIds().indexOf(k) < 0) throw new Error('Unknown section: ' + k); });
+  const roles = cloudRolesOf(rec);
+  if(id === 'custom') throw new Error('That role cannot be changed.');
+  if(id && !roles[id]) throw new Error('That role no longer exists.');
+  Object.keys(roles).forEach(k=>{ if(k !== id && roles[k].label.toLowerCase() === name.toLowerCase()) throw new Error('There is already a role called ' + roles[k].label + '.'); });
+  if(!id){
+    const t = (nowMs || Date.now()).toString(36);
+    id = 'r-' + cloudRoleSlug(name) + '-' + t;
+    while(roles[id] || CLOUD_ROLES[id]) id += 'x';
+  }
+  const stored = Object.assign({}, (rec && rec.roles) || {});
+  stored[id] = { label: name, perms: cloudPermsClean(perms) };
+  const next = Object.assign({}, rec, { roles: stored });
+  const newRoles = cloudRolesOf(next);
+  const approved = cloudAccessApproved(next);
+  const emails = cloudAccessRecompute(approved, newRoles, id);
+  return { record: cloudAccessTouch(next, approved, nowMs), id, emails, email: emails[0] };
+}
+// Delete a role you made (refused while anyone has it), or reset an edited built-in preset to its original.
+function cloudAccessApplyRoleDelete(rec, id, nowMs){
+  const roles = cloudRolesOf(rec);
+  if(id === 'custom') throw new Error('That role cannot be removed.');
+  if(!roles[id]) throw new Error('That role no longer exists.');
+  const approved = cloudAccessApproved(rec);
+  const users = Object.keys(approved).filter(e=> approved[e] && approved[e].role === id);
+  if(!roles[id].builtin && users.length) throw new Error(users.length + (users.length === 1 ? ' person has' : ' people have') + ' this role - give them another role first.');
+  if(roles[id].builtin && !roles[id].modified) throw new Error('That is a built-in role and it has not been changed.');
+  const stored = Object.assign({}, (rec && rec.roles) || {}); delete stored[id];
+  const next = Object.assign({}, rec, { roles: stored });
+  const emails = cloudAccessRecompute(approved, cloudRolesOf(next), id);
+  return { record: cloudAccessTouch(next, approved, nowMs), id, emails, email: emails[0], reset: !!roles[id].builtin };
 }
 // Turn edit access on or off for someone already on the list; their end time is not touched, so edit access
 // always ends with the approval. Refused if they are not on the list or their approval has already ended.
@@ -301,7 +494,7 @@ function cloudAccessApplySetWrite(rec, email, on, nowMs){
   const old = approved[e];
   if(!old) throw new Error('That person is no longer on the list.');
   if(on && !(Number(old.expiresAt) > now)) throw new Error('Their approval has already ended - use Extend first, then allow editing.');
-  approved[e] = Object.assign({}, old, { write: on === true });
+  approved[e] = cloudAccessBuildEntry(old, { write: on === true }, cloudRolesOf(rec));
   return { record: cloudAccessTouch(rec, approved, now), email: e, write: on === true, expiresAt: Number(old.expiresAt) || 0 };
 }
 // Move someone's end time. deltaMs > 0 extends (counted from the later of now and their end time, so an
@@ -344,7 +537,7 @@ function cloudAccessList(rec, nowMs){
   return Object.keys((rec && rec.approved) || {}).map(email => {
     const a = rec.approved[email] || {};
     const expiresAt = Number(a.expiresAt) || 0;
-    return { email, expiresAt, write: a.write === true, expired: !(expiresAt > now) };
+    return { email, expiresAt, write: a.write === true, expired: !(expiresAt > now), role: cloudRolesOf(rec)[a.role] ? a.role : '', perms: cloudPermsFor(a.role, a.overrides, cloudRolesOf(rec)), overrides: a.overrides || null, needsApproval: cloudNeedsApprovalClean(a.needsApproval) };
   }).sort((a, b) => (a.expired - b.expired) || (a.expiresAt - b.expiresAt) || (a.email < b.email ? -1 : 1));
 }
 // Owner only: read the record, let `mutate` change it, save it. Nothing is written if `mutate` throws.
@@ -368,9 +561,20 @@ async function cloudAccessEdit(mutate){
   try{ localStorage.setItem(CLOUD_ACCESS_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){}
   // Keep the small note that tells that person's phone about its own edit access in step (write-access.js).
   // The record above is the truth; if only the note fails, the caller is told (out.mirrorError).
-  if(typeof waMirrorGrant === 'function' && out.email){
-    try{ await waMirrorGrant(db, out.email, (out.record.approved || {})[out.email] || null); }
-    catch(e){ console.error(e); out.mirrorError = true; }
+  if(typeof waMirrorGrant === 'function'){
+    for(const em of (out.emails && out.emails.length ? out.emails : (out.email ? [out.email] : []))){
+      try{ await waMirrorGrant(db, em, (out.record.approved || {})[em] || null); }
+      catch(e){ console.error(e); out.mirrorError = true; }
+    }
+  }
+  // With encryption on, the keys follow the record (js/section-keys.js): each person's bundle holds only the
+  // keys of sections they may view, and a section someone lost gets a new key. If that step fails the record
+  // is still saved; the caller is warned and it is retried when the People card is opened again.
+  if(typeof skReconcile === 'function' && typeof encEnabled === 'function' && encEnabled()){
+    try{
+      const r = await skReconcile(db, out.record);
+      if(r && r.rotated && r.rotated.length) out.rotated = r.rotated;
+    }catch(e){ console.error(e); out.mirrorError = true; }
   }
   return out;
 }
@@ -397,20 +601,79 @@ function cloudPeopleTimeLeft(expiresAt, nowMs){
   const d = Math.floor(left / DAYMS);
   return d + (d === 1 ? ' day' : ' days') + ' left';
 }
+const em0 = x => escHtml(x);
+function cloudPermGridHtml(attr, key, perms){
+  return cloudSectionIds().map(id=>{
+    const l = (perms && perms[id]) || '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="flex:1;min-width:0;font-size:14px">${escHtml(CLOUD_SECTION_LABELS[id])}</span>` +
+      CLOUD_LETTERS.split('').map(c=> `<label style="display:flex;flex-direction:column;align-items:center;font-size:11px;width:30px"><input type="checkbox" ${attr}="${escHtml(key)}|${id}|${c}"${l.indexOf(c) >= 0 ? ' checked' : ''}>${c.toUpperCase()}</label>`).join('') + '</div>';
+  }).join('');
+}
+// One "Needs approval" box per section for one person (Release 3). Saved together with the V / A / E / D boxes.
+function cloudApprovalGridHtml(email, on){
+  return cloudSectionIds().map(id=>
+    `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:14px"><input type="checkbox" data-cp-appr="${escHtml(email)}|${id}"${on && on[id] === true ? ' checked' : ''}><span style="flex:1;min-width:0">${escHtml(CLOUD_SECTION_LABELS[id])}</span></label>`
+  ).join('');
+}
+// Reads one person's Needs approval boxes back into {section: true/false} (every section listed).
+function cloudApprovalRead(box, email){
+  const out = {};
+  cloudSectionIds().forEach(id=>{ out[id] = false; });
+  box.querySelectorAll('[data-cp-appr]').forEach(c => {
+    const [k, id] = String(c.getAttribute('data-cp-appr')).split('|');
+    if(k === email && id in out) out[id] = !!c.checked;
+  });
+  return out;
+}
+function cloudApprovalSummary(on){
+  const ids = cloudSectionIds().filter(id=> on && on[id] === true);
+  return ids.length ? 'Needs your approval: ' + ids.map(id=> CLOUD_SECTION_LABELS[id]).join(', ') : '';
+}
+function cloudRoleOptionsHtml(roles, selected){
+  return Object.keys(roles).map(k=> `<option value="${escHtml(k)}"${selected === k ? ' selected' : ''}>${escHtml(roles[k].label)}</option>`).join('');
+}
+// Reads one grid's boxes back into {section: letters}; a section whose V box is off counts as none.
+function cloudGridRead(box, attr, key){
+  const want = {};
+  box.querySelectorAll('[' + attr + ']').forEach(c => {
+    const [k, id, l] = String(c.getAttribute(attr)).split('|');
+    if(k !== key || !c.checked) return;
+    want[id] = (want[id] || '') + l;
+  });
+  Object.keys(want).forEach(id => { if(want[id].indexOf('v') < 0) delete want[id]; });
+  return want;
+}
 function cloudPeopleListHtml(rec, nowMs){
+  const roles = cloudRolesOf(rec);
   const rows = cloudAccessList(rec, nowMs);
   if(!rows.length) return '<p class="note" style="margin:0 0 8px">No one is approved yet.</p>';
   return rows.map(r => {
-    const what = r.expired ? ('Expired ' + cloudPeopleDateText(r.expiresAt)) : ((r.write ? 'Can edit' : 'View only') + ' \u00B7 ' + cloudPeopleTimeLeft(r.expiresAt, nowMs) + ' (until ' + cloudPeopleDateTimeText(r.expiresAt) + ')');
+    const roleName = r.role ? roles[r.role].label : 'No role yet';
+    const what = r.expired ? ('Expired ' + cloudPeopleDateText(r.expiresAt)) : (roleName + ' \u00B7 ' + (r.write ? 'Can edit' : 'View only') + ' \u00B7 ' + cloudPeopleTimeLeft(r.expiresAt, nowMs) + ' (until ' + cloudPeopleDateTimeText(r.expiresAt) + ')');
+    const eff = r.perms;
+    const grid = cloudPermGridHtml('data-cp-perm', r.email, eff);
+    const roleOpts = '<option value=""' + (r.role ? '' : ' selected') + ' disabled>Choose a role</option>' + cloudRoleOptionsHtml(roles, r.role);
     const em = escHtml(r.email);
     return `<div data-cp-row="${em}" style="padding:8px 0;border-bottom:1px solid var(--field-border)">
       <div style="font-weight:500;overflow-wrap:anywhere">${em}</div>
       <div class="note" style="margin:0 0 6px${r.expired ? ';color:var(--rust)' : ''}">${what}</div>
+      <div class="note" style="margin:0 0 6px">${escHtml(cloudPermsSummary(eff))}${r.overrides ? ' (adjusted)' : ''}</div>
+      ${cloudApprovalSummary(r.needsApproval) ? `<div class="note" style="margin:0 0 6px">${escHtml(cloudApprovalSummary(r.needsApproval))}</div>` : ''}
+      <select data-cp-role="${em}" aria-label="Role" style="width:100%;margin-bottom:8px">${roleOpts}</select>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="ghost" type="button" data-cp-access="${em}"${r.role ? '' : ' disabled'}>Sections</button>
         <button class="ghost" type="button" data-cp-open="extend" data-cp-email="${em}">Extend</button>
         <button class="ghost" type="button" data-cp-open="shorten" data-cp-email="${em}"${r.expired ? ' disabled' : ''}>Shorten</button>
         <button class="ghost" type="button" data-cp-write="${em}" data-cp-write-to="${r.write ? 'off' : 'on'}"${(!r.write && r.expired) ? ' disabled' : ''}>${r.write ? 'Stop edit' : 'Allow edit'}</button>
+        ${(typeof encEnabled === 'function' && encEnabled() && !r.expired && Object.keys(r.perms || {}).length) ? `<button class="ghost" type="button" data-cp-code="${em}">Access code</button>` : ''}
         <button class="ghost" type="button" data-cp-revoke="${em}">Revoke</button>
+      </div>
+      <div data-cp-codebox="${em}" style="display:none;margin-top:8px"></div>
+      <div data-cp-accesspanel="${em}" style="display:none;margin-top:8px">
+        <div class="note" style="margin:0 0 4px">V view, A add, E edit, D delete. Add / edit / delete only work while their edit switch is on.</div>${grid}
+        <div style="font-weight:500;margin-top:10px">Needs my approval</div>
+        <div class="note" style="margin:0 0 4px">Tick a section and every add, edit or delete they make there waits for your OK. Only matters where they can add, edit or delete. Saved with Save access; Reset to role leaves it as it is.</div>${cloudApprovalGridHtml(r.email, r.needsApproval)}
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" type="button" data-cp-saveperms="${em}" style="flex:1">Save access</button><button class="ghost" type="button" data-cp-resetperms="${em}" style="flex:1">Reset to role</button></div>
       </div>
       <div data-cp-panel="${em}" style="display:none;margin-top:8px">
         <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -424,6 +687,85 @@ function cloudPeopleListHtml(rec, nowMs){
       </div>
     </div>`;
   }).join('');
+}
+// ---- The Roles card (Settings, owner only) ---------------------------------------------------------------
+function cloudRolesHtml(rec){
+  const roles = cloudRolesOf(rec), approved = cloudAccessApproved(rec);
+  const used = id => Object.keys(approved).filter(e=> approved[e] && approved[e].role === id).length;
+  const rows = Object.keys(roles).map(id=>{
+    const r = roles[id], n = used(id), eid = escHtml(id), editable = id !== 'custom';
+    const tail = r.builtin ? (r.modified ? ' \u00B7 edited' : ' \u00B7 built in') : '';
+    return `<div data-rl-row="${eid}" style="padding:8px 0;border-bottom:1px solid var(--field-border)">
+      <div style="font-weight:500">${escHtml(r.label)}<span class="note" style="margin:0 0 0 6px">${n} ${n === 1 ? 'person' : 'people'}${tail}</span></div>
+      <div class="note" style="margin:0 0 6px">${id === 'custom' ? 'Starts with nothing; you choose sections for each person.' : escHtml(cloudPermsSummary(r.perms))}</div>` +
+      (editable ? `<div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button class="ghost" type="button" data-rl-edit="${eid}">Edit</button>
+        <button class="ghost" type="button" data-rl-delete="${eid}"${(r.builtin && !r.modified) ? ' disabled' : ''}>${r.builtin ? 'Reset' : 'Delete'}</button>
+      </div>
+      <div data-rl-panel="${eid}" style="display:none;margin-top:8px">
+        <input type="text" data-rl-name="${eid}" value="${escHtml(r.label)}" maxlength="${CLOUD_ROLE_NAME_MAX}" aria-label="Role name" style="width:100%;margin-bottom:6px">
+        ${cloudPermGridHtml('data-rl-perm', id, r.perms)}
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" type="button" data-rl-save="${eid}" style="flex:1">Save role</button><button class="ghost" type="button" data-rl-cancel="${eid}" style="flex:1">Cancel</button></div>
+      </div>` : '') + '</div>';
+  }).join('');
+  return rows + `<div style="margin-top:10px"><button class="ghost" type="button" data-rl-new="1">New role</button>
+    <div data-rl-panel="new" style="display:none;margin-top:8px">
+      <input type="text" data-rl-name="new" value="" maxlength="${CLOUD_ROLE_NAME_MAX}" placeholder="Role name" aria-label="Role name" style="width:100%;margin-bottom:6px">
+      ${cloudPermGridHtml('data-rl-perm', 'new', {})}
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="ghost" type="button" data-rl-save="new" style="flex:1">Create role</button><button class="ghost" type="button" data-rl-cancel="new" style="flex:1">Cancel</button></div>
+    </div></div>`;
+}
+function cloudRolesCardHtml(){
+  return `<div class="card"><div class="card-head"><h2>Roles</h2></div><div id="cloudRoles">
+    <p class="note" style="margin:0 0 8px">A role says what a person may see and do in each part of the ledger (V view, A add, E edit, D delete). Give it to someone under People, for as long as you choose. Editing a role changes everyone who has it, except the sections you adjusted for them one by one. Add / edit / delete only work while a person's edit switch is on.</p>
+    <div id="cloudRolesList"><p class="note" style="margin:0 0 8px">Loading\u2026</p></div>
+    <p class="note" id="cloudRolesMsg" role="status" style="margin:8px 0 0;color:var(--rust)"></p></div></div>`;
+}
+function cloudRolesSay(text, ok){
+  const el = document.getElementById('cloudRolesMsg');
+  if(el){ el.textContent = text || ''; el.style.color = ok ? 'inherit' : 'var(--rust)'; }
+}
+function cloudRolesFind(box, attr, key){
+  const all = box.querySelectorAll('[' + attr + ']');
+  for(let i = 0; i < all.length; i++) if(all[i].getAttribute(attr) === key) return all[i];
+  return null;
+}
+function cloudRolesDraw(rec){
+  const box = document.getElementById('cloudRolesList');
+  if(!box) return;
+  box.innerHTML = cloudRolesHtml(rec);
+  const each = (sel, fn) => box.querySelectorAll(sel).forEach(fn);
+  each('[data-rl-edit]', b => { b.onclick = () => { const pn = cloudRolesFind(box, 'data-rl-panel', b.getAttribute('data-rl-edit')); if(pn) pn.style.display = pn.style.display === 'none' ? 'block' : 'none'; }; });
+  each('[data-rl-new]', b => { b.onclick = () => { const pn = cloudRolesFind(box, 'data-rl-panel', 'new'); if(pn) pn.style.display = pn.style.display === 'none' ? 'block' : 'none'; }; });
+  each('[data-rl-cancel]', b => { b.onclick = () => { const pn = cloudRolesFind(box, 'data-rl-panel', b.getAttribute('data-rl-cancel')); if(pn) pn.style.display = 'none'; }; });
+  each('[data-rl-save]', b => { b.onclick = () => cloudRolesSave(box, b, b.getAttribute('data-rl-save')); });
+  each('[data-rl-delete]', b => { b.onclick = () => cloudRolesDelete(b, b.getAttribute('data-rl-delete')); });
+}
+async function cloudRolesSave(box, btn, key){
+  btn.disabled = true; cloudRolesSay('');
+  try{
+    const nameEl = cloudRolesFind(box, 'data-rl-name', key);
+    const perms = cloudGridRead(box, 'data-rl-perm', key);
+    const out = await cloudAccessEdit(rec => cloudAccessApplyRoleSave(rec, key === 'new' ? null : key, nameEl ? nameEl.value : '', perms, Date.now()));
+    cloudRolesSay((key === 'new' ? 'Role created. ' : 'Role saved. ') + (out.emails.length ? out.emails.length + (out.emails.length === 1 ? ' person' : ' people') + ' with it will pick up the change on their next sync.' : 'Nobody has it yet.') + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+  }catch(e){ console.error(e); cloudRolesSay(cloudPeopleErrorText(e)); }
+  btn.disabled = false; await cloudPeopleRefresh();
+}
+// Delete / Reset: tap once to arm, again to do it.
+async function cloudRolesDelete(btn, id){
+  if(!btn.__armed){
+    const label = btn.textContent;
+    btn.__armed = setTimeout(() => { btn.__armed = null; btn.textContent = label; }, 4000);
+    btn.textContent = 'Tap again';
+    return;
+  }
+  clearTimeout(btn.__armed); btn.__armed = null;
+  btn.disabled = true; cloudRolesSay('');
+  try{
+    const out = await cloudAccessEdit(rec => cloudAccessApplyRoleDelete(rec, id, Date.now()));
+    cloudRolesSay(out.reset ? 'Role reset to its original.' : 'Role deleted.', true);
+  }catch(e){ console.error(e); cloudRolesSay(cloudPeopleErrorText(e)); }
+  await cloudPeopleRefresh();
 }
 // The owner-only block, drawn inside the People card (Settings > People).
 function cloudPeopleHtml(){
@@ -441,6 +783,8 @@ function cloudPeopleHtml(){
     <div id="cloudPeopleUntilRow" style="display:none;margin-bottom:8px">
       <input type="datetime-local" id="cloudPeopleUntil" value="${cloudAccessDefaultDateTime()}" style="width:100%">
     </div>
+    <label class="note" for="cloudPeopleRole" style="display:block;margin:0 0 4px">Role</label>
+    <select id="cloudPeopleRole" style="width:100%;margin-bottom:8px">${cloudRoleOptionsHtml(cloudRolesOf(null), 'business_viewer')}</select>
     <div style="display:flex;gap:8px">
       <button class="ghost" id="cloudPeopleAddBtn" type="button" style="flex:1">Approve to view</button>
       <button class="ghost" id="cloudPeopleEditBtn" type="button" style="flex:1">Approve to edit</button>
@@ -453,7 +797,7 @@ function cloudPeopleSection(){
   if(!cloudIsOwner()) return '';
   const u = cloudUserNow();
   if(!u || !u.verified) return '';
-  return `<div class="card"><div class="card-head"><h2>People</h2></div>${cloudPeopleHtml()}</div>`;
+  return `<div class="card"><div class="card-head"><h2>People</h2></div>${cloudPeopleHtml()}</div>` + cloudRolesCardHtml();
 }
 async function cloudPeopleRefresh(reconcile){
   const box = document.getElementById('cloudPeopleList');
@@ -461,12 +805,23 @@ async function cloudPeopleRefresh(reconcile){
   try{
     const rec = await cloudAccessRead();
     if(reconcile === true && typeof waMirrorAll === 'function') waMirrorAll(rec); // quietly re-sends each person's edit-access note (also covers entries set by hand)
+    if(reconcile === true && typeof skReconcile === 'function' && typeof encEnabled === 'function' && encEnabled()){ // quietly brings the keys in step (retry, expired approvals)
+      cloudSdkReady().then(d => skReconcile(d, rec)).catch(e => console.error(e));
+    }
+    const roleSel = document.getElementById('cloudPeopleRole');
+    if(roleSel){ const keep = roleSel.value; roleSel.innerHTML = cloudRoleOptionsHtml(cloudRolesOf(rec), keep || 'business_viewer'); }
+    cloudRolesDraw(rec);
     box.innerHTML = cloudPeopleListHtml(rec);
     box.querySelectorAll('[data-cp-open]').forEach(b => { b.onclick = () => cloudPeopleOpenPanel(box, b.getAttribute('data-cp-email'), b.getAttribute('data-cp-open')); });
     box.querySelectorAll('[data-cp-cancel]').forEach(b => { b.onclick = () => cloudPeopleClosePanel(box, b.getAttribute('data-cp-cancel')); });
     box.querySelectorAll('[data-cp-apply]').forEach(b => { b.onclick = () => cloudPeopleApplyPanel(box, b, b.getAttribute('data-cp-apply')); });
     box.querySelectorAll('[data-cp-write]').forEach(b => { b.onclick = () => cloudPeopleSetWrite(b, b.getAttribute('data-cp-write'), b.getAttribute('data-cp-write-to') === 'on'); });
     box.querySelectorAll('[data-cp-revoke]').forEach(b => { b.onclick = () => cloudPeopleAct(b, 'revoke'); });
+    box.querySelectorAll('[data-cp-code]').forEach(b => { b.onclick = () => { if(typeof skPeopleCode === 'function') skPeopleCode(box, b.getAttribute('data-cp-code')); }; });
+    box.querySelectorAll('[data-cp-role]').forEach(b => { b.onchange = () => cloudPeopleSetRole(b.getAttribute('data-cp-role'), b.value); });
+    box.querySelectorAll('[data-cp-access]').forEach(b => { b.onclick = () => { const pn = cloudPeopleFind(box, 'data-cp-accesspanel', b.getAttribute('data-cp-access')); if(pn) pn.style.display = pn.style.display === 'none' ? 'block' : 'none'; }; });
+    box.querySelectorAll('[data-cp-saveperms]').forEach(b => { b.onclick = () => cloudPeopleSavePerms(box, b, b.getAttribute('data-cp-saveperms')); });
+    box.querySelectorAll('[data-cp-resetperms]').forEach(b => { b.onclick = () => cloudPeopleResetPerms(b, b.getAttribute('data-cp-resetperms')); });
   }catch(e){ console.error(e); box.innerHTML = `<p class="note" style="margin:0 0 8px;color:var(--rust)">${escHtml(cloudPeopleErrorText(e))}</p>`; }
 }
 // Added to a message when the person's own phone could not be told (the record itself was saved).
@@ -545,6 +900,33 @@ async function cloudPeopleSetWrite(btn, email, on){
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
   await cloudPeopleRefresh();
 }
+async function cloudPeopleSetRole(email, role){
+  cloudPeopleSay('');
+  try{
+    const out = await cloudAccessEdit(rec => cloudAccessApplySetRole(rec, email, role, Date.now()));
+    cloudPeopleSay(out.email + ' is now a ' + out.roleLabel + '.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ' Their phone picks it up on its next sync.'), true);
+  }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
+  await cloudPeopleRefresh();
+}
+// The screen's V / A / E / D boxes for one person, as a full map. A section whose V box is off counts as none.
+function cloudPeopleReadPerms(box, email){ return cloudGridRead(box, 'data-cp-perm', email); }
+async function cloudPeopleSavePerms(box, btn, email){
+  btn.disabled = true; cloudPeopleSay('');
+  try{
+    const want = cloudPeopleReadPerms(box, email), appr = cloudApprovalRead(box, email);
+    const out = await cloudAccessEdit(rec => cloudAccessApplySetPerms(rec, email, want, Date.now(), appr));
+    cloudPeopleSay(out.email + ' saved: ' + cloudPermsSummary(out.perms) + '.' + (cloudApprovalSummary(out.needsApproval) ? ' ' + cloudApprovalSummary(out.needsApproval) + '.' : '') + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+  }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
+  btn.disabled = false; await cloudPeopleRefresh();
+}
+async function cloudPeopleResetPerms(btn, email){
+  btn.disabled = true; cloudPeopleSay('');
+  try{
+    const out = await cloudAccessEdit(rec => { const r0 = cloudAccessApproved(rec)[String(email).trim().toLowerCase()]; if(!r0) throw new Error('That person is no longer on the list.'); return cloudAccessApplySetRole(rec, email, r0.role, Date.now()); });
+    cloudPeopleSay(out.email + ' reset to the ' + out.roleLabel + ' role.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
+  }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
+  btn.disabled = false; await cloudPeopleRefresh();
+}
 // write === true: "Approve to edit". Anything else (including no argument): "Approve to view", which keeps
 // whatever edit access the person already had.
 async function cloudPeopleAdd(write){
@@ -555,7 +937,7 @@ async function cloudPeopleAdd(write){
   try{
     const now = Date.now();
     const email = val('cloudPeopleEmail'), until = cloudAccessExpiry(val('cloudPeopleUnit') || 'days', val('cloudPeopleAmount'), val('cloudPeopleUntil'), now);
-    const out = await cloudAccessEdit(rec => cloudAccessApplyApprove(rec, email, until, now, canEdit ? true : undefined));
+    const out = await cloudAccessEdit(rec => cloudAccessApplyApprove(rec, email, until, now, canEdit ? true : undefined, val('cloudPeopleRole') || undefined));
     const box = document.getElementById('cloudPeopleEmail'); if(box) box.value = '';
     cloudPeopleSay(out.email + (out.updated ? ' updated' : ' approved') + (canEdit ? ' to edit' : '') + ' until ' + cloudPeopleDateTimeText(until) + '.' + (!canEdit && out.write ? ' They can still edit (use Stop edit on their row to make them view only).' : '') + ' Ask them to tap Sync Now on their phone.' + (out.mirrorError ? CLOUD_MIRROR_WARNING : ''), true);
   }catch(e){ console.error(e); cloudPeopleSay(cloudPeopleErrorText(e)); }
@@ -667,6 +1049,237 @@ if(typeof document !== 'undefined' && document.addEventListener){
 }
 async function cloudCurrentHash(){ return sha256Hex(JSON.stringify(DATA)); }
 
+// ---- Sections (Release 3) ----------------------------------------------------------------------
+// In the cloud the ledger is not one document any more but one document per SECTION, in the "ledger"
+// collection (ledger/production, ledger/sales, ledger/wages ...). A phone reads and writes only the
+// sections its account may see, so what a person is not allowed to see is never downloaded to their phone
+// (Firestore's rules refuse the read - see the rules step of Release 3). The owner's phone holds and
+// syncs every section. Which ledger keys live in which section is decided here and nowhere else:
+// a key that is not listed goes to 'tools', which is owner-only, so a new key can never leak by accident.
+const CLOUD_SECTIONS = [
+  { id:'production', keys:['production','loomAssignments','warpBeams'] },
+  { id:'reference',  keys:['qualities','looms','employees'] },
+  { id:'sales',      keys:['sale','clients','dyeingUnits'] },
+  { id:'recovery',   keys:['recovery','banks'] },
+  { id:'expenses',   keys:['expense'] },
+  { id:'wages',      keys:['wageBonuses','wagePayments','wageSettlements','wageRateHistory','wageFrom','wageTo'] },
+  { id:'loans',      keys:['loanPayments'] },
+  { id:'family',     keys:['family','personal','personalLoans','familyMembers'] },
+  { id:'materials',  keys:['warp','weft','warpTypes','weftTypes'] },
+  { id:'business',   keys:['businessInfo'] },
+  { id:'tools',      keys:['checkpoints','openingBalance','rateCalcs','rateCalcDefaults'] },
+];
+const CLOUD_SECTION_FALLBACK = 'tools';
+const CLOUD_KEY_SECTION = (()=>{ const m = {}; CLOUD_SECTIONS.forEach(sec=> sec.keys.forEach(k=>{ m[k] = sec.id; })); return m; })();
+const CLOUD_SEC_SEEN_KEY = 'khata-cloud-sec-seen';     // {section: savedAt of the cloud copy this phone last matched}
+const CLOUD_SEC_HASH_KEY = 'khata-cloud-sec-hash';     // {section: sha256 of that section as of the same moment}
+const CLOUD_PERMS_KEY = 'khata-cloud-perms';           // {section: 'vaed'} - what a non-owner account may do, once it has been told
+const CLOUD_KEYSIG_KEY = 'khata-cloud-keysig';         // which encryption setup the cloud sections were last written with
+const CLOUD_MANIFEST_ID = 'manifest';                  // ledger/manifest: owner-only marker that the section layout is in use
+const CLOUD_MANIFEST_OK_KEY = 'khata-cloud-manifest';  // owner email this phone last saw the manifest for
+const cloudSecRef = (db, sec) => db.collection('ledger').doc(sec);
+function cloudSectionIds(){ return CLOUD_SECTIONS.map(x=> x.id); }
+function cloudSectionOf(key){ return CLOUD_KEY_SECTION[key] || CLOUD_SECTION_FALLBACK; }
+// ---- Roles and per-section permissions (Release 3) -----------------------------------------------------
+// Each approved person has a ROLE (a preset: which sections, and what they may do in each) plus optional
+// per-person OVERRIDES on top of it. What a section allows is a string of letters: v = view, a = add,
+// e = edit, d = delete (any of a / e / d implies v - you cannot change what you cannot see). The effective
+// map {section: letters} is stored in the person's entry as `perms`, which the Firestore rules read.
+// The letters a / e / d only count while the person's edit switch is on (the same switch and the same end
+// time as Release 2: "Approve to edit" / "Allow edit" / "Stop edit"); with it off they are view-only.
+// A person with no role (an entry made before roles existed) has no access until one is chosen.
+const CLOUD_ROLES = {
+  business_viewer:     { label: 'Business viewer',     perms: { production: 'v', reference: 'v', sales: 'v', recovery: 'v', business: 'v' } },
+  production_operator: { label: 'Production operator', perms: { production: 'vae', reference: 'v', business: 'v' } },
+  custom:              { label: 'Custom',              perms: {} },
+};
+const CLOUD_SECTION_LABELS = { production:'Production', reference:'Employees, looms, qualities', sales:'Sales & clients', recovery:'Recovery & cheques', expenses:'Expenses', wages:'Wages', loans:'Employee loans', family:'Family & personal', materials:'Warp & weft', business:'Business info', tools:'Tools & settings' };
+const CLOUD_LETTERS = 'vaed';
+function cloudPermsCleanLetters(x){
+  const have = {}; String(x || '').toLowerCase().split('').forEach(c=>{ if(CLOUD_LETTERS.indexOf(c) >= 0) have[c] = true; });
+  if(have.a || have.e || have.d) have.v = true;
+  return CLOUD_LETTERS.split('').filter(c=> have[c]).join('');
+}
+function cloudPermsClean(map){
+  const out = {};
+  cloudSectionIds().forEach(id=>{ const l = cloudPermsCleanLetters(map && map[id]); if(l) out[id] = l; });
+  return out;
+}
+// The roles in force for a record: the built-in presets, with any the owner edited or created (record.roles).
+// `custom` (start from nothing) is fixed. Each entry: { label, perms, builtin, modified }.
+function cloudRolesOf(rec){
+  const out = {};
+  Object.keys(CLOUD_ROLES).forEach(id=>{ out[id] = { label: CLOUD_ROLES[id].label, perms: cloudPermsClean(CLOUD_ROLES[id].perms), builtin: true, modified: false }; });
+  const stored = rec && rec.roles && typeof rec.roles === 'object' ? rec.roles : {};
+  Object.keys(stored).forEach(id=>{
+    if(id === 'custom' || !stored[id] || typeof stored[id] !== 'object') return;
+    const label = String(stored[id].label || '').trim() || (CLOUD_ROLES[id] && CLOUD_ROLES[id].label) || id;
+    out[id] = { label, perms: cloudPermsClean(stored[id].perms), builtin: !!CLOUD_ROLES[id], modified: !!CLOUD_ROLES[id] };
+  });
+  return out;
+}
+function cloudRoleBase(role, roles){ const m = roles || CLOUD_ROLES; return (m[role] && m[role].perms) || {}; }
+// A role's permissions with a person's overrides laid over them (an override replaces that section; '' removes it).
+function cloudPermsFor(role, overrides, roles){
+  const base = cloudRoleBase(role, roles), out = {};
+  cloudSectionIds().forEach(id=>{ out[id] = (overrides && Object.prototype.hasOwnProperty.call(overrides, id)) ? overrides[id] : base[id]; });
+  return cloudPermsClean(out);
+}
+// What the person may actually do right now: edit letters count only while their edit switch is on.
+function cloudPermsEffective(entry, roles){
+  const p = cloudPermsFor(entry && entry.role, entry && entry.overrides, roles);
+  if(entry && entry.write === true) return p;
+  const out = {}; Object.keys(p).forEach(id=>{ if(p[id].indexOf('v') >= 0) out[id] = 'v'; });
+  return out;
+}
+function cloudPermsCanWrite(perms){ return Object.keys(perms || {}).some(id=> /[aed]/.test(String(perms[id]))); }
+function cloudPermsSummary(perms){
+  const ids = Object.keys(cloudPermsClean(perms));
+  return ids.length ? ids.map(id=> CLOUD_SECTION_LABELS[id] + ' ' + perms[id].toUpperCase()).join(', ') : 'no sections';
+}
+// "Needs approval" (Release 3): per person, the sections where every change they make (add, edit, delete) is to wait
+// for the owner's OK. Stored as {section: true}; a section that is off is simply not listed.
+function cloudNeedsApprovalClean(map){
+  const out = {};
+  cloudSectionIds().forEach(id=>{ if(map && map[id] === true) out[id] = true; });
+  return out;
+}
+function cloudAccessBuildEntry(old, patch, roles){
+  const e = Object.assign({}, old || {}, patch || {});
+  e.role = (roles || CLOUD_ROLES)[e.role] ? e.role : '';
+  if(e.overrides && Object.keys(e.overrides).length) e.overrides = Object.assign({}, e.overrides); else delete e.overrides;
+  const na = cloudNeedsApprovalClean(e.needsApproval);
+  if(Object.keys(na).length) e.needsApproval = na; else delete e.needsApproval;
+  e.perms = cloudPermsEffective(e, roles);
+  return e;
+}
+function cloudIsDenied(e){ return !!(e && (e.code === 'permission-denied' || /insufficient permissions/i.test(e.message || ''))); }
+
+// Splits a whole ledger into one object per section. Every section is always present (possibly empty).
+// Key order inside a section is fixed (known keys in the order above, then any unknown keys sorted, then
+// deletedIds), so the same data always gives the same text and therefore the same hash on every phone.
+// deletedIds (the deletion notes, see tombRecordDeletions) is divided by list name, so each section
+// carries only the notes for its own lists.
+function cloudSplit(data){
+  const src = data || {}, parts = {};
+  CLOUD_SECTIONS.forEach(sec=>{ parts[sec.id] = {}; });
+  CLOUD_SECTIONS.forEach(sec=> sec.keys.forEach(k=>{ if(src[k] !== undefined) parts[sec.id][k] = src[k]; }));
+  Object.keys(src).filter(k=> k !== 'deletedIds' && !CLOUD_KEY_SECTION[k]).sort().forEach(k=>{ parts[CLOUD_SECTION_FALLBACK][k] = src[k]; });
+  const tomb = src.deletedIds;
+  if(tomb && typeof tomb === 'object' && !Array.isArray(tomb)){
+    Object.keys(tomb).forEach(list=>{
+      const part = parts[cloudSectionOf(list)];
+      (part.deletedIds = part.deletedIds || {})[list] = tomb[list];
+    });
+  }
+  return parts;
+}
+// The reverse: sections back into one ledger object.
+function cloudJoin(parts){
+  const out = {}, tomb = {};
+  cloudSectionIds().forEach(id=>{
+    const p = parts && parts[id]; if(!p) return;
+    Object.keys(p).forEach(k=>{ if(k === 'deletedIds') Object.assign(tomb, p[k]); else out[k] = p[k]; });
+  });
+  if(Object.keys(tomb).length) out.deletedIds = tomb;
+  return out;
+}
+// Number of records in a section (used only as a note beside the document).
+function cloudSectionCount(part){
+  let n = 0;
+  Object.keys(part || {}).forEach(k=>{ if(k !== 'deletedIds' && Array.isArray(part[k])) n += part[k].length; });
+  return n;
+}
+// Puts one section's data into the live ledger, replacing that section's keys and deletion notes and
+// leaving every other section exactly as it is.
+function cloudSetSection(sec, part){
+  part = part || {};
+  Object.keys(DATA).forEach(k=>{ if(k !== 'deletedIds' && cloudSectionOf(k) === sec) delete DATA[k]; });
+  Object.keys(part).forEach(k=>{ if(k !== 'deletedIds') DATA[k] = part[k]; });
+  const tomb = (DATA.deletedIds && typeof DATA.deletedIds === 'object' && !Array.isArray(DATA.deletedIds)) ? DATA.deletedIds : {};
+  Object.keys(tomb).forEach(list=>{ if(cloudSectionOf(list) === sec) delete tomb[list]; });
+  const mine = part.deletedIds || {};
+  Object.keys(mine).forEach(list=>{ tomb[list] = mine[list]; });
+  if(Object.keys(tomb).length) DATA.deletedIds = tomb; else delete DATA.deletedIds;
+}
+
+// Small maps kept in the phone's storage (section -> value).
+function cloudMapGet(key){
+  try{ const m = JSON.parse(localStorage.getItem(key) || 'null'); return m && typeof m === 'object' && !Array.isArray(m) ? m : {}; }
+  catch(e){ return {}; }
+}
+function cloudMapSet(key, m){ try{ localStorage.setItem(key, JSON.stringify(m)); }catch(e){} }
+
+// What this account may do with each section. The owner: everything. Anyone else: what the owner allowed
+// (letters v = view, a = add, e = edit, d = delete), once this phone has been told; until then a phone
+// tries to read every section and simply skips the ones Firebase refuses, and it sends nothing.
+function cloudPermsKnown(){
+  try{ const p = JSON.parse(localStorage.getItem(CLOUD_PERMS_KEY) || 'null'); return p && typeof p === 'object' && !Array.isArray(p) ? p : null; }
+  catch(e){ return null; }
+}
+// Saving or clearing what this account may do: when it really changed, the drawer and the buttons are redrawn,
+// and sections the account may no longer view are removed from this phone (view-only.js: permsPurgeHidden).
+function cloudPermsChanged(){
+  try{
+    if(typeof permsPurgeHidden === 'function') Promise.resolve(permsPurgeHidden()).catch(e=> console.error(e)).then(()=>{ if(typeof switchTab === 'function' && typeof CURRENT_TAB !== 'undefined') switchTab(CURRENT_TAB || 'overview'); });
+    else if(typeof switchTab === 'function' && typeof CURRENT_TAB !== 'undefined') switchTab(CURRENT_TAB || 'overview');
+  }catch(e){ console.error(e); }
+}
+function cloudPermsSave(perms){
+  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){}
+  const next = JSON.stringify(cloudPermsClean(perms));
+  try{ localStorage.setItem(CLOUD_PERMS_KEY, next); }catch(e){}
+  if(before !== next) cloudPermsChanged();
+}
+function cloudPermsClear(){
+  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){}
+  try{ localStorage.removeItem(CLOUD_PERMS_KEY); }catch(e){}
+  cloudApprovalClear();
+  if(before !== null) cloudPermsChanged();
+}
+// "Needs approval" on this phone (Release 3): the sections where the owner wants every change from this account
+// to wait for their OK. Told by the owner's note, like the permissions. The owner is never asked.
+const CLOUD_APPROVAL_KEY = 'khata-cloud-needs-approval';  // {section: true}
+function cloudApprovalKnown(){
+  try{ const p = JSON.parse(localStorage.getItem(CLOUD_APPROVAL_KEY) || 'null'); return p && typeof p === 'object' && !Array.isArray(p) ? cloudNeedsApprovalClean(p) : {}; }
+  catch(e){ return {}; }
+}
+function cloudApprovalSave(map){ try{ localStorage.setItem(CLOUD_APPROVAL_KEY, JSON.stringify(cloudNeedsApprovalClean(map))); }catch(e){} }
+function cloudApprovalClear(){ try{ localStorage.removeItem(CLOUD_APPROVAL_KEY); }catch(e){} }
+function cloudNeedsApproval(sec){ return !cloudIsOwner() && cloudApprovalKnown()[sec] === true; }
+function cloudSectionPerm(sec){
+  if(cloudIsOwner()) return 'vaed';
+  const p = cloudPermsKnown();
+  return p && typeof p[sec] === 'string' ? p[sec] : '';
+}
+function cloudCanViewSection(sec){ return cloudSectionPerm(sec).indexOf('v') >= 0; }
+function cloudCanWriteSection(sec){ return /[aed]/.test(cloudSectionPerm(sec)) && !cloudNeedsApproval(sec); } // a section that needs approval is never sent by the person's own phone (the cloud rule refuses it too)
+function cloudReadSections(){
+  if(cloudIsOwner() || !cloudPermsKnown()) return cloudSectionIds();
+  return cloudSectionIds().filter(cloudCanViewSection);
+}
+function cloudWriteSections(){ return cloudSectionIds().filter(cloudCanWriteSection); }
+// Sections this account may change whose local copy differs from what was last sent / received.
+// With `conservative` (used before filing a wind-down safety copy) a phone that was never told its sections
+// counts all of them, so nothing could be lost by under-counting.
+async function cloudUnsyncedSections(conservative){
+  const parts = cloudSplit(DATA), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY), out = [];
+  const list = conservative && !cloudIsOwner() && !cloudPermsKnown() ? cloudSectionIds() : cloudWriteSections();
+  for(const sec of list){
+    if(hashes[sec] !== await sha256Hex(JSON.stringify(parts[sec]))) out.push(sec);
+  }
+  return out;
+}
+// Records "this phone matches the cloud" for the older whole-ledger markers (Release 2 uses them to
+// decide whether a wound-down grant left unsynced entries). Only when nothing here is waiting to be sent.
+async function cloudMarkSynced(newestSavedAt){
+  try{
+    if((await cloudUnsyncedSections()).length) return;
+    localStorage.setItem(CLOUD_LAST_HASH_KEY, await cloudCurrentHash());
+    if(newestSavedAt) localStorage.setItem(CLOUD_LAST_SEEN_KEY, newestSavedAt);
+  }catch(e){ /* storage unavailable: the next check simply compares again */ }
+}
+
 let CLOUD_PUSH_TIMER = null;
 // Called from save() (core.js) after every change — debounced so a burst of edits sends one
 // push a few seconds after the user stops, not one push per keystroke/field.
@@ -677,38 +1290,95 @@ function cloudSyncSchedule(){
   clearTimeout(CLOUD_PUSH_TIMER);
   CLOUD_PUSH_TIMER = setTimeout(cloudPushNow, 4000);
 }
-async function cloudPushNow(){
+// The cloud document for one section (see cloudPushNow / cloudMigrateToSections). With encryption on, the
+// payload is sealed with that section's own key (js/section-keys.js) and `kv` says which version of the key.
+// It carries no keyWrap any more: the PIN-locked key lives only in the owner's vault (keys/<owner>).
+async function cloudBuildSectionDoc(sec, part, json, meta, who){
+  const enc = !!encEnabled(); let payload = json, kv = 0;
+  if(enc){
+    if(typeof skSealSection === 'function'){ const sealed = await skSealSection(sec, json); payload = sealed.payload; kv = sealed.kv; }
+    else payload = await encSeal(json);
+  }else if(!cloudIsOwner() && typeof skMustEncrypt === 'function' && skMustEncrypt(sec)){
+    throw new Error('the ' + sec + ' section is encrypted in the cloud \u2014 turn on Encrypt Data in Settings on this phone and enter your access code before changing it');
+  }
+  const doc = { section: sec, payload, encrypted: enc, savedAt: new Date().toISOString(), count: cloudSectionCount(part), by: who };
+  if(kv) doc.kv = kv;
+  return doc;
+}
+// What the cloud documents were last written with: plain or encrypted with section keys. Anything else
+// (including the older single-key layout, stored as 'e:<key>') is sent again, once.
+function cloudKeySig(){ return encEnabled() ? 'e2' : 'p'; }
+// Sends the sections this account may change and that changed since the last send (or all of them when
+// `force` is true, or when the encryption setup changed - the key bundle travels with every document).
+// Each section is its own write, recorded as it succeeds, so a failure part-way loses nothing: the
+// sections not yet sent still differ from their stored hash and go out on the next push. A phone that has
+// never received a section does not send it (it would overwrite the real one with an empty copy) - only the
+// owner's phone may seed a section.
+async function cloudPushNow(force){
   if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return;
   if(cloudViewOnly()) return; // a view-only phone never sends anything to the cloud
-  // Encrypting the outgoing payload (encSeal) needs the vault unlocked — on a fresh install
+  // Encrypting the outgoing payload (encSeal) needs the vault unlocked - on a fresh install
   // this can be tapped (via Sync Now, or the debounced schedule below) before the person has
-  // entered their PIN even once, which used to surface as the raw "Sync error: locked" from
-  // encSeal's own Error('locked'). Give a message that actually says what to do instead, and
-  // stop here rather than letting that exception reach the catch block below.
-  if(encEnabled() && !ENC_DEK){ setCloudStatus('error', 'app is locked — unlock with your PIN first, then try Sync Now'); return; }
+  // entered their PIN even once. Give a message that says what to do and stop here.
+  if(encEnabled() && !ENC_DEK){ setCloudStatus('error', 'app is locked \u2014 unlock with your PIN first, then try Sync Now'); return; }
   if(navigator.onLine === false){ setCloudStatus('offline'); return; }
+  const writable = cloudWriteSections();
+  if(!writable.length) return; // this account may not change any section
   setCloudStatus('syncing');
   try{
     const db = await cloudSdkReady();
-    const json = JSON.stringify(DATA);
-    const payload = encEnabled() ? await encSeal(json) : json;
-    const savedAt = new Date().toISOString();
-    const doc = { payload, encrypted: !!encEnabled(), savedAt, entryCount: currentEntryCount() };
-    // Also push the PIN-wrapped key bundle (not the key itself) so another device can adopt
-    // this same key via joinEncryptedSync (encryption.js) instead of generating its own —
-    // that mismatch was the actual cause of cross-device decrypt always failing before.
+    const owner = cloudIsOwner();
+    const parts = cloudSplit(DATA);
+    const seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY);
+    // Also push the PIN-wrapped key bundle (not the key itself) so another device can adopt this same key
+    // via joinEncryptedSync (encryption.js) instead of generating its own.
     const meta = encEnabled() ? encMeta() : null;
-    if(meta){ doc.keyWrap = meta.pin; doc.iter = meta.iter; }
-    await cloudDocRef(db).set(doc);
-    const hash = await sha256Hex(json);
-    try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, hash); }catch(e){}
+    const sig = cloudKeySig();
+    let lastSig = null; try{ lastSig = localStorage.getItem(CLOUD_KEYSIG_KEY); }catch(e){}
+    const all = force === true || sig !== lastSig;
+    if(owner && encEnabled() && typeof skOwnerPrepare === 'function') await skOwnerPrepare(db); // keys made and backed up in the vault BEFORE anything is sealed
+    if(typeof auditFlush === 'function') await auditFlush(db); // the audit entries go first: a change never reaches the cloud ahead of its log entry (a connection failure stops the push here)
+    const who = recEditorEmail();
+    const denied = []; let newest = null;
+    for(const sec of writable){
+      if(!owner && !seen[sec]) continue; // never received: don't overwrite the cloud copy with an empty one
+      const json = JSON.stringify(parts[sec]);
+      const hash = await sha256Hex(json);
+      if(!all && seen[sec] && hashes[sec] === hash) continue; // unchanged since the last send / receive
+      const doc = await cloudBuildSectionDoc(sec, parts[sec], json, meta, who);
+      const savedAt = doc.savedAt;
+      try{ await cloudSecRef(db, sec).set(doc); }
+      catch(e){ if(cloudIsDenied(e)){ denied.push(sec); continue; } throw e; }
+      seen[sec] = savedAt; hashes[sec] = hash; newest = savedAt;
+      cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); cloudMapSet(CLOUD_SEC_HASH_KEY, hashes);
+    }
+    // The owner marks the section layout as in use once every section has been written.
+    if(owner && all && !denied.length){
+      let ok = null; try{ ok = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){}
+      if(ok !== CLOUD_OWNER_EMAIL){
+        await db.collection('ledger').doc(CLOUD_MANIFEST_ID).set({ version: 3, sections: cloudSectionIds(), migratedAt: new Date().toISOString(), by: who });
+        try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){}
+      }
+    }
     CLOUD_PENDING_REMOTE = null;
+    if(denied.length){
+      if(typeof waOnPermissionDenied === 'function') waOnPermissionDenied(); // a phone that thought it could edit checks whether that is gone
+      setCloudStatus('error', 'the cloud refused changes to: ' + denied.join(', ') + ' \u2014 ask the owner to allow editing there');
+      return;
+    }
+    try{ localStorage.setItem(CLOUD_KEYSIG_KEY, sig); }catch(e){}
+    await cloudMarkSynced(newest);
     setCloudStatus('synced');
   }catch(e){ cloudFail(e); }
 }
 // Decrypts (or passes through) a remote doc's payload; used by both cloudApplyRemote and the
 // auto-merge path below. Returns {json} or {error} (never throws) so callers just check which.
 async function cloudDecryptRemote(remote){
+  if(remote.encrypted && remote.kv && typeof skOpenSection === 'function') return skOpenSection(remote); // sealed with a section key
+  if(remote.encrypted && remote.section && typeof skNoteEncrypted === 'function') skNoteEncrypted(remote.section);
+  if(remote.encrypted && !cloudIsOwner() && remote.section){
+    return { error: 'the ' + remote.section + ' section has not been re-sealed for this version yet \u2014 ask the owner to open the app and tap Sync Now' };
+  }
   if(remote.encrypted && !ENC_DEK){
     return { error: encEnabled()
       ? 'app is locked — unlock with your PIN first, then try Sync Now'
@@ -753,7 +1423,13 @@ function tombIdsNow(){
 // Records never edited since this feature arrived have no _mt; a stamped one beats an unstamped one,
 // and when neither (or both with equal times) can be told apart this device's copy wins, as before.
 // The email is left off when no account is known on this phone (the time is still stamped).
-const REC_STAMP_KEYS = ['_mt', '_mb', '_ct', '_cb'];
+// A change the owner APPROVED (a person marked "Needs approval" proposed it, js/proposals.js) is stamped as the person's
+// own work - _cb / _mb is the person who proposed it - plus _ca (added, approved by) / _ma (last edited, approved by) with
+// the owner's email. The owner's Accept sets REC_APPROVAL just before the normal save(); the next recStampEdits takes it
+// (once) so no other save can pick it up. A normal edit clears _ma (a later edit is no longer that approval).
+const REC_STAMP_KEYS = ['_mt', '_mb', '_ct', '_cb', '_ca', '_ma'];
+let REC_APPROVAL = null;     // { by: who proposed it, ab: who approved it, ct: when it was proposed } - waiting for the next save
+let REC_APPROVAL_NOW = null; // the same, only while recStampEdits runs (audit.js reads it to log the entry in the person's name)
 let REC_BASE = null; // {listName: {id: JSON of the record without its stamps}} as of the last save/load
 function recEditorEmail(){
   try{ const u = typeof cloudUserNow === 'function' ? cloudUserNow() : null; return u && u.email ? String(u.email).trim().toLowerCase() : ''; }
@@ -771,25 +1447,46 @@ function recSigsNow(){
   return o;
 }
 function recStampEdits(){
-  const now = recSigsNow();
-  if(REC_BASE){
-    const t = Date.now(), who = recEditorEmail();
-    Object.keys(now).forEach(k=>{
-      const base = REC_BASE[k];
-      if(!base) return;
-      DATA[k].forEach(r=>{
-        const old = base[String(r.id)], cur = now[k][String(r.id)];
-        if(old === undefined){ if(r._ct == null){ r._ct = t; if(who) r._cb = who; } }              // new since the previous save
-        else if(old !== cur){ r._mt = t; if(who) r._mb = who; else delete r._mb; } // existing record whose contents changed
+  const ap = REC_APPROVAL; REC_APPROVAL = null;   // taken once: only the save that applies the approved change uses it
+  REC_APPROVAL_NOW = (ap && ap.by && ap.ab) ? ap : null;
+  try{
+    const now = recSigsNow();
+    if(REC_BASE){
+      const t = Date.now(), who = REC_APPROVAL_NOW ? REC_APPROVAL_NOW.by : recEditorEmail();
+      Object.keys(now).forEach(k=>{
+        const base = REC_BASE[k];
+        if(!base) return;
+        DATA[k].forEach(r=>{
+          const old = base[String(r.id)], cur = now[k][String(r.id)];
+          if(old === undefined){ // new since the previous save
+            if(r._ct == null){
+              r._ct = REC_APPROVAL_NOW && Number(REC_APPROVAL_NOW.ct) > 0 ? Number(REC_APPROVAL_NOW.ct) : t;
+              if(who) r._cb = who;
+              if(REC_APPROVAL_NOW) r._ca = REC_APPROVAL_NOW.ab;
+            }
+            auditNoteSafe('add', k, null, r);
+          }
+          else if(old !== cur){ // existing record whose contents changed
+            r._mt = t; if(who) r._mb = who; else delete r._mb;
+            if(REC_APPROVAL_NOW) r._ma = REC_APPROVAL_NOW.ab; else delete r._ma;
+            auditNoteSafe('edit', k, JSON.parse(old), r);
+          }
+        });
+        Object.keys(base).forEach(id=>{ if(now[k][id] === undefined) auditNoteSafe('delete', k, JSON.parse(base[id]), null); }); // removed since the previous save
       });
-    });
-  }
-  REC_BASE = now;
+    }
+    if(typeof auditObjectsCompare === 'function'){ try{ auditObjectsCompare(); }catch(e){ /* the log must never block a save */ } }
+    REC_BASE = now;
+  }finally{ REC_APPROVAL_NOW = null; }
 }
-function tombRebaseline(){ try{ TOMB_BASE = tombIdsNow(); REC_BASE = recSigsNow(); }catch(e){ TOMB_BASE = null; REC_BASE = null; } }
+// Hands one change to the audit trail (js/audit.js) with the record's stamps left off; never throws.
+function auditNoteSafe(action, list, before, after){
+  try{ if(typeof auditNote === 'function') auditNote(action, list, before, after ? auditStripStamps(after) : null); }catch(e){ console.error(e); }
+}
+function tombRebaseline(){ try{ TOMB_BASE = tombIdsNow(); REC_BASE = recSigsNow(); }catch(e){ TOMB_BASE = null; REC_BASE = null; } if(typeof auditRebaseline === 'function') auditRebaseline(); }
 // Call right BEFORE a save that replaces the whole ledger (restore, cloud pull, merge): the records
 // that vanish then are not "deleted by the person", so they must not be noted as deletions.
-function tombResetBaseline(){ TOMB_BASE = null; REC_BASE = null; }
+function tombResetBaseline(){ TOMB_BASE = null; REC_BASE = null; if(typeof auditResetBaseline === 'function') auditResetBaseline(); }
 function tombRecordDeletions(){
   try{ recStampEdits(); }catch(e){ /* best effort */ }
   const now = tombIdsNow();
@@ -929,7 +1626,7 @@ async function cloudTakeSafetyPoint(){
   try{ if(typeof snapAdd === 'function') await snapAdd('before-sync', json); }catch(e){ /* best effort — Undo still works from memory */ }
   let seen = null, hash = null;
   try{ seen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); hash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
-  return { json, seen, hash };
+  return { json, seen, hash, secSeen: cloudMapGet(CLOUD_SEC_SEEN_KEY), secHash: cloudMapGet(CLOUD_SEC_HASH_KEY) };
 }
 async function cloudUndoApply(pt, remote, mode){
   try{
@@ -965,11 +1662,154 @@ async function cloudApplyRemote(remote){
   switchTab(CURRENT_TAB || 'overview');
   showSyncNotice('New data synced from the cloud', ()=> cloudUndoApply(pt, remote, 'pull'));
 }
-// Asks before touching local data: a blue bar at the top (Update / ✕), the same idea as the
-// "new version" bar. Nothing is applied and nothing is pushed until Update is tapped; ✕ leaves
+// Undo after a section apply: puts back ONLY the sections that apply changed (from the Safety copy taken just
+// before), with their own sync markers, and leaves everything else - including edits made in other sections
+// since - exactly as it is. The cloud data is left "waiting" (no automatic push until Sync Now / next start
+// re-checks it), so undoing can never overwrite the other device's newer data.
+async function cloudUndoSections(pt, items){
+  try{
+    CLOUD_PENDING_PULL = { items, mode: 'pull' }; // blocks automatic pushes until the cloud data is reviewed again
+    const before = cloudSplit(JSON.parse(pt.json));
+    const seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY);
+    items.forEach(it=>{
+      cloudSetSection(it.sec, before[it.sec]);
+      const s0 = (pt.secSeen || {})[it.sec], h0 = (pt.secHash || {})[it.sec];
+      if(s0 === undefined) delete seen[it.sec]; else seen[it.sec] = s0;
+      if(h0 === undefined) delete hashes[it.sec]; else hashes[it.sec] = h0;
+    });
+    tombResetBaseline();
+    UNDO_SUPPRESS = true; UNDO_STACK.length = 0; updateUndoButton(); // the ledger-wide Undo list no longer matches
+    await save();
+    cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); cloudMapSet(CLOUD_SEC_HASH_KEY, hashes);
+    try{
+      if(pt.seen == null) localStorage.removeItem(CLOUD_LAST_SEEN_KEY); else localStorage.setItem(CLOUD_LAST_SEEN_KEY, pt.seen);
+      if(pt.hash == null) localStorage.removeItem(CLOUD_LAST_HASH_KEY); else localStorage.setItem(CLOUD_LAST_HASH_KEY, pt.hash);
+    }catch(e){}
+    setCloudStatus('waiting');
+    switchTab(CURRENT_TAB || 'overview');
+    showSyncNotice('Undone. Cloud data is still waiting \u2014 tap Sync Now to review it.');
+  }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
+}
+// Brings the given cloud sections into the ledger. items = [{sec, remote, mode: 'pull' | 'merge'}]:
+// 'pull' replaces that section with the cloud copy, 'merge' combines the two by record id (nothing either
+// side added is dropped, see mergeLedgers). opts.viewer = sections this phone cannot change: just brought
+// down, no Safety copy, no Undo, no push. Otherwise a Safety copy is filed first, the result is sent back
+// (merged sections and anything else changed here) and the notice offers Undo.
+// Everything is decrypted and read BEFORE the ledger is touched, so one unreadable section changes nothing.
+async function cloudApplySections(items, opts){
+  opts = opts || {};
+  const dec = [];
+  for(const it of items){
+    const d = await cloudDecryptRemote(it.remote);
+    if(d.error){ setCloudStatus('error', d.error); return false; }
+    let part; try{ part = JSON.parse(d.json); }catch(e){ setCloudStatus('error', 'part of the cloud copy could not be read'); return false; }
+    dec.push({ it, part });
+  }
+  const pt = opts.viewer ? null : await cloudTakeSafetyPoint();
+  const merges = [];
+  dec.forEach(({ it, part })=>{
+    if(it.mode === 'merge'){
+      const local = cloudSplit(DATA)[it.sec] || {};
+      const merged = mergeLedgers(local, part);
+      const text = mergeSummaryText(local, merged); if(text) merges.push(text);
+      cloudSetSection(it.sec, merged);
+    } else cloudSetSection(it.sec, part);
+  });
+  tombResetBaseline(); // sections were replaced or merged - records that vanished were deleted elsewhere, not here
+  try{ if(typeof ensureDataDefaults === 'function') await ensureDataDefaults(); }catch(e){ console.error(e); }
+  if(opts.viewer){
+    UNDO_SUPPRESS = true; UNDO_STACK.length = 0; if(typeof updateUndoButton === 'function') updateUndoButton();
+    await (typeof viewOnlyAllowSave === 'function' ? viewOnlyAllowSave(()=> save()) : save()); // the one save a view-only phone may make: storing the cloud copy
+  } else await (typeof viewOnlyAllowSave === 'function' ? viewOnlyAllowSave(()=> save()) : save()); // the cloud copy arriving is always allowed to store (it is not something this person changed)
+  const parts = cloudSplit(DATA), seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY);
+  let newest = null;
+  for(const { it } of dec){
+    seen[it.sec] = it.remote.savedAt; newest = it.remote.savedAt;
+    if(it.mode !== 'merge') hashes[it.sec] = await sha256Hex(JSON.stringify(parts[it.sec])); // a merged section stays "changed" so it is sent back
+  }
+  cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); cloudMapSet(CLOUD_SEC_HASH_KEY, hashes);
+  CLOUD_PENDING_REMOTE = null;
+  if(opts.viewer){ await cloudMarkSynced(newest); setCloudStatus('synced'); }
+  else await cloudPushNow(); // share merged sections (and anything else waiting) so the other device converges too
+  switchTab(CURRENT_TAB || 'overview');
+  if(opts.viewer) showSyncNotice('Updated from the cloud');
+  else showSyncNotice(merges.length ? ('Merged from the other device: ' + merges.join('; ')) : (dec.some(x=> x.it.mode === 'merge') ? 'Merged \u2014 nothing new from the other device' : 'New data synced from the cloud'), ()=> cloudUndoSections(pt, items));
+  return true;
+}
+// Sections this phone cannot change: brought down without asking.
+async function cloudViewerApply(items){ return cloudApplySections(items, { viewer: true }); }
+// ---- The one-time move from the single ledger document into sections (owner's phone only) -------
+// Safe to run any number of times:
+//  - a Safety copy ("Before moving the cloud copy into sections" in Backup & Restore) is filed first; if
+//    it cannot be filed, nothing is sent;
+//  - the old copy (sync/ledger) is only ever READ - never changed or deleted - so it stays as a backup;
+//  - a section that already exists in the cloud is never overwritten (an interrupted earlier run, or
+//    another of your phones, may have written it): only missing sections are written, and the ones that
+//    exist are left for the normal per-section check to compare;
+//  - every section written is read back and compared before the manifest is written, and the manifest
+//    (ledger/manifest) is what marks the job done, so a run that stops half way simply continues next time.
+// Returns 'done' | 'failed'.
+async function cloudMigrateToSections(db){
+  if(!cloudIsOwner()) return 'failed';
+  if(encEnabled() && !ENC_DEK){ setCloudStatus('error', 'app is locked \u2014 unlock with your PIN first, then try Sync Now'); return 'failed'; }
+  setCloudStatus('syncing');
+  try{
+    const man = await db.collection('ledger').doc(CLOUD_MANIFEST_ID).get();
+    if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){} return 'done'; } // already moved
+    try{ await snapAdd('before-sections', JSON.stringify(DATA)); }
+    catch(e){ console.error(e); setCloudStatus('error', 'could not file the safety copy first, so nothing was moved \u2014 try again'); return 'failed'; }
+    const parts = cloudSplit(DATA), meta = encEnabled() ? encMeta() : null, who = recEditorEmail();
+    const seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY);
+    if(encEnabled() && typeof skOwnerPrepare === 'function') await skOwnerPrepare(db); // keys first, backed up in the vault
+    let wrote = 0;
+    for(const sec of cloudSectionIds()){
+      const there = await cloudSecRef(db, sec).get();
+      if(there.exists) continue; // never overwrite a section that is already in the cloud
+      const json = JSON.stringify(parts[sec]);
+      const doc = await cloudBuildSectionDoc(sec, parts[sec], json, meta, who);
+      await cloudSecRef(db, sec).set(doc);
+      const back = await cloudSecRef(db, sec).get(); // verify before trusting it
+      if(!back.exists || back.data().payload !== doc.payload) throw new Error('the ' + sec + ' section did not save correctly \u2014 nothing was marked as moved; try Sync Now again');
+      seen[sec] = doc.savedAt; hashes[sec] = await sha256Hex(json); wrote++;
+      cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); cloudMapSet(CLOUD_SEC_HASH_KEY, hashes);
+    }
+    await db.collection('ledger').doc(CLOUD_MANIFEST_ID).set({ version: 3, sections: cloudSectionIds(), migratedAt: new Date().toISOString(), by: who, wrote });
+    try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); localStorage.setItem(CLOUD_KEYSIG_KEY, cloudKeySig()); }catch(e){}
+    return 'done';
+  }catch(e){ cloudFail(e); return 'failed'; }
+}
+// First run on the section layout only: the old whole-ledger copy (sync/ledger) is applied the way it always
+// was, then everything is split into sections and sent. The old copy is left untouched as a backup.
+async function cloudFinishMigration(){
+  const db = await cloudSdkReady();
+  if(await cloudMigrateToSections(db) === 'done'){ await cloudSectionsCheck(db); }
+}
+async function cloudApplyLegacy(item){
+  if(item.mode === 'merge'){
+    const dec = await cloudDecryptRemote(item.remote);
+    if(dec.error){ setCloudStatus('error', dec.error); return; }
+    const pt = await cloudTakeSafetyPoint();
+    const merged = mergeLedgers(DATA, JSON.parse(dec.json));
+    const summary = mergeSummaryText(DATA, merged);
+    Object.assign(DATA, merged);
+    tombResetBaseline();
+    await save();
+    CLOUD_PENDING_REMOTE = null;
+    await cloudFinishMigration();
+    switchTab(CURRENT_TAB || 'overview');
+    showSyncNotice(summary ? ('Merged from the other device: ' + summary) : 'Merged \u2014 nothing new from the other device', ()=> cloudUndoApply(pt, item.remote, 'merge'));
+  } else {
+    await cloudApplyRemote(item.remote);
+    await cloudFinishMigration();
+  }
+}
+// Asks before touching local data: a blue bar at the top (Update / X), the same idea as the
+// "new version" bar. Nothing is applied and nothing is pushed until Update is tapped; X leaves
 // the prompt for later (Settings > Cloud Sync > Sync Now brings it back).
-function cloudAskToApply(remote, mode){
-  CLOUD_PENDING_PULL = { remote, mode };
+// items = [{sec, remote, mode}] (or one {legacy: true, remote, mode} on the first run on sections);
+// mode is 'merge' if any of them needs a merge, else 'pull'.
+function cloudAskToApply(items, mode){
+  CLOUD_PENDING_PULL = { items, mode };
   setCloudStatus('waiting');
   const old = document.getElementById('cloudAskBar'); if(old) old.remove();
   const el = document.createElement('div');
@@ -989,93 +1829,108 @@ function cloudAskToApply(remote, mode){
     if(!pending) return;
     CLOUD_PENDING_PULL = null;
     try{
-      if(pending.mode === 'merge'){
-        const dec = await cloudDecryptRemote(pending.remote);
-        if(dec.error){ setCloudStatus('error', dec.error); return; }
-        const pt = await cloudTakeSafetyPoint();
-        const merged = mergeLedgers(DATA, JSON.parse(dec.json));
-        const summary = mergeSummaryText(DATA, merged);
-        Object.assign(DATA, merged);
-        tombResetBaseline(); // records the merge dropped were deleted elsewhere — not new deletions here
-        await save();
-        CLOUD_PENDING_REMOTE = null;
-        await cloudPushNow(); // share the merged result back so the other device converges too
-        switchTab(CURRENT_TAB || 'overview');
-        showSyncNotice(summary ? ('Merged from the other device: ' + summary) : 'Merged — nothing new from the other device', ()=> cloudUndoApply(pt, pending.remote, 'merge'));
-      } else {
-        await cloudApplyRemote(pending.remote);
-      }
+      const list = pending.items || [];
+      const legacy = list.find(i=> i.legacy);
+      if(legacy) await cloudApplyLegacy(legacy);
+      else await cloudApplySections(list, {});
     }catch(e){ console.error(e); setCloudStatus('error', e && e.message ? e.message : 'unknown error'); }
   };
 }
-// App start/unlock, and "Sync Now": decide whether to pull, push, or flag a real conflict.
-// Never guesses when both sides have changed — see the file header note.
+// First run of the owner's phone on the section layout (no ledger/manifest yet). Returns true when it dealt
+// with this check. If the old whole-ledger copy has newer changes, they are applied first (asking, as always);
+// otherwise the one-time move (cloudMigrateToSections) runs.
+async function cloudMigrationCheck(db){
+  let flag = null; try{ flag = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){}
+  if(flag === CLOUD_OWNER_EMAIL) return false;
+  const man = await db.collection('ledger').doc(CLOUD_MANIFEST_ID).get();
+  if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){} return false; }
+  const snap = await cloudDocRef(db).get();
+  const remote = snap.exists ? snap.data() : null;
+  let lastSeen = null, lastHash = null;
+  try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); lastHash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
+  if(remote && remote.savedAt && remote.savedAt !== lastSeen){ // the old copy has changes this phone hasn't seen: apply them first (asking, as always)
+    const mode = lastHash !== await cloudCurrentHash() ? 'merge' : 'pull';
+    cloudAskToApply([{ legacy: true, remote, mode }], mode);
+    return true;
+  }
+  if(await cloudMigrateToSections(db) === 'done') return false; // then carry on with the normal per-section check
+  return true;
+}
+// Every check after that: read only the sections this account may see, then per section decide whether to
+// pull, push or merge. Sections this phone cannot change are brought down silently; the rest ask first
+// (nothing is applied and no push runs while a prompt is waiting, so a dismissed prompt can never let this
+// device overwrite newer data). Never guesses when both sides changed.
+async function cloudSectionsCheck(db){
+  const viewer = cloudViewOnly();
+  const results = await Promise.all(cloudReadSections().map(async sec=>{
+    try{ return { sec, snap: await cloudSecRef(db, sec).get() }; }
+    catch(e){ if(cloudIsDenied(e)) return { sec, denied: e }; throw e; }
+  }));
+  const readable = results.filter(r=> !r.denied);
+  if(!readable.length){
+    if(results.length && results[0].denied) throw results[0].denied; // refused everywhere: the usual "not approved" message
+    setCloudStatus('error', 'nothing to show yet \u2014 the owner has not synced the ledger'); return;
+  }
+  if(!cloudIsOwner() && !readable.some(r=> r.snap.exists)){ setCloudStatus('error', 'nothing to show yet \u2014 the owner has not synced the ledger'); return; }
+  const seen = cloudMapGet(CLOUD_SEC_SEEN_KEY), hashes = cloudMapGet(CLOUD_SEC_HASH_KEY), parts = cloudSplit(DATA);
+  const silent = [], ask = []; let push = false;
+  for(const r of readable){
+    const sec = r.sec, mine = !viewer && cloudCanWriteSection(sec);
+    if(!r.snap.exists){ if(mine && cloudIsOwner()) push = true; continue; } // owner: seed a section the cloud does not have yet
+    const remote = r.snap.data();
+    const remoteChanged = !!remote.savedAt && remote.savedAt !== seen[sec];
+    if(!mine){ if(remoteChanged) silent.push({ sec, remote, mode: 'pull' }); continue; }
+    const localChanged = hashes[sec] !== await sha256Hex(JSON.stringify(parts[sec]));
+    if(remoteChanged && !localChanged) ask.push({ sec, remote, mode: 'pull' });
+    else if(remoteChanged && localChanged) ask.push({ sec, remote, mode: 'merge' });
+    else if(localChanged) push = true;
+  }
+  if(silent.length) await cloudViewerApply(silent);
+  if(ask.length){ cloudAskToApply(ask, ask.some(a=> a.mode === 'merge') ? 'merge' : 'pull'); return; }
+  if(push){ await cloudPushNow(); return; }
+  if(!silent.length) setCloudStatus('synced');
+}
+// App start/unlock, and "Sync Now": decide, section by section, whether to pull, push, or ask.
 async function cloudSyncCheckOnStart(){
   if(!cloudSyncEnabled()) return;
   CLOUD_LAST_CHECK_AT = Date.now();
   CLOUD_PENDING_PULL = null; // re-evaluated from scratch on every check (also what "Sync Now" does)
   const oldBar = document.getElementById('cloudAskBar'); if(oldBar) oldBar.remove();
-  if(encEnabled() && !ENC_DEK) return; // still locked — afterUnlockLoad() calls this again once unlocked
+  if(encEnabled() && !ENC_DEK) return; // still locked - afterUnlockLoad() calls this again once unlocked
   if(navigator.onLine === false){ setCloudStatus('offline'); return; }
   setCloudStatus('syncing');
   try{
     const db = await cloudSdkReady();
     cloudEnsureAccessRecord(db); // owner only; runs alongside the sync check, never blocks it
+    if(typeof skReconcileQuiet === 'function') skReconcileQuiet(db); // owner only, encryption on: keys follow who is approved (also re-keys after an approval ended)
     if(typeof waRefreshGrant === 'function') await waRefreshGrant(); // other phone: learn whether it may edit right now (may switch it to/from view-only)
-    const snap = await cloudDocRef(db).get();
-    if(cloudViewOnly()){ await cloudViewerCheck(snap); return; } // view-only phone: only ever bring the cloud copy down
-    if(!snap.exists){ await cloudPushNow(); return; } // nothing in the cloud yet — seed it from this device
-    const remote = snap.data();
-    let lastSeen = null, lastHash = null;
-    try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); lastHash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
-    const remoteChanged = !!remote.savedAt && remote.savedAt !== lastSeen;
-    const localChanged = lastHash !== await cloudCurrentHash();
-    if(!remoteChanged && !localChanged){ setCloudStatus('synced'); return; }
-    if(remoteChanged && !localChanged){ cloudAskToApply(remote, 'pull'); return; }
-    if(!remoteChanged && localChanged){ await cloudPushNow(); return; }
-    // Both sides changed — offer to merge by record id (nothing either device added is dropped,
-    // see mergeLedgers above), but only once the person agrees.
-    cloudAskToApply(remote, 'merge');
+    if(typeof auditFlush === 'function') auditFlush(db).catch(e => console.error(e)); // entries kept while offline go out now; never blocks the sync check
+    if(typeof auditPurge === 'function') auditPurge(db).catch(e => console.error(e));  // owner only, once a day: entries older than a year are removed
+    if(typeof proposalsSync === 'function') proposalsSync(db).catch(e => console.error(e)); // person: send proposals + learn the owner's answers; owner: refresh the inbox count (js/proposals.js)
+    if(cloudIsOwner() && await cloudMigrationCheck(db)) return;
+    await cloudSectionsCheck(db);
   }catch(e){ cloudFail(e); }
 }
-// View-only phone: there is nothing on it that could be lost or that the owner needs, so the cloud copy is
-// simply brought down whenever it is newer - no Update / Merge question, and never a push.
-async function cloudViewerCheck(snap){
-  if(!snap.exists){ setCloudStatus('error', 'nothing to show yet \u2014 the owner has not synced the ledger'); return; }
-  const remote = snap.data();
-  let lastSeen = null; try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
-  if(!remote.savedAt || remote.savedAt === lastSeen){ setCloudStatus('synced'); return; }
-  await cloudViewerApply(remote);
-}
-async function cloudViewerApply(remote){
-  const dec = await cloudDecryptRemote(remote);
-  if(dec.error){ setCloudStatus('error', dec.error); return; }
-  const parsed = JSON.parse(dec.json);
-  Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
-  Object.assign(DATA, parsed);
-  tombResetBaseline();
-  try{ await ensureDataDefaults(); }catch(e){ console.error(e); }
-  UNDO_SUPPRESS = true; UNDO_STACK.length = 0; if(typeof updateUndoButton === 'function') updateUndoButton();
-  await viewOnlyAllowSave(()=> save()); // the one save a view-only phone may make: storing the cloud copy
-  try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(dec.json)); }catch(e){}
-  CLOUD_PENDING_REMOTE = null;
-  setCloudStatus('synced');
-  switchTab(CURRENT_TAB || 'overview');
-  showSyncNotice('Updated from the cloud');
-}
-async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; CLOUD_PENDING_PULL = null; await cloudPushNow(); }
+async function cloudResolveKeepDevice(){ CLOUD_PENDING_REMOTE = null; CLOUD_PENDING_PULL = null; await cloudPushNow(true); }
 async function cloudResolveUseCloud(){
   try{
     CLOUD_PENDING_PULL = null;
-    let remote = CLOUD_PENDING_REMOTE;
-    if(!remote){ // conflict flag didn't survive a reload/relaunch — fetch fresh instead of doing nothing
-      const db = await cloudSdkReady();
-      const snap = await cloudDocRef(db).get();
-      if(!snap.exists){ setCloudStatus('error', 'No cloud copy found yet.'); return; }
-      remote = snap.data();
+    const db = await cloudSdkReady();
+    const items = [];
+    for(const sec of cloudReadSections()){
+      try{ const snap = await cloudSecRef(db, sec).get(); if(snap.exists) items.push({ sec, remote: snap.data(), mode: 'pull' }); }
+      catch(e){ if(!cloudIsDenied(e)) throw e; }
     }
-    await cloudApplyRemote(remote);
+    if(!items.length){ setCloudStatus('error', 'No cloud copy found yet.'); return; }
+    await cloudApplySections(items, {});
   }catch(e){ cloudFail(e); }
+}
+// "Join Encrypted Sync" (owner's second phone) needs the PIN-locked key and the keyring, which live in the
+// owner's vault (keys/<owner email>, js/section-keys.js). Only the owner can read it.
+async function cloudJoinRemote(db){
+  try{ const snap = await db.collection('keys').doc(CLOUD_OWNER_EMAIL).get(); if(snap.exists && snap.data() && snap.data().keyWrap && snap.data().vault) return snap.data(); }
+  catch(e){ if(!cloudIsDenied(e)) throw e; }
+  return null;
 }
 
 // --- Settings card ---
@@ -1133,7 +1988,8 @@ function cloudSyncSection(){
         <button class="ghost" id="cloudKeepDeviceBtn" type="button" style="width:100%;margin-bottom:8px">Keep This Device's Data</button>
         <button class="ghost" id="cloudUseCloudBtn" type="button" style="width:100%;background:var(--rust-deep);color:#fff">Use Cloud's Data Instead</button>
       </div>
-      <div id="cloudJoinEnc" style="margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
+      ${typeof skCodeCardHtml === 'function' ? skCodeCardHtml() : ''}
+      <div id="cloudJoinEnc" style="${cloudIsOwner() ? '' : 'display:none;'}margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
         <p class="note" style="margin:0 0 8px;font-weight:500">${encEnabled() ? 'Adopt a different device\'s key' : 'Join an already-encrypted cloud copy'}</p>
         <p class="note" style="margin:0 0 8px">If the cloud copy is encrypted (saved by a device with Encrypt Data on), this device needs that same key before it can read it — enter the PIN used on that other device, plus this device's own current PIN and recovery answer:</p>
         <input type="password" id="cloudJoinSharedPin" placeholder="PIN from the other device" style="width:100%;margin-bottom:8px" inputmode="numeric">
@@ -1267,6 +2123,8 @@ function wireCloudAccountCard(){
 function wireCloudSyncCard(){
   wireCloudAccountCard();
   wireCloudPeople();
+  if(typeof wireAuditCard === 'function') wireAuditCard();
+  if(typeof proposalsWire === 'function') proposalsWire();
   const toggle = document.getElementById('cloudSyncToggle');
   if(toggle) toggle.onchange = async ()=>{
     try{ localStorage.setItem(CLOUD_SYNC_ON_KEY, toggle.checked ? '1' : '0'); }catch(e){}
@@ -1279,6 +2137,7 @@ function wireCloudSyncCard(){
   if(keepBtn) keepBtn.onclick = async ()=>{ await cloudResolveKeepDevice(); switchTab('settings'); };
   const useCloudBtn = document.getElementById('cloudUseCloudBtn');
   if(useCloudBtn) useCloudBtn.onclick = async ()=>{ await cloudResolveUseCloud(); switchTab('settings'); };
+  if(typeof skWireCodeCard === 'function') skWireCodeCard();
   const joinBtn = document.getElementById('cloudJoinBtn');
   if(joinBtn) joinBtn.onclick = async ()=>{
     const statusEl = document.getElementById('cloudJoinStatus');
@@ -1289,8 +2148,7 @@ function wireCloudSyncCard(){
     joinBtn.disabled = true;
     try{
       const db = await cloudSdkReady();
-      const snap = await cloudDocRef(db).get();
-      const remote = snap.exists ? snap.data() : null;
+      const remote = await cloudJoinRemote(db);
       const msg = await joinEncryptedSync(sharedPin, localPin, localAnswer, remote);
       if(msg){ if(statusEl) statusEl.textContent = msg; }
       else { await save(); switchTab('settings'); }

@@ -23,7 +23,7 @@ function load(opts){
   remoteDoc = opts.remote === undefined ? null : opts.remote;
   const user = opts.user || null;
   const db = { collection: c => ({ doc: d => ({
-    async get(){ const k = c + '/' + d; if(k === 'sync/ledger') return { exists: !!remoteDoc, data: () => remoteDoc }; return { exists: false, data: () => null }; },
+    async get(){ const k = c + '/' + d; if(k === 'ledger/production') return { exists: !!remoteDoc, data: () => remoteDoc }; return { exists: false, data: () => null }; },
     async set(v){ sets.push({ path: c + '/' + d, value: v }); },
   }) }) };
   const auth = { get currentUser(){ return user; }, onAuthStateChanged(cb){ Promise.resolve().then(()=>cb(user)); return ()=>{}; }, async signOut(){} };
@@ -48,7 +48,8 @@ function load(opts){
 }
 const run = code => vm.runInContext(code, ctx);
 const signIn = (email, verified) => store.set('khata-cloud-user', JSON.stringify({ email, verified: verified !== false }));
-const remoteLedger = (data, savedAt) => ({ payload: JSON.stringify(data), encrypted: false, savedAt: savedAt || '2026-09-30T10:00:00.000Z' });
+// The cloud keeps one document per section (ledger/<section>); these tests use the Production one.
+const remoteLedger = (data, savedAt) => ({ section: 'production', payload: JSON.stringify(data), encrypted: false, savedAt: savedAt || '2026-09-30T10:00:00.000Z' });
 beforeEach(() => load());
 
 describe('who is view-only', () => {
@@ -105,8 +106,12 @@ describe('saving', () => {
     const core = read('js/core.js');
     const at = core.indexOf('async function save(){');
     assert.ok(at > 0);
-    const firstLine = core.slice(at, at + 400).split('\n')[1];
-    assert.match(firstLine, /viewOnlySaveBlocked/);
+    const lines = core.slice(at, at + 900).split('\n').slice(1, 4);
+    // Release 3 (Needs approval): the proposals gate (js/proposals.js) may come first - it only acts for a person who
+    // needs approval, and stops the save before anything is stored. The view-only gate follows, still ahead of everything else.
+    const gate = lines.findIndex(l => /viewOnlySaveBlocked/.test(l));
+    assert.ok(gate === 0 || (gate === 1 && /proposalsWouldHold/.test(lines[0])), 'only the proposals gate may precede the view-only gate');
+    assert.ok(core.indexOf('viewOnlySaveBlocked()', at) < core.indexOf('Saving', at), 'the gates run before the status line or anything else is touched');
   });
 });
 
@@ -124,8 +129,8 @@ describe('Cloud Sync on a view-only phone', () => {
     run('cloudSyncSchedule()');
     assert.equal(ctx.__timers.length, 1);
     await run('cloudPushNow()');
-    assert.equal(sets.length, 1);
-    assert.equal(sets[0].path, 'sync/ledger');
+    assert.ok(sets.length >= 1, 'the owner sends its sections');
+    assert.ok(sets.some(x => x.path === 'ledger/production'), 'one document per section');
   });
   test('a newer cloud copy is brought down and stored with no question asked, and nothing is sent', async () => {
     signIn('someone@example.com');
@@ -135,7 +140,7 @@ describe('Cloud Sync on a view-only phone', () => {
     assert.deepEqual(run('DATA.production.map(r => r.id)'), ['x', 'y']);
     assert.equal(saves.length, 1);
     assert.equal(sets.length, 0);
-    assert.equal(store.get('khata-cloud-last-seen'), '2026-09-30T10:00:00.000Z');
+    assert.equal(JSON.parse(store.get('khata-cloud-sec-seen')).production, '2026-09-30T10:00:00.000Z');
     assert.equal(run('CLOUD_STATUS'), 'synced');
     assert.equal(run('CLOUD_PENDING_PULL'), null);
   });

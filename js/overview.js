@@ -40,7 +40,11 @@ function dismissBanner(id, signature){
 // device's storage, so this is the one thing that can cause real, unrecoverable loss.
 // Silent once a backup was taken within the last 7 days, or once dismissed for today's exact
 // message (see dismissBanner above — a new day's message brings it right back).
+// Release 3: is this Overview card allowed for the signed-in account? (tags: PERM_OVERVIEW_CARDS in view-only.js;
+// the owner and a phone with no limits see every card)
+function ovCardOn(id){ return typeof permsCardAllowed === 'function' ? permsCardAllowed(id) : true; }
 function backupNagBanner(){
+  if(!ovCardOn('backup_reminder')) return ''; // about this phone's own backup: shown on the owner's phone only
   const days = daysSinceLastBackup();
   if(days !== null && days < 7) return '';
   const msg = days === null
@@ -93,9 +97,12 @@ function remindersBanner(){
   const soonCutoff = dateAddDays(today, 7);
   const pendingCheques = [];
   DATA.recovery.forEach(r=> (r.cheques||[]).forEach(c=>{ if(c.status==='Pending' && c.chequeDate) pendingCheques.push(c); }));
-  const overdueCheques = pendingCheques.filter(c=> c.chequeDate < today);
-  const dueSoonCheques = pendingCheques.filter(c=> c.chequeDate >= today && c.chequeDate <= soonCutoff);
-  const staleClients = overdueClients(30);
+  // Release 3: the cheque rows need Recovery; the "quiet clients" row needs Sales and Recovery. A row the account
+  // may not see is left out (and not counted in the dismissal signature), and no rows at all means no banner.
+  const chequesOn = ovCardOn('reminders_cheques'), clientsOn = ovCardOn('reminders_clients');
+  const overdueCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate < today) : [];
+  const dueSoonCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate >= today && c.chequeDate <= soonCutoff) : [];
+  const staleClients = clientsOn ? overdueClients(30) : [];
   if(!overdueCheques.length && !dueSoonCheques.length && !staleClients.length) return '';
   const signature = `${overdueCheques.length}:${dueSoonCheques.length}:${staleClients.length}`;
   if(isBannerDismissed('reminders', signature)) return '';
@@ -200,6 +207,7 @@ function beamForecastBasisNote(f){
 // beams and states being shown, so dismissing it lasts until that changes (a beam moves to a
 // more urgent state, a new one joins the list, etc.), not just until tomorrow.
 function beamsEndingCard(){
+  if(!ovCardOn('beams_ending')) return '';
   const list = computeBeamForecasts(beamAlertDays() || 3).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon');
   if(!list.length) return '';
   const signature = list.map(f=>`${f.id}:${f.state}`).sort().join(',');
@@ -254,10 +262,10 @@ function overviewPanel(){
   const monthOpts = MONTH_NAMES.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
   const yearOpts = years.map(y=>`<option value="${y}">${y}</option>`).join('');
   return `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    ${(typeof permsCan === 'function' && !permsCan('sales','a') && !permsCan('recovery','a')) ? '' : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <button type="button" class="primary" data-quick-add="sale" style="margin:0">+ Add Sale</button>
       <button type="button" class="ghost" data-quick-add="recovery" style="margin:0">+ Add Recovery</button>
-    </div>
+    </div>`}
     ${remindersBanner()}
     ${beamsEndingCard()}
     ${backupNagBanner()}
@@ -371,10 +379,10 @@ function renderStats(monthVal){
   ['stmt_client','stmt_from','stmt_to'].forEach(id=>{ const el = document.getElementById(id); if(el) keepStmt[id] = el.value; });
 
   wrap.innerHTML = `
-    ${pendingLCardHtml()}
-    ${pendingChequesCardHtml()}
-    ${bouncedChequesCardHtml()}
-    <div class="card"><h2>Stock Position</h2>
+    ${ovCardOn('pending_l') ? pendingLCardHtml() : ''}
+    ${ovCardOn('pending_cheques') ? pendingChequesCardHtml() : ''}
+    ${ovCardOn('bounced_cheques') ? bouncedChequesCardHtml() : ''}
+    ${ovCardOn('stock') ? `<div class="card"><h2>Stock Position</h2>
       <div class="group-label" style="margin-top:0">Stock by Quality</div>
       <div class="table-lg log-scroll">${table(
         ['Quality','Produced (mtr)','Sold (mtr)','In Stock (mtr)'],
@@ -385,12 +393,12 @@ function renderStats(monthVal){
         ${card('Produced (mtr)', s.producedCum, fmtQtyMtr(monthVal?s.producedMonth:s.producedCum), 'compact')}
         ${card('Sold (mtr)', s.soldCum, fmtQtyMtr(monthVal?s.soldMonth:s.soldCum), 'compact')}
         ${card('In Stock (mtr)', s.stock, fmtQtyMtr(s.stock), 'balance compact')}
-        ${card('Cash Position', s.cash, fmtRs2(s.cash), 'balance compact')}
+        ${ovCardOn('cash_position') ? card('Cash Position', s.cash, fmtRs2(s.cash), 'balance compact') : ''}
       </div>
-      <div class="legend">${monthVal ? 'Produced/Sold shown for the selected period. In Stock and Cash Position are cumulative as of the end of that period.' : 'All figures shown are all-time totals.'}</div>
-    </div>
-    ${clientStatementCardHtml()}
-    <div class="card"><h2>Sales & Receivables</h2>
+      <div class="legend">${monthVal ? `Produced/Sold shown for the selected period. In Stock${ovCardOn('cash_position') ? ' and Cash Position are' : ' is'} cumulative as of the end of that period.` : 'All figures shown are all-time totals.'}</div>
+    </div>` : ''}
+    ${ovCardOn('client_statement') ? clientStatementCardHtml() : ''}
+    ${ovCardOn('sales_receivables') ? `<div class="card"><h2>Sales & Receivables</h2>
       <div class="group-label" style="margin-top:0;display:flex;align-items:center;justify-content:space-between;gap:10px">Breakdown by Client<button type="button" class="info-btn" data-info-toggle data-info-target="info-beforeLastSale" title="Info">i</button></div>
       <p class="note info-note" id="info-beforeLastSale" hidden>Before Last Sale is what a client owed right before their most recent sale was entered — handy for reconciling with them if a cheque bounces after being provisionally counted (it updates once the cheque is actually marked Bounced).</p>
       <button class="ghost" data-toggle="beforeLastSale" style="margin-bottom:10px">${SHOW_BEFORE_LAST_SALE ? 'Hide' : 'Show'} Before Last Sale</button>
@@ -431,8 +439,8 @@ function renderStats(monthVal){
         ${card('Amount Received', s.receivedCum, fmtRs(monthVal?s.receivedMonth:s.receivedCum), 'compact')}
         ${card('Receivable (Outstanding)', s.receivable, fmtRs(s.receivable), 'balance compact')}
       </div>
-    </div>
-    <div class="card"><div class="card-head"><h2>Warp Usage (Last 2 Months)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    </div>` : ''}
+    ${ovCardOn('warp_usage') ? `<div class="card"><div class="card-head"><h2>Warp Usage (Last 2 Months)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Warp purchases from the last 2 months — same cutoff used when logging a new beam. Woven comes straight from Production entries. For older purchases and the full per-beam breakdown, see the Warp (Tana) Beam tab.</p>
       ${(()=>{
         // Same "last 2 months" cutoff as warpPurchaseSelectField, so this card and the beam-log
@@ -453,8 +461,8 @@ function renderStats(monthVal){
         )}</div>`;
       })()}
       <button type="button" class="ghost" style="margin-top:12px" onclick="switchTab('warpbeams')">View All Purchases</button>
-    </div>
-    <div class="card"><div class="card-head"><h2>Receivables Aging</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    </div>` : ''}
+    ${ovCardOn('receivables_aging') ? `<div class="card"><div class="card-head"><h2>Receivables Aging</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Always as of today, regardless of the period selected above — payments are applied against each client's oldest unpaid sale first, so this shows how old the outstanding money actually is, not just how much.</p>
       ${aging.rows.length ? `
       <div class="grid cols-4">
@@ -472,8 +480,8 @@ function renderStats(monthVal){
         })
       )}</div>
       ` : `<div class="empty">Nothing outstanding right now.</div>`}
-    </div>
-    <div class="card"><div class="card-head"><h2>Clients Breakdown by Quality</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    </div>` : ''}
+    ${ovCardOn('client_quality') ? `<div class="card"><div class="card-head"><h2>Clients Breakdown by Quality</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Quantity (mtr) sold to each client, split by quality.</p>
       <div class="log-scroll">${(()=>{
         if(!s.clientQualityBreakdown.length) return `<div class="empty">No sales yet</div>`;
@@ -486,8 +494,8 @@ function renderStats(monthVal){
         <tfoot><tr><td><b>Total</b></td>${totalsByQ.map(t=>`<td><b>${fmtQtyMtr(t)}</b></td>`).join('')}<td><b>${fmtQtyMtr(grandTotal)}</b></td></tr></tfoot>
         </table>`;
       })()}</div>
-    </div>
-    <div class="card"><h2>Expenses & Material Cost</h2>
+    </div>` : ''}
+    ${ovCardOn('expenses_material') ? `<div class="card"><h2>Expenses & Material Cost</h2>
       <div class="grid cols-4">
         ${card('Business Expenses', s.bizExpCum, `${fmtRs(monthVal?s.bizExpMonth:s.bizExpCum)} (incl. ${fmtRs(monthVal?s.wagesPaidMonth:s.wagesPaidCum)} wages)`)}
         ${card('Family Expenses', s.famExpCum, fmtRs(monthVal?s.famExpMonth:s.famExpCum))}
@@ -506,15 +514,15 @@ function renderStats(monthVal){
         ${card('Personal Loan Repayments', s.personalLoanRepaidCum, fmtRs(monthVal?s.personalLoanRepaidMonth:s.personalLoanRepaidCum))}
       </div>
       <div class="legend">Cash given to / received back from family or friends as loans — affects Cash Position but kept separate from Business Expenses and Profit/Loss. See the Personal Loans (Given) tab for balances per person.</div>` : ''}
-    </div>
-    <div class="card"><h2>Profit / Loss</h2>
+    </div>` : ''}
+    ${ovCardOn('profit_loss') ? `<div class="card"><h2>Profit / Loss</h2>
       <div class="grid cols-2">
         ${card('Cumulative (all time to period end)', s.profitCum, fmtRs(s.profitCum))}
         ${card('Selected Period Only', s.profitMonth, monthVal?fmtRs(s.profitMonth):'—')}
       </div>
       <div class="legend">Sales − Business Expenses (incl. Wages Paid) − Family Expenses − Personal Expenses − Warp (Tana) Cost − Weft (Bana) Cost.</div>
-    </div>
-    ${s.checkpoint ? `<div class="note">Cash Position uses checkpoint from ${fmtDate(s.checkpoint.date)}${s.checkpoint.time?' '+s.checkpoint.time:''} (${fmtRs(s.checkpoint.balance)}) plus everything logged since — on the checkpoint's own date, only entries with a later time count.</div>`
+    </div>` : ''}
+    ${!ovCardOn('cash_position') ? '' : s.checkpoint ? `<div class="note">Cash Position uses checkpoint from ${fmtDate(s.checkpoint.date)}${s.checkpoint.time?' '+s.checkpoint.time:''} (${fmtRs(s.checkpoint.balance)}) plus everything logged since — on the checkpoint's own date, only entries with a later time count.</div>`
       : `<div class="note">No checkpoint found on or before this date — Cash Position uses Opening Balance instead. Add checkpoints in the Cash Checkpoints tab for more accuracy.</div>`}
   `;
   // Freshly rendered selects need the custom dropdown wrapper (switchTab only enhances once,

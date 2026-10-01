@@ -179,33 +179,32 @@ async function enableEncryption(pin, answer, recoveryKey){
   try{ await snapConvertAll(true); }catch(e){ /* older safety copies are converted best-effort */ }
   return '';
 }
-// Adopts another device's encryption key from the cloud, instead of this device generating its
-// own (which is what made cross-device decrypt always fail before — see cloud-sync.js). sharedPin
-// is the PIN used on the device that first turned encryption on (unwraps remote.keyWrap, the
-// pin-wrapped copy of its key, now also pushed to the cloud by cloudPushNow); localPin/localAnswer
-// are THIS device's own already-set credentials, used to re-wrap the same key locally exactly like
-// enableEncryption does. Returns '' on success, otherwise the message to show.
+// Owner's second phone: adopts the first phone's data key from the cloud instead of generating its own (a
+// different key could never read what the first phone saved). `remote` is the owner's vault
+// (keys/<owner email>, see js/section-keys.js): the PIN-locked copy of the data key (keyWrap) and the keyring
+// sealed with that key (vault). sharedPin is the PIN used on the phone that first turned encryption on;
+// localPin/localAnswer are THIS device's own already-set credentials, used to lock the same key locally
+// exactly like enableEncryption does. This phone's own ledger is left as it is: the next sync compares it
+// with the cloud and asks before changing anything. Returns '' on success, otherwise the message to show.
 async function joinEncryptedSync(sharedPin, localPin, localAnswer, remote){
-  if(!remote || !remote.keyWrap) return 'No shared key found in the cloud yet.';
+  if(!remote || !remote.keyWrap || !remote.vault) return 'No shared key found in the cloud yet. On the phone that first turned encryption on, open the app and tap Sync Now, then try again.';
   if(!(await checkPin(localPin))) return "This device's current PIN is incorrect.";
   if(!(await checkRecoveryAnswer(localAnswer))) return "This device's recovery answer is incorrect.";
   let dek;
   try{ dek = await encUnwrap(remote.keyWrap, sharedPin, remote.iter || ENC_ITER); }
   catch(e){ return "Couldn't unlock the shared key — check the PIN from the other device."; }
-  let json;
-  try{ json = await encOpenWith(dek, remote.payload); }
-  catch(e){ return 'Shared key did not match the cloud data.'; }
+  let vaultJson;
+  try{ vaultJson = await encOpenWith(dek, remote.vault); JSON.parse(vaultJson); }
+  catch(e){ return 'Shared key did not match the cloud keys.'; }
   const meta = {v:1, iter:ENC_ITER, pin: await encWrap(dek, localPin, ENC_ITER), rec: await encWrap(dek, normalizeAnswer(localAnswer), ENC_ITER)};
-  const blob = await encSealWith(dek, json);
+  const blob = await encSealWith(dek, JSON.stringify(DATA));
   try{
     localStorage.setItem(ENC_DATA_KEY, blob);
     localStorage.setItem(ENC_META_KEY, JSON.stringify(meta));
   }catch(e){ return 'Not enough storage space to write the encrypted copy — nothing was changed.'; }
   ENC_DEK = dek; ENC_PENDING_LOAD = false; ENC_LOAD_FAILED = false;
   purgePlaintextLedgerAndHashes();
-  Object.keys(DATA).forEach(k=>{ delete DATA[k]; });
-  Object.assign(DATA, JSON.parse(json));
-  if(typeof tombRebaseline === 'function') tombRebaseline(); // joined a different ledger — start deletion tracking fresh
+  try{ if(typeof skAdoptVault === 'function') await skAdoptVault(vaultJson); }catch(e){ console.error(e); }
   try{ await snapConvertAll(true); }catch(e){ /* best effort */ }
   return '';
 }
@@ -223,6 +222,7 @@ async function disableEncryption(pin, answer){
     try{ localStorage.removeItem(STORAGE_KEY); }catch(_){ /* nothing more to do */ }
     return 'Not enough storage space to write the plain copy — nothing was changed.';
   }
+  try{ if(typeof skOnEncryptionOff === 'function') await skOnEncryptionOff(); }catch(e){ /* best effort: the owner's cloud keys stay with the phone */ }
   await setPinPlain(pin);
   await setRecoveryPlain(getRecoveryQuestion(), answer);
   try{ await snapConvertAll(false); }catch(e){ /* best effort */ }

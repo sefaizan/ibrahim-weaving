@@ -62,9 +62,14 @@ function load(opts){
   if(opts.flag !== false && email && email !== OWNER) store.set('khata-view-only', '1');
 }
 const run = code => vm.runInContext(code, ctx);
-const giveGrant = (msFromNow, extra) => store.set('khata-write-grant', JSON.stringify(Object.assign({ email: WORKER, expiresAt: Date.now() + msFromNow }, extra || {})));
-const grantNote = (msFromNow, write) => docs.set(noteId(WORKER), { write: write !== false, expiresAt: Date.now() + msFromNow });
-const syncedHash = () => store.set('khata-cloud-last-hash', sha(JSON.stringify(run('DATA')))); // marks the ledger as fully synced
+const giveGrant = (msFromNow, extra) => { store.set('khata-cloud-perms', JSON.stringify({ production: 'vae' })); store.set('khata-write-grant', JSON.stringify(Object.assign({ email: WORKER, expiresAt: Date.now() + msFromNow }, extra || {}))); };
+const EDIT_PERMS = { production: 'vae' };
+const grantNote = (msFromNow, write, perms) => docs.set(noteId(WORKER), { write: write !== false, expiresAt: Date.now() + msFromNow, perms: perms || EDIT_PERMS });
+const syncedHash = () => { // marks the ledger as fully synced: every section's hash matches, plus the older whole-ledger marker
+  const parts = JSON.parse(run('JSON.stringify(cloudSplit(DATA))')), m = {};
+  Object.keys(parts).forEach(k => { m[k] = sha(JSON.stringify(parts[k])); });
+  store.set('khata-cloud-sec-hash', JSON.stringify(m)); store.set('khata-cloud-last-hash', sha(JSON.stringify(run('DATA'))));
+};
 beforeEach(() => load());
 
 describe('who may edit', () => {
@@ -142,7 +147,7 @@ describe('learning the grant from the note', () => {
     docs.set('sync/ledger', { payload: JSON.stringify({ production: [{ id: 'a' }] }), encrypted: false, savedAt: '2026-09-30T10:00:00.000Z' });
     grantNote(2 * HOUR);
     await run('cloudSyncCheckOnStart()');
-    assert.equal(run('viewOnly()'), false); assert.ok(gets.indexOf(noteId(WORKER)) < gets.indexOf('sync/ledger'), 'note read first');
+    assert.equal(run('viewOnly()'), false); assert.equal(gets[0], noteId(WORKER), 'note read first, before any section is looked at');
   });
 });
 
@@ -163,6 +168,7 @@ describe('dropping back to view-only', () => {
   });
   test('revoked while offline-editing: the next push is refused, the phone finds the grant gone, keeps the entry, goes view-only', async () => {
     giveGrant(2 * HOUR); run(`DATA.production.push({ id: 'offline-edit' })`); store.set('khata-cloud-last-hash', 'old');
+    store.set('khata-cloud-sec-seen', JSON.stringify({ production: '2026-09-30T10:00:00.000Z' })); // this phone has received the section before, so it may send it
     denyAll = true;
     await run('cloudPushNow()'); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
     assert.equal(run('viewOnly()'), true);
@@ -238,10 +244,11 @@ describe('keeping the unsynced entries safe', () => {
 describe('the owner\'s side: the note follows the record', () => {
   beforeEach(() => { load({ email: OWNER }); });
   const ent = (msFromNow, write) => ({ expiresAt: Date.now() + msFromNow, write: !!write, addedAt: 1 });
-  test('approving someone with edit access writes their note; view-only or revoked people get none', async () => {
+  test('approving someone writes their note (view-only people get a note that does not allow editing); revoked people have it removed', async () => {
     docs.set('config/access', { ownerEmail: OWNER, approved: {} });
     await run(`cloudAccessEdit(r => cloudAccessApplyApprove(r, '${WORKER}', ${Date.now() + DAY}, ${Date.now()}))`);
-    assert.deepEqual(deletes, [noteId(WORKER)], 'view-only: any old note is removed');
+    assert.deepEqual(deletes, [], 'view-only: still gets a note, which carries their role and sections');
+    assert.equal(sets.find(s => s.path === noteId(WORKER)).value.write, false);
     docs.set('config/access', { ownerEmail: OWNER, approved: { [WORKER]: ent(DAY, true) } });
     sets.length = 0; await run(`cloudAccessEdit(r => cloudAccessApplyShift(r, '${WORKER}', ${HOUR}, ${Date.now()}))`);
     const note = sets.find(s => s.path === noteId(WORKER));
@@ -266,7 +273,7 @@ describe('the owner\'s side: the note follows the record', () => {
   test('opening the People card re-sends every note (covers entries set by hand)', async () => {
     const rec = { ownerEmail: OWNER, approved: { [WORKER]: ent(DAY, true), 'viewer@example.com': ent(DAY, false) } };
     await run(`waMirrorAll(${JSON.stringify(rec)})`);
-    assert.ok(sets.some(s => s.path === noteId(WORKER))); assert.ok(deletes.includes(noteId('viewer@example.com')));
+    assert.ok(sets.some(s => s.path === noteId(WORKER))); const vn = sets.find(s => s.path === noteId('viewer@example.com')); assert.ok(vn && vn.value.write === false, 'a view-only person gets a note that does not allow editing');
   });
   test('the notes live in the "sync" collection the current rules already cover, so no rule change is needed', () => {
     assert.match(read('js/cloud-sync.js'), /match \/sync\/\{doc\}/);

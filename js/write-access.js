@@ -34,8 +34,10 @@ async function waGrantDocId(email){
 // Owner only: make the note match one person's entry in the record (null = they were revoked / not on the list).
 async function waMirrorGrant(db, email, entry){
   const ref = db.collection('sync').doc(await waGrantDocId(email));
-  const live = entry && entry.write === true && Number(entry.expiresAt) > 0;
-  if(live) await ref.set({ write: true, expiresAt: Number(entry.expiresAt), updatedAt: new Date().toISOString() });
+  // Release 3: every approved person gets a note (not only editors): it carries their role and what they may do
+  // in each section, which is how their phone learns it. Revoked / not on the list = the note is deleted.
+  const live = entry && Number(entry.expiresAt) > 0;
+  if(live) await ref.set({ write: entry.write === true, expiresAt: Number(entry.expiresAt), role: entry.role || '', perms: (entry.perms && typeof entry.perms === 'object') ? entry.perms : {}, needsApproval: cloudNeedsApprovalClean(entry.needsApproval), updatedAt: new Date().toISOString() });
   else await ref.delete();
 }
 // Owner only: bring every note in line with the record (also covers entries set by hand in the console).
@@ -79,9 +81,20 @@ function waBadgeUpdate(){
     el.hidden = !on;
     if(on) el.textContent = 'Can edit \u00B7 ' + waLeftText(waLeftMs()) + ' left';
   }catch(e){}
+  try{ if(typeof proposalsBadgeUpdate === 'function') proposalsBadgeUpdate(); }catch(e){}
 }
 // The line in Settings > Cloud Sync for a signed-in non-owner account.
+// Changes kept as proposals on this phone (js/proposals.js), shown under the account note while any are waiting.
+function waProposalsNoteHtml(){
+  try{
+    const n = typeof proposalsCount === 'function' ? proposalsCount() : 0;
+    return n ? '<p class=\"note\" style=\"margin:0 0 8px\"><b>' + n + (n === 1 ? ' change is' : ' changes are') + ' waiting for the owner\u2019s approval.</b> The ledger on this phone does not include ' + (n === 1 ? 'it' : 'them') + ' yet.</p>' : '';
+  }catch(e){ return ''; }
+}
 function waAccountNoteHtml(){
+  return waAccountNoteMainHtml() + waProposalsNoteHtml() + (typeof proposalsBoxHtml === 'function' ? proposalsBoxHtml() : '');
+}
+function waAccountNoteMainHtml(){
   if(cloudWriteGrantActive()){
     const g = waGrantLocal();
     return '<p class="note" style="margin:0 0 8px"><b>Can edit</b> until ' + escHtml(cloudPeopleDateTimeText(g.expiresAt)) + ' (' + escHtml(waLeftText(waLeftMs())) + ' left). When it ends this phone goes back to view only, and anything not yet synced is kept as a safety copy.</p>';
@@ -111,11 +124,13 @@ async function waRefreshGrant(){
       if(e && (e.code === 'permission-denied' || /insufficient permissions/i.test(e.message || ''))){
         // Not approved (any more) at all: the note can't even be read.
         if(held) await waGrantEnd('revoked');
+        cloudPermsClear();
         return 'denied';
       }
       return 'error'; // no signal etc.: keep things as they are
     }
-    if(d && d.write === true && Number(d.expiresAt) > Date.now()){
+    if(d && Number(d.expiresAt) > Date.now()){ cloudPermsSave(d.perms || {}); cloudApprovalSave(d.needsApproval || {}); } else if(!d || Number(d.expiresAt) <= Date.now()) cloudPermsClear(); // what this account may do, per section
+    if(d && d.write === true && Number(d.expiresAt) > Date.now() && cloudPermsCanWrite(d.perms)){
       const was = cloudWriteGrantActive();
       waGrantSave({ email: String(u.email).trim().toLowerCase(), expiresAt: Number(d.expiresAt) });
       waTickStart();
@@ -143,9 +158,9 @@ async function waGrantEnd(reason){
   await waFinishDrop();
 }
 async function waHasUnsynced(){
-  let last = null;
-  try{ last = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
-  return last !== await cloudCurrentHash();
+  // Per section (Release 3): only sections this account may change count, so entries that merely arrived
+  // from the cloud in a view-only section are never mistaken for unsynced work.
+  return (await cloudUnsyncedSections(true)).length > 0;
 }
 async function waFinishDrop(){
   const g = waGrantLocal();
@@ -183,6 +198,10 @@ function waEndedMessage(reason, copy){
   if(copy === 'safety') m += ' Changes that had not synced were saved as a safety copy (Settings > Backup & Restore).';
   else if(copy === 'local') m += ' Changes that had not synced were saved as a copy on this phone.';
   else if(copy === 'failed') m += ' Warning: changes that had not synced could not be saved as a copy.';
+  try{
+    const k = typeof proposalsUnsentCount === 'function' ? proposalsUnsentCount() : 0;
+    if(k) m += ' ' + k + (k === 1 ? ' proposed change that has' : ' proposed changes that have') + ' not reached the owner ' + (k === 1 ? 'is' : 'are') + ' kept on this phone (Settings > Cloud Sync).';
+  }catch(e){}
   return m;
 }
 function waShowEnded(reason, copy){

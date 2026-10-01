@@ -622,7 +622,7 @@ function recordMatchesSearch(rec, term){
   if(!term) return true;
   const t = term.toLowerCase();
   return Object.entries(rec).some(([key, val])=>{
-    if(key === '_mt' || key === '_mb' || key === '_ct' || key === '_cb') return false; // edit stamps (who / when) are not part of what the entry says
+    if(key === '_mt' || key === '_mb' || key === '_ct' || key === '_cb' || key === '_ca' || key === '_ma') return false; // edit stamps (who / when) are not part of what the entry says
     if(val == null || val === '') return false;
     if(typeof val === 'object') return JSON.stringify(val).toLowerCase().includes(t);
     return String(val).toLowerCase().includes(t);
@@ -711,12 +711,12 @@ function recStampWhen(ms){
 // The lines shown for one entry: [ 'Added by x - date', 'Last edited by y - date' ] (or a single line when there is nothing recorded).
 function recStampLines(rec){
   if(!rec) return ['This entry could not be found.'];
-  const line = (label, who, ms)=> label + (who ? ' by ' + who : '') + (recStampWhen(ms) ? ' \u00B7 ' + recStampWhen(ms) : '');
+  const line = (label, who, ms, appr)=> label + (who ? ' by ' + who : '') + (recStampWhen(ms) ? ' \u00B7 ' + recStampWhen(ms) : '') + (appr ? ' \u00B7 approved by ' + appr : '');
   const added = Number(rec._ct) > 0 || rec._cb, edited = Number(rec._mt) > 0 || rec._mb;
   if(!added && !edited) return ['No history recorded for this entry.'];
   return [
-    added ? line('Added', rec._cb, rec._ct) : 'Added before history was recorded',
-    edited ? line('Last edited', rec._mb, rec._mt) : 'Not edited since it was added',
+    added ? line('Added', rec._cb, rec._ct, rec._ca) : 'Added before history was recorded',
+    edited ? line('Last edited', rec._mb, rec._mt, rec._ma) : 'Not edited since it was added',
   ];
 }
 let _recInfoTimer = null;
