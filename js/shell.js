@@ -208,7 +208,7 @@ function settingsPanel(){
       </table>
     </div>`;
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  return `<div class="card"><h2>Appearance</h2>
+  const appearanceCard = `<div class="card"><h2>Appearance</h2>
     <label style="display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer">
       <input type="checkbox" id="darkModeToggle" ${isDark?'checked':''} style="width:18px;height:18px">
       Dark Mode
@@ -218,9 +218,8 @@ function settingsPanel(){
       Show logs as cards on phones
     </label>
     <p class="note" style="margin-top:6px">Turn off to go back to the classic sideways-scrolling tables. Only affects small screens.</p>
-  </div>
-  ` + pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + (typeof auditCardHtml === 'function' ? auditCardHtml() : '') + beamAlertSettingsCard() + `
-  <div class="card"><div class="card-head"><h2>Business Info</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+  </div>`;
+  const businessInfoCard = `<div class="card"><div class="card-head"><h2>Business Info</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>Shown on the header of printed Sale receipts (Sales Log → Receipt). Leave any of these blank to leave that line off the receipt.</p>
     <div class="grid cols-1">
       ${field('Business Name','biz_name','text',`value="${(DATA.businessInfo?.name||'').replace(/"/g,'&quot;')}"`)}
@@ -229,13 +228,24 @@ function settingsPanel(){
       ${field('Address','biz_address','text',`value="${(DATA.businessInfo?.address||'').replace(/"/g,'&quot;')}"`)}
       ${field('Phone','biz_phone','text',`value="${(DATA.businessInfo?.phone||'').replace(/"/g,'&quot;')}"`)}
     </div>
-    <button class="primary" id="saveBusinessInfo" style="margin-top:12px">Save</button></div>
-  ` + section('Qualities','qualities','e.g. 44 Picks',false) + section('Clients','clients','e.g. Ali Textiles',true,true)
-    + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Family Members','familyMembers','e.g. Uncle Rafiq',true,true) + section('Looms','looms','e.g. 9',false)
-    + loomAssignmentsSection()
-    + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)
-    + section('Dyeing Units','dyeingUnits','e.g. Al-Karam Dyeing',false)
-    + section('Banks','banks','e.g. Meezan Bank',false);
+    <button class="primary" id="saveBusinessInfo" style="margin-top:12px">Save</button></div>`;
+  // Settings is grouped into four collapsible sections (one open at a time) instead of one long scroll of cards.
+  return settingsGroup('general', 'General', ['Appearance','Business Info','Banks'],
+      appearanceCard + businessInfoCard + section('Banks','banks','e.g. Meezan Bank',false))
+    + settingsGroup('security', 'Security & sync', ['PIN Lock','Encryption','Cloud Sync','Cloud People','Audit'],
+      pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + (typeof auditCardHtml === 'function' ? auditCardHtml() : ''))
+    + settingsGroup('people', 'People', ['Clients','Employees','Family Members'],
+      section('Clients','clients','e.g. Ali Textiles',true,true) + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Family Members','familyMembers','e.g. Uncle Rafiq',true,true))
+    + settingsGroup('looms', 'Looms & materials', ['Looms','Loom Assignments','Qualities','Warp Types','Weft Types','Dyeing Units','Beam Alerts'],
+      section('Looms','looms','e.g. 9',false) + loomAssignmentsSection() + section('Qualities','qualities','e.g. 44 Picks',false)
+      + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)
+      + section('Dyeing Units','dyeingUnits','e.g. Al-Karam Dyeing',false) + beamAlertSettingsCard());
+}
+// Which Settings group is open (null = all closed). Kept in memory so a re-render after Add/Edit/Remove keeps your place.
+let SETTINGS_OPEN = null;
+function settingsGroup(key, title, names, inner){
+  const isOpen = SETTINGS_OPEN === key ? ' open' : '';
+  return `<details class="set-group" data-set-group="${key}"${isOpen}><summary><span class="sg-title">${title}</span><span class="sg-sub">${names.map(n=>`<span>${n}</span>`).join(', ')}</span></summary><div class="sg-body">${inner}</div></details>`;
 }
 // Settings card for the PIN Lock feature — two states: not set up yet (just pick a PIN) vs.
 // already enabled (status + two actions, each of which asks for the *current* PIN again

@@ -680,6 +680,19 @@ function wireScrollAwareFab(fabBackup){
     if(btn){ recInfoShow(btn.getAttribute('data-rec-info')); return; }
     if(typeof recInfoHide === 'function') recInfoHide();
   });
+  // Settings groups: opening one closes the others, and the open one is remembered across re-renders.
+  document.addEventListener('toggle', (e)=>{
+    const d = e.target;
+    if(!d || !d.matches || !d.matches('details.set-group')) return;
+    const key = d.getAttribute('data-set-group');
+    if(d.open){
+      SETTINGS_OPEN = key;
+      document.querySelectorAll('details.set-group[open]').forEach(o=>{ if(o !== d) o.open = false; });
+      d.scrollIntoView({block:'nearest', behavior:'smooth'});
+    } else if(SETTINGS_OPEN === key){
+      SETTINGS_OPEN = null;
+    }
+  }, true);
   // Card-heading info toggles (see .card-head / .info-btn in the stylesheet): delegated
   // since these get re-rendered constantly across every panel. Most buttons toggle the
   // [hidden] note immediately following the .card-head they sit in; a button can instead

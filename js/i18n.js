@@ -37,6 +37,7 @@ const I18N_UR = {
   'This Month':'اس مہینے', 'Last Month':'پچھلے مہینے', 'This Year':'اس سال', 'Custom…':'اپنی مرضی…',
   'From':'سے', 'To':'تک', 'Qty':'مقدار', 'Beam':'بیم', 'Emp 1':'ملازم 1', 'Emp 2':'ملازم 2', 'Emp 3':'ملازم 3', 'Diff':'فرق',
   // Settings lists
+  'General':'عمومی', 'Security & sync':'سیکیورٹی اور سنک', 'People':'افراد', 'Looms & materials':'لومز اور مال',
   'Qualities':'کوالٹیز', 'Looms':'لومز', 'Employees':'ملازمین', 'Name':'نام',
   // Common buttons
   'Edit':'ترمیم', 'Delete':'حذف', 'Cancel':'منسوخ', 'Save':'محفوظ کریں', 'Close':'بند کریں', 'Search':'تلاش',
@@ -143,7 +144,7 @@ function i18nInit(){
   css.textContent =
     'html[lang="ur"] body,html[lang="ur"] button,html[lang="ur"] input,html[lang="ur"] select,html[lang="ur"] textarea{font-family:"Noto Naskh Arabic","Geeza Pro","Segoe UI",Tahoma,sans-serif}' +
     'html[lang="ur"] label,html[lang="ur"] h1,html[lang="ur"] h2,html[lang="ur"] h3,html[lang="ur"] p,html[lang="ur"] th,html[lang="ur"] .note,html[lang="ur"] .group-label,html[lang="ur"] .sub{unicode-bidi:plaintext}' +
-    '#langBtn{font-size:13px;min-height:30px;padding:2px 10px;margin-right:6px;border-radius:8px}';
+    '#langBtn{font-size:12px;line-height:16px;min-height:0;height:auto;padding:1px 10px;margin:0;border-radius:20px;pointer-events:auto}';
   document.head.appendChild(css);
   const meta = document.querySelector('.appbar-meta');
   if(meta){
