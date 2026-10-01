@@ -111,7 +111,11 @@ describe('Business viewer: Production, Sales and Cheques cards only', () => {
     ['cash_position', 'warp_usage', 'expenses_material', 'profit_loss', 'backup_reminder'].forEach(id => assert.equal(on(id), false, id));
   });
   test('the Overview page renders exactly those cards, in order', () => {
-    assert.deepEqual(cards(), ['pending_l', 'pending_cheques', 'bounced_cheques', 'Stock Position', 'client_statement', 'Sales & Receivables', 'Receivables Aging', 'Clients Breakdown by Quality']);
+    // 'At a Glance' leads the page; it only holds numbers this role may already see (Sales and Receivable here)
+    assert.deepEqual(cards(), ['At a Glance', 'pending_l', 'pending_cheques', 'bounced_cheques', 'Stock Position', 'client_statement', 'Sales & Receivables', 'Receivables Aging', 'Clients Breakdown by Quality']);
+    run('renderStats("")');
+    const glance = wrap.innerHTML.match(/<div class="card ov-glance">[\s\S]*?<\/div><div class="ov-sub">/)[0];
+    assert.doesNotMatch(glance, /Cash Position|Profit/);
   });
   test('the Stock card has no Cash Position tile and no checkpoint note', () => {
     run('renderStats("2026-09")');
@@ -181,9 +185,9 @@ describe('Production operator', () => {
 });
 
 describe('a role that may view everything sees every card', () => {
-  test('all sections viewable: all fourteen data cards and the Cash Position tile', () => {
+  test('all sections viewable: At a Glance plus all fourteen data cards and the Cash Position tile', () => {
     load({ perms: ALL });
-    assert.deepEqual(cards(), ['pending_l', 'pending_cheques', 'bounced_cheques', 'Stock Position', 'client_statement', 'Sales & Receivables', 'Warp Usage (Last 2 Months)', 'Receivables Aging', 'Clients Breakdown by Quality', 'Expenses & Material Cost', 'Profit / Loss']);
+    assert.deepEqual(cards(), ['At a Glance', 'pending_l', 'pending_cheques', 'bounced_cheques', 'Stock Position', 'client_statement', 'Sales & Receivables', 'Warp Usage (Last 2 Months)', 'Receivables Aging', 'Clients Breakdown by Quality', 'Expenses & Material Cost', 'Profit / Loss']);
     assert.match(wrap.innerHTML, /Cash Position/);
   });
   test('Materials missing: Warp usage, Expenses & Material cost and Profit / Loss (which include warp / weft cost) are left out, and so is Cash Position', () => {

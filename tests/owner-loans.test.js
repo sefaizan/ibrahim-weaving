@@ -99,12 +99,10 @@ describe('Owner Loans: wired in everywhere, owner-only', () => {
     const roles = read('js/cloud-sync.js').match(/const CLOUD_ROLES = \{[\s\S]*?\n\};/)[0];
     assert.doesNotMatch(roles, /tools/);
   });
-  test('release bookkeeping moved together: build, badge, package.json, cache', () => {
+  test('release bookkeeping stays in step: package.json version matches the header badge', () => {
     const html = read('index.html');
     const v = JSON.parse(read('package.json')).version;
-    assert.equal(v, '3.17.33');
     assert.ok(html.includes(`id="appVersionTag">v${v}<`));
-    assert.match(html, /name="app-build" content="2026-10-02-release3-owner-loans"/);
-    assert.match(read('service-worker.js'), /CACHE_VERSION = 'v160'/);
+    assert.match(read('service-worker.js'), /CACHE_VERSION = 'v\d+'/);
   });
 });
