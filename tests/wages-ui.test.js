@@ -101,6 +101,16 @@ describe('Summary tab', () => {
     closeTo(bal('Bilal'), 1485, 'Bilal balance');
     assert.match(html, /Rs 625 owed/); assert.match(html, /Rs 1485 owed/);
   });
+  test('summary card lists production by quality (Diff included) with a total', () => {
+    const t = load(ledger());
+    t.vals.wg_from = '2026-09-28'; t.vals.wg_to = '2026-10-02';
+    t.run('renderWages()');
+    const hero = t.el('wagesWrap').innerHTML.match(/<div class="card wg-hero">[^]*?<div class="card"><div class="card-head">/)[0];
+    assert.match(hero, /Production by Quality \(mtr\)/);
+    assert.match(hero, /<span class="q">A<\/span><span class="m">180<\/span>/);   // 100 + 80
+    assert.match(hero, /<span class="q">B<\/span><span class="m">50<\/span>/);    // 40 own + 10 unassigned shared
+    assert.match(hero, /Total production<\/span><span class="m">230<\/span>/);
+  });
   test('Diff share is shown on its own and still counted once', () => {
     const t = load(ledger());
     t.vals.wg_from = '2026-09-28'; t.vals.wg_to = '2026-10-02';
