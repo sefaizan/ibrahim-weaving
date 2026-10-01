@@ -407,7 +407,7 @@ function cascadeMasterRename(key, oldName, newName){
 /* ---------------- Backup files: password protection, decoding, validation ---------------- */
 const BACKUP_ENC_PREFIX = 'KHATA-ENC1:'; // marks a password-protected (AES-GCM) backup
 const BACKUP_KNOWN_LISTS = ['sale','recovery','clients','qualities','employees','looms','production','expense','family','personal','warp','weft',
-  'wagePayments','wageBonuses','wageSettlements','loanPayments','personalLoans','familyMembers','warpBeams','checkpoints'];
+  'wagePayments','wageBonuses','wageSettlements','loanPayments','personalLoans','ownerLoans','familyMembers','warpBeams','checkpoints'];
 function b64FromBytes(bytes){
   let s = '';
   for(let i=0; i<bytes.length; i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
@@ -462,7 +462,7 @@ function backupErrorMessage(err){
 function backupCounts(o){
   const n = k => (o && Array.isArray(o[k])) ? o[k].length : 0;
   return {sales:n('sale'), recoveries:n('recovery'), production:n('production'), clients:n('clients'),
-          other:n('expense')+n('family')+n('personal')+n('warp')+n('weft')+n('wagePayments')+n('wageBonuses')+n('wageSettlements')+n('loanPayments')+n('personalLoans')+n('warpBeams')+n('checkpoints')};
+          other:n('expense')+n('family')+n('personal')+n('warp')+n('weft')+n('wagePayments')+n('wageBonuses')+n('wageSettlements')+n('loanPayments')+n('personalLoans')+n('ownerLoans')+n('warpBeams')+n('checkpoints')};
 }
 const totalEntries = c => c.sales + c.recoveries + c.production + c.other;
 function countsText(c){
@@ -580,7 +580,7 @@ function ledgerSizeLineHtml(){
 /* ---------------- Export a log table to CSV (opens in Excel / Google Sheets) ---------------- */
 const EXPORT_SOURCES = {}; // pageKey -> () => ({headers, cells}) for the log table as last drawn (all filtered rows, not just the page shown)
 const EXPORT_LABELS = {sale:'Sales', recovery:'Recovery', expense:'Expenses', family:'Family_Expenses', personal:'Personal_Expenses', warp:'Warp', weft:'Weft', production:'Production',
-  wageBonuses:'Wage_Bonuses', wagePayments:'Wage_Payments', wageSettlements:'Wage_Settlements', loanPayments:'Loans', personalLoans:'Personal_Loans', rateCalcs:'Grey_Cloth_Rates',
+  wageBonuses:'Wage_Bonuses', wagePayments:'Wage_Payments', wageSettlements:'Wage_Settlements', loanPayments:'Loans', personalLoans:'Personal_Loans', ownerLoans:'Owner_Loans', rateCalcs:'Grey_Cloth_Rates',
   checkpoints:'Cash_Checkpoints', warpBeams:'Warp_Beams', warpBeamsFinished:'Warp_Beams_Finished', pendingCheques:'Pending_Cheques', bouncedCheques:'Bounced_Cheques', unlinkedReplaced:'Replaced_Cheques_Not_Linked'};
 function exportBarHtml(pageKey, count){
   if(!count) return '';
@@ -712,7 +712,7 @@ const UNDO_MAX = 25, UNDO_MAX_CHARS = 12000000;
 let _undoSeq = 0;
 const UNDO_KEY_LABEL = {sale:'Sale', recovery:'Recovery', production:'Production', expense:'Expense', family:'Family expense', personal:'Personal expense', warp:'Warp purchase',
   weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', familyMembers:'Family member', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', dyeingUnits:'Dyeing unit', banks:'Bank',
-  wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', personalLoans:'Personal loan entry', warpBeams:'Warp beam',
+  wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', personalLoans:'Personal loan entry', ownerLoans:'Owner loan entry', warpBeams:'Warp beam',
   checkpoints:'Checkpoint', rateCalcs:'Rate calculation', loomAssignments:'Loom assignment', wageRateHistory:'Wage rates', businessInfo:'Business info'};
 const undoKeyLabel = k => UNDO_KEY_LABEL[k] || k;
 

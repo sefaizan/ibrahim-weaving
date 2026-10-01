@@ -164,6 +164,7 @@ const PERM_TAB_SECTIONS = {
   production: ['production'], warpbeams: ['production'],
   sale: ['sales'], recovery: ['recovery'], expense: ['expenses'], wages: ['wages'], loans: ['loans'],
   family: ['family'], personal: ['family'], personalloans: ['family'],
+  ownerloans: ['tools'], // owner's own money lent to the business: owner-only (tools is never in a preset role)
   warp: ['materials'], weft: ['materials'],
   ratecalc: ['tools'], checkpoints: ['tools'],
   // settings and backup are device pages: always shown (what is inside them is limited below)
@@ -194,6 +195,7 @@ const PERM_OVERVIEW_CARDS = {
   warp_usage:        { needs: ['production', 'materials'] },                   // warp purchases (Materials) against beams woven
   receivables_aging: { needs: ['sales', 'recovery'] },
   client_quality:    { needs: ['sales'] },
+  owner_loans:       { needs: ['tools'] },                                     // money the owner lent the business, and what is still owed
   expenses_material: { needs: PERM_MONEY_ALL },                                // expenses, wages paid, family, personal, warp / weft cost, loans
   profit_loss:       { needs: ['sales'].concat(['expenses', 'wages', 'family', 'materials']) },
 };

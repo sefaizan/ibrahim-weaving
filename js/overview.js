@@ -495,6 +495,18 @@ function renderStats(monthVal){
         </table>`;
       })()}</div>
     </div>` : ''}
+    ${ovCardOn('owner_loans') && (ownerLoanList().length) ? `<div class="card"><div class="card-head"><h2>Owner Loans (Owed to You)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Your own money put into the business, and what is still owed back to you. Cash Position already includes it (it is cash in hand), so "Cash after repaying you" takes it back out: Cash Position minus what you are still owed. It is not income or an expense, so Profit / Loss does not change. Log entries in the Owner Loans tab.</p>
+      <div class="grid cols-2">
+        ${card('Owed to You', s.ownerLoanOwed, fmtRs(s.ownerLoanOwed), 'balance compact')}
+        ${card('Cash after repaying you', s.cash - s.ownerLoanOwed, fmtRs(s.cash - s.ownerLoanOwed), 'balance compact')}
+      </div>
+      <div class="grid cols-2" style="margin-top:14px">
+        ${card('Put In', s.ownerLoanInCum, fmtRs(monthVal?s.ownerLoanInMonth:s.ownerLoanInCum), 'compact')}
+        ${card('Paid Back', s.ownerLoanRepaidCum, fmtRs(monthVal?s.ownerLoanRepaidMonth:s.ownerLoanRepaidCum), 'compact')}
+      </div>
+      <div class="legend">${monthVal ? 'Put In / Paid Back shown for the selected period; Owed to You and Cash are cumulative as of the end of that period.' : 'All figures shown are all-time totals.'}</div>
+    </div>` : ''}
     ${ovCardOn('expenses_material') ? `<div class="card"><h2>Expenses & Material Cost</h2>
       <div class="grid cols-4">
         ${card('Business Expenses', s.bizExpCum, `${fmtRs(monthVal?s.bizExpMonth:s.bizExpCum)} (incl. ${fmtRs(monthVal?s.wagesPaidMonth:s.wagesPaidCum)} wages)`)}
@@ -551,7 +563,7 @@ function lastNMonthKeys(n){
 // open-ended "From" when Graphs has a custom range with only a "To" date set.
 function earliestLedgerDate(){
   const dates = [];
-  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans]
+  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans,DATA.ownerLoans]
     .forEach(arr=>{ if(arr) arr.forEach(r=>{ if(r.date) dates.push(r.date); }); });
   return dates.length ? dates.reduce((a,b)=> a<b?a:b) : todayStr();
 }
@@ -559,7 +571,7 @@ function earliestLedgerDate(){
 // current month — used for the "All available months" range option.
 function allMonthKeysFromData(){
   const dates = [];
-  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans]
+  [DATA.production,DATA.sale,DATA.expense,DATA.family,DATA.personal,DATA.warp,DATA.weft,DATA.recovery,DATA.wagePayments,DATA.loanPayments,DATA.personalLoans,DATA.ownerLoans]
     .forEach(arr=>{ if(arr) arr.forEach(r=>{ if(r.date) dates.push(r.date); }); });
   if(!dates.length) return lastNMonthKeys(12);
   const minDate = dates.reduce((a,b)=> a<b?a:b);

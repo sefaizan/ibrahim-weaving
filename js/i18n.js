@@ -19,7 +19,7 @@ const I18N_UR = {
   'Daily':'روزانہ', 'Money':'رقم', 'Family':'گھر', 'Materials':'مال', 'Tools':'ٹولز',
   'Overview':'جائزہ', 'Production':'پیداوار', 'Sale':'فروخت', 'Recovery':'وصولی', 'Expense':'اخراجات', 'Wages':'اجرت',
   'Loans (Employee)':'قرض (ملازم)', 'Grey Cloth Rate':'گرے کپڑے کا ریٹ', 'Family Expense':'گھریلو اخراجات',
-  'Personal Expense':'ذاتی اخراجات', 'Personal Loans (Given)':'ذاتی قرض (دیے گئے)', 'Warp (Tana)':'تانا',
+  'Personal Expense':'ذاتی اخراجات', 'Personal Loans (Given)':'ذاتی قرض (دیے گئے)', 'Owner Loans (to Company)':'مالک کا قرض (کمپنی کو)', 'Warp (Tana)':'تانا',
   'Weft (Bana)':'بانا', 'Warp (Tana) Beam':'تانا بیم', 'Cash Checkpoints':'کیش چیک پوائنٹس', 'Graphs':'گراف',
   'Approvals':'منظوریاں', 'Audit':'آڈٹ', 'Settings':'سیٹنگز', 'Backup & Restore':'بیک اپ اور بحالی',
   // Header

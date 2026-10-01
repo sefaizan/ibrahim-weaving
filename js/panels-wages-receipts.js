@@ -433,6 +433,74 @@ function personalLoansPanel(){
   `;
 }
 
+/* ---------------- Owner Loans (to Company) ---------------- */
+// Money the owner puts into the business (e.g. to buy yarn or spare parts) and gets back later, usually
+// out of recoveries. Kept apart from the business's own money: Cash Position includes it (it really is
+// cash in hand), and the "Cash after repaying you" figure on the Overview takes it back out. Never
+// income and never an expense, so Profit/Loss is untouched. Owner-only: the tab, the cloud section
+// (tools) and the Overview card are all hidden from every other account.
+const OWNER_LOAN_PURPOSES = ['Warp (Tana)','Weft (Bana)','Spare parts','Other'];
+// The recoveries offered in "Paid back from recovery": the 60 newest, plus any already linked from an entry
+// (so editing an old entry never loses its link).
+function ownerLoanRecoveryChoices(){
+  const linked = new Set(ownerLoanList().map(p=>p.recoveryId).filter(Boolean));
+  const recent = DATA.recovery.slice(-60);
+  const out = recent.slice();
+  DATA.recovery.forEach(r=>{ if(linked.has(r.id) && !out.includes(r)) out.push(r); });
+  return out.reverse();
+}
+function ownerLoanRecoveryLabel(r){
+  return `${fmtDate(r.date)} · ${r.client||'—'} · ${fmtRs(recoveryReceivableAmount(r))}`;
+}
+function ownerLoansPanel(){
+  const b = computeOwnerLoanBalance();
+  const list = ownerLoanList();
+  const inTotals = sumAllAndMonth(list.filter(p=>!ownerLoanIsRepaid(p)), 'amount');
+  const repaidTotals = sumAllAndMonth(list.filter(p=>ownerLoanIsRepaid(p)), 'amount');
+  const owedCls = b.balance > 0.004 ? 'color:var(--red)' : '';
+  const balText = b.balance < -0.004 ? `${fmtRs(Math.abs(b.balance))} paid back extra` : fmtRs(Math.max(0, b.balance));
+  const purposeRows = ownerLoanByPurpose().map(r=>`<tr><td><span class="name">${escHtml(r.purpose)}</span></td><td>${fmtRs2(r.amount)}</td></tr>`).join('');
+  const recById = {}; DATA.recovery.forEach(r=>{ recById[r.id] = r; });
+  const recChoices = ownerLoanRecoveryChoices();
+  const summary = `${sumCardOpen('ownerbalance','Owed to You')}
+    <div class="grid cols-3" style="margin-bottom:14px">
+      <div class="stat compact"><div class="label">Owed to You Now</div><div class="value" style="${owedCls}">${balText}</div></div>
+      <div class="stat compact"><div class="label">Total Put In</div><div class="value">${fmtRs(inTotals.all)}</div></div>
+      <div class="stat compact"><div class="label">Total Paid Back</div><div class="value">${fmtRs(repaidTotals.all)}</div></div>
+    </div>
+    ${purposeRows ? `<div class="log-scroll"><table><thead><tr><th>Put in for</th><th>Total</th></tr></thead><tbody>${purposeRows}</tbody></table></div>` : ''}
+  ${sumCardClose()}`;
+  return `
+    ${summary}
+    <div class="card"><div class="card-head"><h2>Log Owner Loan</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Loan In = your own money put into the business (for yarn, spare parts, ...). It raises Cash Position, but it is not income and not an expense, so Profit/Loss does not change. Loan Repaid = money the business pays back to you, usually out of recoveries; it lowers Cash Position and what you are owed. The Overview shows "Cash after repaying you" = Cash Position minus what you are still owed, i.e. what the business really holds as its own money.</p>
+      <div class="grid cols-3">
+        ${field('Date','ol_date','date',`value="${todayStr()}"`)}
+        <div class="field"><label>Type</label><select id="ol_type"><option value="Loan In">Loan In — you put money in</option><option value="Loan Repaid">Loan Repaid — paid back to you</option></select></div>
+        ${field('Amount (Rs)','ol_amt','number')}
+      </div>
+      <div class="grid cols-2" style="margin-top:12px">
+        <div class="field" id="ol_purpose_wrap"><label>Put in for</label><select id="ol_purpose">${OWNER_LOAN_PURPOSES.map(p=>`<option>${escHtml(p)}</option>`).join('')}</select></div>
+        <div class="field" id="ol_rec_wrap"><label>Paid back from recovery (optional)</label><select id="ol_rec"><option value="">—</option>${recChoices.map(r=>`<option value="${escHtml(r.id)}">${escHtml(ownerLoanRecoveryLabel(r))}</option>`).join('')}</select></div>
+      </div>
+      <div class="note" id="ol_helper" style="margin-top:8px"></div>
+      <div class="grid cols-1" style="margin-top:12px">
+        ${textareaField('Remarks (optional)','ol_rem')}
+      </div>
+      <div class="form-actions">
+        <button class="primary" id="addOwnerLoan">Add Owner Loan Entry</button>
+        <button class="ghost" id="cancelOwnerLoans" style="display:none">Cancel Edit</button>
+      </div></div>
+      <div class="card"><h2>Owner Loan Log</h2>${logTable('ownerLoans',
+        ['Date','Type','Amount','For / From','Remarks',''],
+        list.slice().reverse(),
+        r=>[fmtDate(r.date), escHtml(r.type||'—'), fmtRs2(r.amount),
+            ownerLoanIsRepaid(r) ? (r.recoveryId ? (recById[r.recoveryId] ? escHtml(ownerLoanRecoveryLabel(recById[r.recoveryId])) : 'recovery removed') : '—') : escHtml(r.purpose||'—'),
+            escHtml(r.remarks||'—'), actionBtns('ownerLoans',r.id)]
+      )}</div>
+  `;
+}
+
 /* ---------------- Grey Cloth Rate Calculator ---------------- */
 // Formula (per the mill's costing sheet):
 //   total threads   = thread count * (width + width addition)     [addition is usually 2, sometimes 2.5 — editable]

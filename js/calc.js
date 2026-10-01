@@ -266,6 +266,27 @@ function computePersonLoanBalance(person){
   const repaid = entries.filter(p=>p.type === 'Loan Repaid').reduce((s,p)=>s+(Number(p.amount)||0),0);
   return {given, repaid, balance: given - repaid};
 }
+// Owner Loans (to Company): money the owner puts into the business (e.g. to buy yarn or spare parts)
+// that the business owes back. 'Loan In' adds to what is owed; 'Loan Repaid' (paid back to the owner,
+// usually out of recoveries) reduces it. The cash effect is the OPPOSITE of the loans given out
+// above: a Loan In raises Cash Position, a repayment lowers it. Never income, never an expense, so
+// Profit/Loss is untouched. DATA.ownerLoans may be missing on an old ledger, so it is always read
+// through ownerLoanList().
+function ownerLoanList(){ return (typeof DATA !== 'undefined' && Array.isArray(DATA.ownerLoans)) ? DATA.ownerLoans : []; }
+function ownerLoanIsRepaid(p){ return p && p.type === 'Loan Repaid'; }
+function computeOwnerLoanBalance(){
+  const list = ownerLoanList();
+  const given = list.filter(p=>!ownerLoanIsRepaid(p)).reduce((s,p)=>s+(Number(p.amount)||0),0);
+  const repaid = list.filter(p=>ownerLoanIsRepaid(p)).reduce((s,p)=>s+(Number(p.amount)||0),0);
+  return {given, repaid, balance: given - repaid};
+}
+// Money put in, split by what it was for (Yarn, Spare parts, ...), so the owner can see what the
+// outstanding balance was spent on. Repayments are not tied to a purpose, so they are shown as one total.
+function ownerLoanByPurpose(){
+  const m = {};
+  ownerLoanList().filter(p=>!ownerLoanIsRepaid(p)).forEach(p=>{ const k = p.purpose || 'Other'; m[k] = (m[k]||0) + (Number(p.amount)||0); });
+  return Object.keys(m).map(k=>({purpose:k, amount:m[k]}));
+}
 // Distinct people who appear anywhere in Personal Loans, in first-seen order — there's no
 // separate master list of family/friends (unlike employees), so the Personal Loans page
 // builds its per-person rows straight from whoever has been logged.
@@ -885,6 +906,17 @@ function computeStats(monthVal){
   const personalLoanRepaidCum = sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd);
   const personalLoanRepaidMonth = start ? sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',start,end) : personalLoanRepaidCum;
 
+  // Owner Loans (to Company): the owner's own money put into the business, and paid back out of
+  // recoveries. Raises cash when put in, lowers it when repaid; never an expense or income (see
+  // computeOwnerLoanBalance). 'Owed' is as of the period end, like Cash Position.
+  const ownerIn = ownerLoanList().filter(p=>!ownerLoanIsRepaid(p));
+  const ownerRepaid = ownerLoanList().filter(p=>ownerLoanIsRepaid(p));
+  const ownerLoanInCum = sumWhere(ownerIn,'amount',null,cumEnd);
+  const ownerLoanInMonth = start ? sumWhere(ownerIn,'amount',start,end) : ownerLoanInCum;
+  const ownerLoanRepaidCum = sumWhere(ownerRepaid,'amount',null,cumEnd);
+  const ownerLoanRepaidMonth = start ? sumWhere(ownerRepaid,'amount',start,end) : ownerLoanRepaidCum;
+  const ownerLoanOwed = ownerLoanInCum - ownerLoanRepaidCum;
+
   const bizExpCum = sumWhere(DATA.expense,'amount',null,cumEnd) + wagesPaidCum;
   const bizExpMonth = (start ? sumWhere(DATA.expense,'amount',start,end) : sumWhere(DATA.expense,'amount',null,cumEnd)) + wagesPaidMonth;
 
@@ -976,6 +1008,8 @@ function computeStats(monthVal){
       + sumRecoveryAmount(DATA.recovery, recoveryCashAmount, null, cumEnd, cpDateTime)
       + sumWhere(DATA.loanPayments.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
       + sumWhere(DATA.personalLoans.filter(p=>p.type==='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
+      + sumWhere(ownerIn,'amount',null,cumEnd,cpDateTime)
+      - sumWhere(ownerRepaid,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.expense,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.wagePayments,'amount',null,cumEnd,cpDateTime)
       - sumWhere(DATA.loanPayments.filter(p=>p.type!=='Loan Repaid'),'amount',null,cumEnd,cpDateTime)
@@ -986,13 +1020,14 @@ function computeStats(monthVal){
       - sumWhere(DATA.weft,'amount',null,cumEnd,cpDateTime);
   } else {
     cash = Number(DATA.openingBalance||0) + receivedCashCum + loanRepaidCum - loanGivenCum
-      + personalLoanRepaidCum - personalLoanGivenCum - bizExpCum - famExpCum - personalExpCum - warpCostCum - weftCostCum;
+      + personalLoanRepaidCum - personalLoanGivenCum + ownerLoanInCum - ownerLoanRepaidCum - bizExpCum - famExpCum - personalExpCum - warpCostCum - weftCostCum;
   }
 
   return {producedCum,producedMonth,soldCum,soldMonth,salesAmtCum,salesAmtMonth,receivedCum,receivedMonth,
     bizExpCum,bizExpMonth,famExpCum,famExpMonth,personalExpCum,personalExpMonth,warpCostCum,warpCostMonth,weftCostCum,weftCostMonth,
     warpSetsCum,warpSetsMonth,weftBagsCum,weftBagsMonth,wagesPaidCum,wagesPaidMonth,loanGivenCum,loanGivenMonth,loanRepaidCum,loanRepaidMonth,
     personalLoanGivenCum,personalLoanGivenMonth,personalLoanRepaidCum,personalLoanRepaidMonth,
+    ownerLoanInCum,ownerLoanInMonth,ownerLoanRepaidCum,ownerLoanRepaidMonth,ownerLoanOwed,
     receivable,stock,profitCum,profitMonth,cash,checkpoint,stockByQuality,receivablesByClient,
     qualityNames,clientQualityBreakdown};
 }

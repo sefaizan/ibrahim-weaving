@@ -35,6 +35,7 @@ const TABS = [
   {id:'expense', label:'Expense', icon:'receipt_long', group:'Money'},
   {id:'wages', label:'Wages', icon:'groups', group:'Money'},
   {id:'loans', label:'Loans (Employee)', icon:'account_balance_wallet', group:'Money'},
+  {id:'ownerloans', label:'Owner Loans (to Company)', icon:'savings', group:'Money'}, // owner only - see PERM_TAB_SECTIONS (view-only.js)
   {id:'ratecalc', label:'Grey Cloth Rate', icon:'calculate', group:'Money'},
   {id:'family', label:'Family Expense', icon:'home', group:'Family'},
   {id:'personal', label:'Personal Expense', icon:'receipt_long', group:'Family'},
@@ -68,6 +69,7 @@ let DATA = {
   "loanPayments": [],
   "personal": [],
   "personalLoans": [],
+  "ownerLoans": [],
   "familyMembers": [],
   "production": [],
   "warp": [],
@@ -729,6 +731,7 @@ async function ensureDataDefaults(){
   if(!DATA.wagePayments) DATA.wagePayments = [];
   if(!DATA.wageSettlements) DATA.wageSettlements = [];
   if(!DATA.loanPayments) DATA.loanPayments = [];
+  if(!DATA.ownerLoans) DATA.ownerLoans = []; // Owner Loans (to Company) - older ledgers / backups start with none
   if(!DATA.loomAssignments) DATA.loomAssignments = [];
   if(!DATA.wageRateHistory) DATA.wageRateHistory = {};
   if(!DATA.businessInfo) DATA.businessInfo = {};

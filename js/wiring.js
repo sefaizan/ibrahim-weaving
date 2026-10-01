@@ -6,7 +6,7 @@ function renderPanel(id){
   CUR_PANEL = id;
   const map = {
     overview: overviewPanel, production: productionPanel, sale: salePanel, recovery: recoveryPanel,
-    expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel,
+    expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel, ownerloans: ownerLoansPanel,
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
     loans: loansPanel, ratecalc: ratecalcPanel,
     checkpoints: checkpointsPanel, settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
@@ -675,6 +675,54 @@ function wirePanel(id){
     wireEnterSubmit(['pex_date','pex_time','pex_cat','pex_amt'],'addPersonal');
     wireDelete('personal');
     wireEditGeneric('personal','addPersonal','cancelPersonal',{pex_date:'date',pex_time:'time',pex_cat:'category',pex_amt:'amount',pex_desc:'desc'});
+  }
+  if(id==='ownerloans'){
+    document.getElementById('addOwnerLoan').onclick = async ()=>{
+      if(!requireFields([
+        [v('ol_date'), 'Pick the date first.', 'ol_date'],
+        [Number(v('ol_amt')||0) > 0, 'Enter the amount first.', 'ol_amt'],
+      ])) return;
+      const repaid = v('ol_type') === 'Loan Repaid';
+      // The purpose only means something for money put in; the recovery link only for a repayment.
+      const rec = {date:v('ol_date'), type:v('ol_type'), amount:Number(v('ol_amt')||0),
+        purpose: repaid ? '' : v('ol_purpose'), recoveryId: repaid ? v('ol_rec') : '', remarks:v('ol_rem')};
+      if(!Array.isArray(DATA.ownerLoans)) DATA.ownerLoans = [];
+      if(EDITING && EDITING.key==='ownerLoans'){
+        const idx = DATA.ownerLoans.findIndex(r=>r.id===EDITING.id);
+        if(idx>-1) DATA.ownerLoans[idx] = {...DATA.ownerLoans[idx], ...rec};
+        EDITING = null;
+      } else {
+        DATA.ownerLoans.push({id:uid(), ...rec}); PAGE.ownerLoans = 1;
+      }
+      await save(); switchTab('ownerloans');
+    };
+    // Live helper text: what the amount owed to you becomes, and which of the two optional fields applies.
+    const updateOwnerLoanHelper = ()=>{
+      const helperEl = document.getElementById('ol_helper');
+      if(!helperEl) return;
+      const repaid = v('ol_type') === 'Loan Repaid';
+      const pw = document.getElementById('ol_purpose_wrap'), rw = document.getElementById('ol_rec_wrap');
+      if(pw) pw.style.display = repaid ? 'none' : '';
+      if(rw) rw.style.display = repaid ? '' : 'none';
+      const b = computeOwnerLoanBalance();
+      const amt = Number(v('ol_amt')||0);
+      if(amt <= 0){ helperEl.textContent = b.balance > 0.004 ? `Currently ${fmtRs2(b.balance)} owed to you.` : ''; return; }
+      if(repaid){
+        const after = b.balance - amt;
+        helperEl.textContent = after <= 0.004
+          ? `This clears what you are owed${after < -0.004 ? `, with ${fmtRs2(Math.abs(after))} extra paid back` : ''}.`
+          : `Reduces what you are owed to ${fmtRs2(after)}.`;
+      } else {
+        helperEl.textContent = `This brings what you are owed to ${fmtRs2(b.balance + amt)}.`;
+      }
+    };
+    document.getElementById('ol_type').addEventListener('change', updateOwnerLoanHelper);
+    document.getElementById('ol_amt').addEventListener('input', updateOwnerLoanHelper);
+    updateOwnerLoanHelper();
+    wireEnterSubmit(['ol_date','ol_amt'],'addOwnerLoan');
+    wireDelete('ownerLoans');
+    wireEditGeneric('ownerLoans','addOwnerLoan','cancelOwnerLoans',{ol_date:'date',ol_type:'type',ol_amt:'amount',ol_purpose:'purpose',ol_rec:'recoveryId',ol_rem:'remarks'},
+      updateOwnerLoanHelper);
   }
   if(id==='personalloans'){
     document.getElementById('addPersonalLoan').onclick = async ()=>{
@@ -1763,6 +1811,7 @@ function tabForKey(key){
   if(key==='wageBonuses'||key==='wagePayments'||key==='wageSettlements') return 'wages';
   if(key==='loanPayments') return 'loans';
   if(key==='personalLoans') return 'personalloans';
+  if(key==='ownerLoans') return 'ownerloans';
   return key;
 }
 let RATE_EDITING = null; // {quality, date} of the Rate History entry being edited on the Wages page
