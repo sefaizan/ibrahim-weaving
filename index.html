@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-overview-polish">
+<meta name="app-build" content="2026-10-02-release3-glance-stock">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -526,6 +526,12 @@
   .ov-glance .ov-kpi .value.neg{ color:var(--red); }
   .ov-glance .ov-kpi .value.pos{ color:var(--green); }
   .ov-glance .ov-sub{ font-size:11px; color:var(--ink-soft); margin-top:8px; }
+  .ov-glance .ov-stock{ margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); }
+  .ov-glance .ov-stock-title{ font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
+  .ov-glance .ov-stock-row{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:6px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .ov-glance .ov-stock-row:last-child{ border-bottom:none; }
+  .ov-glance .ov-stock-row .q{ font-weight:600; min-width:0; overflow-wrap:anywhere; }
+  .ov-glance .ov-stock-row .m{ font-weight:800; white-space:nowrap; }
   @media (max-width:720px){
     .ov-page .card{ padding:14px; margin-bottom:12px; }
     .ov-page .card h2{ font-size:15px; margin-bottom:10px; }
@@ -840,7 +846,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.34</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.35</span></span>
     </div>
   </header>
 
