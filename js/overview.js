@@ -261,7 +261,7 @@ function overviewPanel(){
   const years = allDataYears();
   const monthOpts = MONTH_NAMES.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
   const yearOpts = years.map(y=>`<option value="${y}">${y}</option>`).join('');
-  return `
+  return `<div class="ov-page">
     ${(typeof permsCan === 'function' && !permsCan('sales','a') && !permsCan('recovery','a')) ? '' : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       <button type="button" class="primary" data-quick-add="sale" style="margin:0">+ Add Sale</button>
       <button type="button" class="ghost" data-quick-add="recovery" style="margin:0">+ Add Recovery</button>
@@ -299,6 +299,7 @@ function overviewPanel(){
       </div>
     </div>
     <div id="statsWrap"></div>
+    </div>
   `;
 }
 
@@ -379,6 +380,16 @@ function renderStats(monthVal){
   ['stmt_client','stmt_from','stmt_to'].forEach(id=>{ const el = document.getElementById(id); if(el) keepStmt[id] = el.value; });
 
   wrap.innerHTML = `
+    ${(()=>{ // "At a glance": the four numbers an owner checks first (each shown only if the role may see it)
+      const k = (cls, label, val) => `<div class="ov-kpi ${cls}"><div class="label">${label}</div><div class="value ${val<0?'neg':(cls==='k-profit'&&val>0?'pos':'')}">${fmtRs(val)}</div></div>`;
+      const tiles = [
+        ovCardOn('cash_position') ? k('k-cash','Cash Position', s.cash) : '',
+        ovCardOn('sales_receivables') ? k('k-recv','Receivable (Outstanding)', s.receivable) : '',
+        ovCardOn('sales_receivables') ? k('k-sales','Sales', monthVal ? s.salesAmtMonth : s.salesAmtCum) : '',
+        ovCardOn('profit_loss') ? k('k-profit', monthVal ? 'Profit / Loss (Period)' : 'Profit / Loss', monthVal ? s.profitMonth : s.profitCum) : '',
+      ].filter(Boolean);
+      return tiles.length ? `<div class="card ov-glance"><h2>At a Glance</h2><div class="ov-kpis">${tiles.join('')}</div><div class="ov-sub">${periodLabel(monthVal)}</div></div>` : '';
+    })()}
     ${ovCardOn('pending_l') ? pendingLCardHtml() : ''}
     ${ovCardOn('pending_cheques') ? pendingChequesCardHtml() : ''}
     ${ovCardOn('bounced_cheques') ? bouncedChequesCardHtml() : ''}
