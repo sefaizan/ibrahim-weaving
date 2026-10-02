@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-55-urdu-pass2">
+<meta name="app-build" content="2026-10-02-release3-v3-17-56-form-polish">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1040,6 +1040,28 @@
   input[type="checkbox"], input[type="radio"]{ width:20px; height:20px; min-height:0; padding:0; flex:none; border-radius:5px; accent-color:var(--rust); cursor:pointer; box-shadow:none; }
   input[type="radio"]{ border-radius:50%; }
   label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ font-weight:500; }
+
+  /* ===== v3.17.56 — Form beautification (CSS-only, final override) ===== */
+  .card > h2:first-child{ display:flex; align-items:center; gap:10px; font-size:17px; font-weight:800; color:var(--rust-deep); }
+  .card > h2:first-child::before{ content:""; width:4px; height:20px; border-radius:4px; background:var(--rust); }
+  .grid{ align-items:start; }
+  .field > label{ display:flex; align-items:center; gap:4px; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin:0 0 6px 2px; }
+  label .req{ font-size:13px; line-height:1; }
+  input, select, textarea, .sel-fake{ background:var(--card); border:1.5px solid var(--field-border); border-radius:12px; padding:11px 14px; box-shadow:inset 0 1px 0 rgba(0,0,0,.02); transition:border-color .15s, box-shadow .15s; }
+  input:focus, select:focus, textarea:focus, .sel-fake:focus{ border-color:var(--rust); box-shadow:0 0 0 4px var(--rust-tonal); }
+  textarea{ min-height:84px; }
+  .qd{ margin-top:8px; }
+  .qd button{ background:var(--rust-tonal); color:var(--rust-deep); font-weight:700; }
+  .qd button:active{ background:var(--rust); color:#fff; }
+  .grid + .grid{ margin-top:14px !important; }
+  .form-actions{ gap:10px; }
+  .form-actions button.primary{ border-radius:14px; min-height:50px; font-size:15px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.18); }
+  @media (max-width:720px){
+    .grid.cols-3 > .field:first-child:nth-last-child(3){ grid-column:auto; }
+    .form-actions{ padding:10px; padding-right:10px; border:1px solid var(--line); }
+    html[dir="rtl"] .form-actions{ padding-left:10px; }
+    .fab-backup{ bottom:calc(92px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px; }
+  }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1070,7 +1092,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.55</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.56</span></span>
     </div>
   </header>
 
