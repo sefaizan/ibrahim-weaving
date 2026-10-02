@@ -1389,7 +1389,7 @@ async function cloudDecryptRemote(remote){
   if(remote.encrypted && remote.kv && typeof skOpenSection === 'function') return skOpenSection(remote); // sealed with a section key
   if(remote.encrypted && remote.section && typeof skNoteEncrypted === 'function') skNoteEncrypted(remote.section);
   if(remote.encrypted && !cloudIsOwner() && remote.section){
-    return { error: 'the ' + remote.section + ' section has not been re-sealed for this version yet \u2014 ask the owner to open the app and tap Sync Now' };
+    return { error: 'the ' + remote.section + ' section is not ready for this phone yet \u2014 ask the owner to tap Sync Now once, then try again.' };
   }
   if(remote.encrypted && !ENC_DEK){
     return { error: encEnabled()
@@ -1987,6 +1987,21 @@ function cloudAccountHtml(){
       <button type="button" id="cloudToResetBtn" style="${link}">Forgot password?</button>
     </div>${msg}`);
 }
+// "Add a device" quick-start: a short checklist that shows where this phone is and what to do next.
+function cloudAddDeviceHtml(){
+  const on = cloudSyncEnabled(), u = typeof cloudUserNow === 'function' ? cloudUserNow() : null, owner = on && cloudIsOwner();
+  const synced = CLOUD_STATUS === 'synced';
+  const steps = [
+    ['Turn on Cloud Sync', on],
+    ['Sign in with your email', on && !!u],
+    ['Open the link we email you to verify', !!(u && u.verified)]
+  ];
+  if(!owner) steps.push(['Type the access code from the owner (below)', synced]);
+  steps.push(['Tap Sync Now \u2014 done', synced]);
+  const cur = steps.findIndex(x => !x[1]);
+  const li = steps.map((x, i) => `<li class="ad-step${x[1] ? ' done' : (i === cur ? ' now' : '')}"><span class="ad-n">${x[1] ? '\u2713' : i + 1}</span>${x[0]}</li>`).join('');
+  return `<div class="adddev"><div class="ad-title">Add this device in ${steps.length} steps</div><ol>${li}</ol>${owner ? '<p class="note" style="margin:6px 0 0">Owner: to add someone, they create their account on their phone; then send them their access code.</p>' : ''}</div>`;
+}
 function cloudSyncSection(){
   const on = cloudSyncEnabled();
   const head = `<div class="card-head"><h2>Cloud Sync</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
@@ -1998,6 +2013,7 @@ function cloudSyncSection(){
       Enable Cloud Sync
     </label>
     <p class="note" id="cloudSyncStatus" style="margin-top:10px">${on ? cloudStatusText() : 'Off — this device only.'}</p>
+    ${cloudAddDeviceHtml()}
     <div id="cloudAccount" style="${on?'':'display:none'};margin-top:10px">${cloudAccountHtml()}</div>
     <div id="cloudSyncActions" style="${on && cloudCanSync() ? '' : 'display:none'}">
       <button class="ghost" id="cloudSyncNowBtn" type="button" style="width:100%">Sync Now</button>
@@ -2007,15 +2023,15 @@ function cloudSyncSection(){
         <button class="ghost" id="cloudUseCloudBtn" type="button" style="width:100%;background:var(--rust-deep);color:#fff">Use Cloud's Data Instead</button>
       </div>
       ${typeof skCodeCardHtml === 'function' ? skCodeCardHtml() : ''}
-      <div id="cloudJoinEnc" style="${cloudIsOwner() ? '' : 'display:none;'}margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
-        <p class="note" style="margin:0 0 8px;font-weight:500">${encEnabled() ? 'Adopt a different device\'s key' : 'Join an already-encrypted cloud copy'}</p>
+      <details id="cloudJoinEnc" style="${cloudIsOwner() ? '' : 'display:none;'}margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
+        <summary style="cursor:pointer;font-weight:600;min-height:36px">Advanced: use another device\'s encryption key</summary><p class="note" style="display:none">${encEnabled() ? 'Adopt a different device\'s key' : 'Join an already-encrypted cloud copy'}</p>
         <p class="note" style="margin:0 0 8px">If the cloud copy is encrypted (saved by a device with Encrypt Data on), this device needs that same key before it can read it — enter the PIN used on that other device, plus this device's own current PIN and recovery answer:</p>
         <input type="password" id="cloudJoinSharedPin" placeholder="PIN from the other device" style="width:100%;margin-bottom:8px" inputmode="numeric">
         <input type="password" id="cloudJoinLocalPin" placeholder="This device's current PIN" style="width:100%;margin-bottom:8px" inputmode="numeric">
         <input type="text" id="cloudJoinLocalAnswer" placeholder="This device's recovery answer" style="width:100%;margin-bottom:8px">
         <button class="ghost" id="cloudJoinBtn" type="button" style="width:100%">Join Encrypted Sync</button>
         <p class="note" id="cloudJoinStatus" style="margin:6px 0 0"></p>
-      </div>
+      </details>
     </div>
   </div>`;
 }
