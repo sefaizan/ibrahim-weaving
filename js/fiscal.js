@@ -122,7 +122,8 @@ function fiscalReport(from, to){
 // ---- the page ------------------------------------------------------------------------------------
 function fiscalSelected(){
   const ps = fiscalPeriods(new Date().getFullYear());
-  const p = ps.find(x=> x.id === FISCAL_SEL.period) || ps[0];
+  const todayIso = new Date().toISOString().slice(0, 10), started = ps.filter(x=> !x.from || x.from <= todayIso);
+  const p = ps.find(x=> x.id === FISCAL_SEL.period) || started[started.length - 1] || ps[0];
   const q = p.quarters.find(x=> x.id === FISCAL_SEL.q);
   return { ps, p, q, from: q ? q.from : p.from, to: q ? q.to : p.to, label: q ? q.label : p.label };
 }
@@ -264,15 +265,20 @@ function fiscalValuationCardHtml(){
 function fiscalPanel(){
   const sel = fiscalSelected();
   if(!FISCAL_SEL.period) FISCAL_SEL.period = sel.p.id;
-  if(!FISCAL_OPEN_YEAR) FISCAL_OPEN_YEAR = 2027;
-  const chip = (attr, id, label, on)=> `<button type="button" class="${on ? 'primary' : 'ghost'}" ${attr}="${id}" style="margin:2px">${escHtml(label)}</button>`;
+  if(!FISCAL_OPEN_YEAR) FISCAL_OPEN_YEAR = Math.max(2027, new Date().getFullYear());
+  const opt = (val, label, on)=> `<option value="${escHtml(String(val))}"${on ? ' selected' : ''}>${escHtml(label)}</option>`;
   const years = sel.ps.filter(p=> p.id !== 'first').map(p=> Number(p.id));
+  // Dropdowns, not buttons: they stay one line tall however many years there are (newest first).
+  const periodOpts = sel.ps.slice().reverse().map(p=> opt(p.id, p.label, p.id === sel.p.id)).join('');
+  const quarterOpts = opt('full', 'Full period', !sel.q) + sel.p.quarters.map(q=> opt(q.id, q.label, sel.q && q.id === sel.q.id)).join('');
   return `<div class="card"><h2>Year Report</h2>
-    <div>${sel.ps.map(p=> chip('data-fy-period', p.id, p.label, p.id === sel.p.id)).join('')}</div>
-    <div style="margin-top:6px">${chip('data-fy-q', 'full', 'Full period', !sel.q)}${sel.p.quarters.map(q=> chip('data-fy-q', q.id, q.label, sel.q && q.id === sel.q.id)).join('')}</div></div>
+    <div class="grid cols-2">
+      <div class="field"><label>Year</label><select id="fy_period">${periodOpts}</select></div>
+      <div class="field"><label>Show</label><select id="fy_q">${quarterOpts}</select></div>
+    </div></div>
     ${fiscalReportHtml(sel)}
     ${fiscalValuationCardHtml()}
-    ${years.length > 1 ? `<div class="card"><div>${years.map(y=> chip('data-fy-open', y, 'Opening ' + y, y === FISCAL_OPEN_YEAR)).join('')}</div></div>` : ''}
+    ${years.length > 1 ? `<div class="card"><div class="field" style="margin:0"><label>Opening position for</label><select id="fy_open">${years.slice().reverse().map(y=> opt(y, 'Opening ' + y, y === FISCAL_OPEN_YEAR)).join('')}</select></div></div>` : ''}
     ${fiscalOpeningCardHtml(FISCAL_OPEN_YEAR)}`;
 }
 
@@ -287,9 +293,10 @@ function fiscalReadOpening(year){
   return op;
 }
 function fiscalWire(){
-  document.querySelectorAll('[data-fy-period]').forEach(b=>{ b.onclick = ()=>{ FISCAL_SEL = { period: b.getAttribute('data-fy-period'), q: 'full' }; switchTab('fiscal'); }; });
-  document.querySelectorAll('[data-fy-q]').forEach(b=>{ b.onclick = ()=>{ FISCAL_SEL.q = b.getAttribute('data-fy-q'); switchTab('fiscal'); }; });
-  document.querySelectorAll('[data-fy-open]').forEach(b=>{ b.onclick = ()=>{ FISCAL_OPEN_YEAR = Number(b.getAttribute('data-fy-open')); switchTab('fiscal'); }; });
+  const fyP = document.getElementById('fy_period'), fyQ = document.getElementById('fy_q'), fyO = document.getElementById('fy_open');
+  if(fyP) fyP.onchange = ()=>{ FISCAL_SEL = { period: fyP.value, q: 'full' }; switchTab('fiscal'); };
+  if(fyQ) fyQ.onchange = ()=>{ FISCAL_SEL.q = fyQ.value; switchTab('fiscal'); };
+  if(fyO) fyO.onchange = ()=>{ FISCAL_OPEN_YEAR = Number(fyO.value); switchTab('fiscal'); };
   const pdf = document.getElementById('fiscalPdf'); if(pdf) pdf.onclick = ()=> fiscalPdf();
   const add = document.getElementById('fiscalAddValuation');
   if(add) add.onclick = async ()=>{
