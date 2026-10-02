@@ -417,7 +417,8 @@ function renderStats(monthVal){
         ovCardOn('profit_loss') ? k('k-profit', monthVal ? 'Profit / Loss (Period)' : 'Profit / Loss', monthVal ? s.profitMonth : s.profitCum) : '',
       ].filter(Boolean);
       // In Stock by quality: only qualities that actually have stock left (zero or less is left out)
-      const inStock = ovCardOn('stock') ? (s.stockByQuality || []).filter(r => Number(r.stock) > 0.0001) : [];
+      const sv = (ovCardOn('stock') || ovCardOn('stock_glance')) ? stockViewFor() : null;
+      const inStock = sv ? sv.rows.filter(r => Number(r.stock) > 0.0001) : [];
       const stockHtml = inStock.length ? `<div class="ov-stock"><div class="ov-stock-title">In Stock by Quality (mtr)</div><div class="ov-kpis ov-kpis-q">${inStock.map(r => `<div class="ov-kpi k-stock"><div class="label">${escHtml(r.name)}</div><div class="value">${fmtQtyMtr(r.stock)}</div></div>`).join('')}</div></div>` : '';
       if(!tiles.length && !stockHtml) return '';
       return `<div class="card ov-glance"><h2>At a Glance</h2>${tiles.length ? `<div class="ov-kpis">${tiles.join('')}</div>` : ''}${stockHtml}<div class="ov-sub">${periodLabel(monthVal)}</div></div>`;

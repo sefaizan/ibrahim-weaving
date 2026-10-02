@@ -1067,6 +1067,7 @@ const CLOUD_SECTIONS = [
   { id:'family',     keys:['family','personal','personalLoans','familyMembers'] },
   { id:'materials',  keys:['warp','weft','warpTypes','weftTypes'] },
   { id:'business',   keys:['businessInfo'] },
+  { id:'stock',      keys:['stockSummary'] },   // calculated total + per-quality stock, written by the owner's phone only, so a person can be given Stock alone
   { id:'tools',      keys:['checkpoints','openingBalance','rateCalcs','rateCalcDefaults','ownerLoans'] },
 ];
 const CLOUD_SECTION_FALLBACK = 'tools';
@@ -1093,7 +1094,7 @@ const CLOUD_ROLES = {
   production_operator: { label: 'Production operator', perms: { production: 'vae', reference: 'v', business: 'v' } },
   custom:              { label: 'Custom',              perms: {} },
 };
-const CLOUD_SECTION_LABELS = { production:'Production', reference:'Employees, looms, qualities', sales:'Sales & clients', recovery:'Recovery & cheques', expenses:'Expenses', wages:'Wages', loans:'Employee loans', family:'Family & personal', materials:'Warp & weft', business:'Business info', tools:'Tools & settings' };
+const CLOUD_SECTION_LABELS = { production:'Production', reference:'Employees, looms, qualities', sales:'Sales & clients', recovery:'Recovery & cheques', expenses:'Expenses', wages:'Wages', loans:'Employee loans', family:'Family & personal', materials:'Warp & weft', business:'Business info', stock:'Stock (totals only)', tools:'Tools & settings' };
 const CLOUD_LETTERS = 'vaed';
 function cloudPermsCleanLetters(x){
   const have = {}; String(x || '').toLowerCase().split('').forEach(c=>{ if(CLOUD_LETTERS.indexOf(c) >= 0) have[c] = true; });
@@ -1165,6 +1166,14 @@ function cloudSplit(data){
   CLOUD_SECTIONS.forEach(sec=>{ parts[sec.id] = {}; });
   CLOUD_SECTIONS.forEach(sec=> sec.keys.forEach(k=>{ if(src[k] !== undefined) parts[sec.id][k] = src[k]; }));
   Object.keys(src).filter(k=> k !== 'deletedIds' && !CLOUD_KEY_SECTION[k]).sort().forEach(k=>{ parts[CLOUD_SECTION_FALLBACK][k] = src[k]; });
+  // Stock summary: worked out from the full ledger, so only the owner's (or an unlimited) phone writes it.
+  try{
+    if(data === DATA && typeof computeStats === 'function' && (cloudIsOwner() || !cloudPermsKnown())){
+      const st = computeStats('');
+      parts.stock.stockSummary = { total: Math.round(st.stock * 100) / 100,
+        byQuality: (st.stockByQuality || []).map(r=>({ name: r.name, stock: Math.round(r.stock * 100) / 100 })) };
+    }
+  }catch(e){}
   const tomb = src.deletedIds;
   if(tomb && typeof tomb === 'object' && !Array.isArray(tomb)){
     Object.keys(tomb).forEach(list=>{

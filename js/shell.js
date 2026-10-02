@@ -229,6 +229,17 @@ function settingsPanel(){
       ${field('Phone','biz_phone','text',`value="${(DATA.businessInfo?.phone||'').replace(/"/g,'&quot;')}"`)}
     </div>
     <button class="primary" id="saveBusinessInfo" style="margin-top:12px">Save</button></div>`;
+  // Read-only Stock card (calculated: produced - sold - L shortage), same figures as Overview > Stock Position.
+  const stockCard = (()=>{
+    const sv = typeof stockViewFor === 'function' ? stockViewFor() : null;
+    const rows = (sv ? sv.rows : []).filter(r=> Math.abs(Number(r.stock)) > 0.0001);
+    const total = sv ? fmtQtyMtr(sv.total) : '-';
+    return `<div class="card"><div class="card-head"><h2>Stock</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+      <p class="note info-note" hidden>Calculated automatically: Produced - Sold - L shortage. Same figures as Overview &gt; Stock Position. Read-only.</p>
+      <p style="margin:0 0 10px;font-size:15px">Total stock: <b style="font-size:22px">${total}</b> mtr</p>
+      ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Quality</th><th>Stock (mtr)</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escHtml(r.name)}</td><td><b>${fmtQtyMtr(r.stock)}</b></td></tr>`).join('')}</tbody></table></div>` : '<p class="note">No stock available.</p>'}
+    </div>`;
+  })();
   // Settings is grouped into four collapsible sections (one open at a time) instead of one long scroll of cards.
   return settingsGroup('general', 'General', ['Appearance','Business Info','Banks'],
       appearanceCard + businessInfoCard + section('Banks','banks','e.g. Meezan Bank',false))
@@ -236,6 +247,7 @@ function settingsPanel(){
       pinLockSection() + encryptionSection() + cloudSyncSection() + cloudPeopleSection() + (typeof auditCardHtml === 'function' ? auditCardHtml() : ''))
     + settingsGroup('people', 'People', ['Clients','Employees','Family Members'],
       section('Clients','clients','e.g. Ali Textiles',true,true) + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Family Members','familyMembers','e.g. Uncle Rafiq',true,true))
+    + settingsGroup('stock', 'Stock', ['Total Stock','By Quality'], stockCard)
     + settingsGroup('looms', 'Looms & materials', ['Looms','Loom Assignments','Qualities','Warp Types','Weft Types','Dyeing Units','Beam Alerts'],
       section('Looms','looms','e.g. 9',false) + loomAssignmentsSection() + section('Qualities','qualities','e.g. 44 Picks',false)
       + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)

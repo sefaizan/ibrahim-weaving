@@ -189,6 +189,7 @@ const PERM_OVERVIEW_CARDS = {
   pending_cheques:   { needs: ['recovery'] },
   bounced_cheques:   { needs: ['recovery'] },
   stock:             { needs: ['production', 'sales'] },                       // stock by quality, Produced / Sold / In Stock
+  stock_glance:      { needs: ['stock'] },                                     // totals-only stock (the At a Glance tiles) for an account given just Stock
   cash_position:     { needs: ['tools', 'recovery'].concat(PERM_MONEY_ALL) },  // the Cash Position tile and its checkpoint note
   client_statement:  { needs: ['sales', 'recovery'] },
   sales_receivables: { needs: ['sales', 'recovery'] },
@@ -406,4 +407,14 @@ async function permsPurgeHidden(){
   try{ if(typeof UNDO_STACK !== 'undefined'){ UNDO_SUPPRESS = true; UNDO_STACK.length = 0; if(typeof updateUndoButton === 'function') updateUndoButton(); } }catch(e){}
   await viewOnlyAllowSave(()=> save());
   return true;
+}
+
+// What stock figure may this account see? Full figures when it can view Production + Sales (or is the owner);
+// otherwise the owner-published totals when it has Stock. Returns { total, rows:[{name,stock}] } or null.
+function stockViewFor(){
+  try{
+    if(permsCardAllowed('stock')){ const st = computeStats(''); return { total: st.stock, rows: (st.stockByQuality || []).map(r=>({ name: r.name, stock: r.stock })), full: true }; }
+    if(permsCardAllowed('stock_glance') && DATA.stockSummary) return { total: Number(DATA.stockSummary.total) || 0, rows: (DATA.stockSummary.byQuality || []).map(r=>({ name: r.name, stock: Number(r.stock) || 0 })), full: false };
+  }catch(e){}
+  return null;
 }
