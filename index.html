@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-recovery-form-helpers">
+<meta name="app-build" content="2026-10-02-release3-ui-polish-wages-recovery-style">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -903,6 +903,89 @@
   .wg-sheetbg{ position:fixed; inset:0; background:rgba(15,12,30,0.45); z-index:60; display:none; } .wg-sheetbg.on{ display:block; }
   .wg-sheet{ position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:auto; background:var(--card); border-radius:20px 20px 0 0; padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)); z-index:61; display:none; max-height:92vh; overflow-y:auto; box-shadow:var(--elev-3); } .wg-sheet.on{ display:block; }
   .wg-qa{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+
+  /* ===== UI polish v3.17.42 — forms, cards, tables, tap targets (CSS-only, overrides above) ===== */
+  main{ padding:18px 16px 96px; }
+  .card{ padding:20px; border-radius:16px; box-shadow:var(--elev-1); transition:box-shadow .15s; }
+  .card:focus-within{ box-shadow:var(--elev-2); }
+  .card h2{ font-size:16px; letter-spacing:.1px; padding-bottom:10px; margin-bottom:14px; border-bottom:1px solid var(--line); }
+  .card-head h2{ border-bottom:0; padding-bottom:0; }
+  .card-head{ padding-bottom:10px; border-bottom:1px solid var(--line); }
+  /* Forms: roomier, clearer labels, tabular numbers, consistent control height */
+  .grid{ gap:14px 12px; align-items:end; }
+  label{ font-size:12.5px; font-weight:600; color:var(--ink); margin-bottom:6px; }
+  input, select, textarea, .sel-fake, .value-label{ min-height:44px; font-size:15px; border-radius:10px; }
+  input[type="number"], input[inputmode], input[type="date"], input[type="time"]{ font-variant-numeric:tabular-nums; }
+  input::placeholder, textarea::placeholder{ color:var(--ink-soft); opacity:.7; }
+  input:hover:not(:focus):not(:disabled), select:hover:not(:focus), textarea:hover:not(:focus), .sel-fake:hover:not(:disabled){ border-color:var(--ink-soft); }
+  input:focus, select:focus, textarea:focus, .sel-fake:focus{ box-shadow:0 0 0 4px var(--rust-tonal); }
+  input:disabled, select:disabled, textarea:disabled{ opacity:.6; cursor:not-allowed; }
+  .field-flag{ box-shadow:0 0 0 4px var(--warn-bg-1); }
+  .sel-item{ padding:12px; }
+  /* Buttons */
+  button.primary{ min-height:46px; padding:12px 28px; font-size:14.5px; letter-spacing:.2px; }
+  button.ghost{ min-height:40px; }
+  button.primary:active{ transform:scale(.98); }
+  /* Tables: sticky header, zebra, right-aligned numbers feel */
+  table{ border-collapse:separate; border-spacing:0; }
+  th{ position:sticky; top:0; z-index:1; background:var(--paper-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-soft); white-space:nowrap; }
+  tbody tr:nth-child(even) td{ background:color-mix(in srgb, var(--paper-dim) 45%, transparent); }
+  td{ font-variant-numeric:tabular-nums; }
+  /* Phones: keep short fields side by side so forms need less scrolling */
+  @media (max-width:720px){
+    main{ padding:12px 10px 100px; }
+    .card{ padding:16px 14px; border-radius:14px; }
+    .grid.cols-2, .grid.cols-3, .grid.cols-4{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 10px; }
+    /* long free-text / notes / wide controls take the full row */
+    .grid > .full, .grid > .field:has(textarea), .grid > :has(> textarea), .grid > :has(> input[type="file"]){ grid-column:1 / -1; }
+    input, select, textarea, .sel-fake{ font-size:16px; } /* stops iOS zoom-on-focus */
+    label{ font-size:12px; }
+    button.primary{ width:100%; margin-top:16px; }
+    form button.primary, .card > button.primary:last-child{ position:sticky; bottom:12px; z-index:5; box-shadow:var(--elev-3); }
+  }
+  @media (max-width:360px){
+    .grid.cols-2, .grid.cols-3, .grid.cols-4{ grid-template-columns:1fr; }
+  }
+  /* Wider screens: use the space — 4-col forms stay compact, primary button hugs content */
+  @media (min-width:721px){
+    .grid.cols-2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .grid.cols-3{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .grid.cols-4{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .card{ padding:22px 24px; }
+  }
+  @media (prefers-reduced-motion:reduce){ .card, button.primary{ transition:none; } }
+  @media print{ th{ position:static; } .card{ box-shadow:none; } }
+
+  /* ===== v3.17.42b — Wages/Recovery look applied to every page ===== */
+  /* Summary tiles: same teal gradient hero language as Wages "wg-hero" / Recovery "rbc-hero" (non-Overview pages) */
+  #panels > .panel:not(:has(.ov-page)) .grid:has(> .stat.compact){ background:linear-gradient(165deg,var(--rust),var(--rust-deep)); border-radius:16px; padding:14px; gap:10px; box-shadow:var(--elev-2); }
+  #panels > .panel:not(:has(.ov-page)) .stat.compact{ background:rgba(255,255,255,.12); border:0; border-radius:12px; padding:10px 12px; }
+  #panels > .panel:not(:has(.ov-page)) .stat.compact .label{ color:rgba(255,255,255,.85); }
+  #panels > .panel:not(:has(.ov-page)) .stat.compact .value{ color:#fff; font-weight:800; font-size:18px; }
+  #panels > .panel:not(:has(.ov-page)) .stat.compact .value.neg{ color:#FFC9BF; }
+  /* Group labels inside forms (Cheques, Bounced…) read as proper section dividers */
+  .group-label{ font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:var(--rust-deep); margin:6px 0 8px; padding-top:12px; border-top:1px dashed var(--line); }
+  /* Live total callout: same hero strip as Wages */
+  .calc-amount{ background:var(--rust-tonal); border-color:transparent; border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .calc-amount.over{ background:var(--tonal-del); }
+  .note{ line-height:1.45; }
+  .info-note{ background:var(--paper-dim); border-radius:10px; padding:8px 12px; }
+  /* Form action row: one clear primary, secondary beside it; on phones pinned to the bottom like Wages' sheet */
+  .form-actions{ padding-top:4px; }
+  .form-actions button.primary{ min-width:160px; }
+  .form-actions button.ghost{ min-height:46px; }
+  /* Filter rows above logs: compact, chip-like controls */
+  .card .grid.cols-2:has(> .field > select[id^="rf_"], > .field > select[id$="_filter"]){ grid-template-columns:minmax(0,1fr); max-width:420px; }
+  /* Log rows: softer separators and larger tap area on phones */
+  @media (max-width:720px){
+    #panels > .panel:not(:has(.ov-page)) .grid:has(> .stat.compact){ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .form-actions{ position:sticky; bottom:10px; z-index:5; background:var(--card); padding:10px; margin:14px -6px 0; border-radius:14px; box-shadow:var(--elev-3); }
+    .form-actions button{ flex:1 1 0; width:auto; }
+    .form-actions button.primary{ min-width:0; }
+    form button.primary, .card > button.primary:last-child{ position:static; box-shadow:var(--elev-1); } /* superseded by .form-actions bar */
+    .wg-sheet button.primary, .wg-sheet .form-actions{ position:static; box-shadow:none; }
+  }
+  [data-theme="dark"] #panels > .panel:not(:has(.ov-page)) .stat.compact{ background:rgba(255,255,255,.08); }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -933,7 +1016,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.41</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.42</span></span>
     </div>
   </header>
 
