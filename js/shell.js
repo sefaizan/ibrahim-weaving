@@ -671,16 +671,29 @@ async function checkForNewVersion(){
     if(m && m[1] !== APP_BUILD) showUpdateBar();
   }catch(e){ /* offline or blocked — just try again later */ }
 }
+// Updates are applied automatically (no prompt). The reload waits while you are typing in a field or
+// reviewing cloud data, and never runs more than once every 2 minutes so it can't loop. Everything
+// you entered is already saved before the reload.
+const AUTO_RELOAD_KEY = 'khata-auto-reload-at';
+let _autoReloadTimer = null;
+function updateIsBusy(){
+  const a = document.activeElement;
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  try{ if(typeof CLOUD_PENDING_PULL !== 'undefined' && CLOUD_PENDING_PULL) return true; }catch(e){ /* not loaded */ }
+  return false;
+}
 function showUpdateBar(){
-  if(document.getElementById('updateBar')) return;
-  const el = document.createElement('div');
-  el.id = 'updateBar';
-  el.setAttribute('role', 'status');
-  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:100000;background:#163B3D;color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px';
-  el.innerHTML = '<span style="flex:1">A new version of the app is ready.</span><button type="button" id="updateReload" style="background:#fff;color:#163B3D;border:0;border-radius:8px;padding:8px 14px;font-weight:700">Reload</button><button type="button" id="updateLater" aria-label="Later" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">✕</button>';
-  document.body.appendChild(el);
-  el.querySelector('#updateReload').onclick = ()=> location.reload();
-  el.querySelector('#updateLater').onclick = ()=> el.remove();
+  if(_autoReloadTimer) return;
+  try{
+    const last = +sessionStorage.getItem(AUTO_RELOAD_KEY) || 0;
+    if(Date.now() - last < 120000) return; // just reloaded — don't loop
+  }catch(e){ /* best effort */ }
+  const tryReload = ()=>{
+    if(updateIsBusy()){ _autoReloadTimer = setTimeout(tryReload, 10000); return; }
+    try{ sessionStorage.setItem(AUTO_RELOAD_KEY, String(Date.now())); }catch(e){ /* best effort */ }
+    location.reload();
+  };
+  _autoReloadTimer = setTimeout(tryReload, 1500);
 }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ checkForNewVersion(); maybeAutoSnapshot(); runBeamAlerts(); } });
 
