@@ -363,7 +363,7 @@ function fiscalPanel(){
   const periodOpts = sel.ps.slice().reverse().map(p=> opt(p.id, p.label, p.id === sel.p.id)).join('');
   const quarterOpts = opt('full', 'Full period', !sel.q) + sel.p.quarters.map(q=> opt(q.id, q.label, sel.q && q.id === sel.q.id)).join('');
   return `${fiscalHistoryHtml()}
-    <details class="card fh-pick"><summary>Pick a year or quarter</summary><div class="grid cols-2" style="margin-top:10px">
+    <details class="card fh-pick"><summary>Pick a year or quarter</summary><div class="fh-pickgrid">
       <div class="field"><label>Year</label><select id="fy_period">${periodOpts}</select></div>
       <div class="field"><label>Show</label><select id="fy_q">${quarterOpts}</select></div>
     </div></details>
