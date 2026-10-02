@@ -1,4 +1,4 @@
-/* UX enhancements (v3.17.43): applied on top of the rendered pages, no page markup is rewritten.
+/* UX enhancements (v3.17.43+): applied on top of the rendered pages, no page markup is rewritten.
  * 1 required-field * markers + inline errors   2 log search + period chips   6 Today/Yesterday chips
  * 7 Enter = next field / save                  8 long notes fold into "Notes"  12 autofocus after save
  * Loaded after i18n.js, before lock-init.js (which must stay last). */
