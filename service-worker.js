@@ -12,10 +12,10 @@
  * Updating the app: replace the hosted files. The next launch still opens the previous copy
  * (instant, works offline) while the new one downloads in the background; the launch after that
  * uses the new copy. While the app is open it also checks whether a newer build is live (the
- * app-build meta tag in index.html) and offers a "Reload" bar — so change that tag on every release.
+ * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v179';
+const CACHE_VERSION = 'v181';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.

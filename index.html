@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-52-access-code-self-heal">
+<meta name="app-build" content="2026-10-02-release3-v3-17-54-auto-update-urdu">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1070,7 +1070,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.52</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.54</span></span>
     </div>
   </header>
 
@@ -1111,9 +1111,15 @@
 <script src="./js/lock-init.js"></script>
 <script>
 if('serviceWorker' in navigator){
+  const hadController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./service-worker.js', {updateViaCache:'none'}).catch(()=>{ /* offline support just won't be available */ });
+    navigator.serviceWorker.register('./service-worker.js', {updateViaCache:'none'}).then(reg=>{
+      reg.update().catch(()=>{});
+      document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') reg.update().catch(()=>{}); });
+    }).catch(()=>{ /* offline support just won't be available */ });
   });
+  // A new service worker took over (whole new file set installed) -> restart on it automatically.
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(hadController && typeof showUpdateBar === 'function') showUpdateBar(); });
 }
 </script>
 </body>
