@@ -608,6 +608,12 @@ function wirePanel(id){
         setTimeout(()=>{ const box = document.getElementById('r_client'); const card = box && box.closest('.card'); if(card) card.scrollIntoView({block:'start', behavior:'smooth'}); }, 80);
       }
     }
+    const rbc = document.getElementById('recByClient');
+    if(rbc) rbc.addEventListener('click', (e)=>{
+      const b = e.target.closest('[data-rcp]'); if(!b) return;
+      FILTER.recoveryPeriod = b.dataset.rcp;
+      document.getElementById('recByClientBody').innerHTML = recoveryByClientInner(); // in place: nothing typed in the form is lost
+    });
     const rfClient = document.getElementById('rf_client');
     rfClient.value = FILTER.recovery || '';
     rfClient.addEventListener('change', ()=>{

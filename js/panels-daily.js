@@ -409,6 +409,60 @@ function pendingLCardHtml(){
       ${logTable('pendingL', headers, awaiting, mapFn)}
     </div>`;
 }
+/* ---------------- Recovery: "Received by Client" for a chosen period ---------------- */
+// Who paid how much in the period, biggest first. Uses the same amount as "Received" everywhere else
+// (recoveryReceivableAmount: cash + bank + cheques that have not bounced / been replaced), split by
+// how it came in. Only approved ledger records are in DATA.recovery, so nothing pending is counted.
+function recoveryPeriods(){
+  const t = todayStr(), tw = currentWageWeek(t);
+  const lw = currentWageWeek(new Date(new Date(tw.from+'T00:00:00Z').getTime() - 86400000).toISOString().slice(0,10));
+  const y = Number(t.slice(0,4)), m = Number(t.slice(5,7)), p = n => String(n).padStart(2,'0');
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return [
+    {id:'week', label:'This week', from:tw.from, to:tw.to},
+    {id:'last', label:'Last week', from:lw.from, to:lw.to},
+    {id:'month', label:'This month', from:`${y}-${p(m)}-01`, to:`${y}-${p(m)}-${p(last)}`},
+    {id:'all', label:'All time', from:'', to:''},
+  ];
+}
+function recoveryByClientData(period){
+  const map = {};
+  DATA.recovery.forEach(r=>{
+    if(period.from && r.date < period.from) return;
+    if(period.to && r.date > period.to) return;
+    const {cashAmount, bankAmount, cheques} = recoveryParts(r);
+    const chq = cheques.filter(c=>c.status!=='Bounced' && c.status!=='Replaced').reduce((s,c)=>s+(Number(c.amount)||0),0);
+    const g = r.client || '—';
+    const o = map[g] || (map[g] = {name:g, cash:0, bank:0, cheque:0, total:0, count:0});
+    o.cash += cashAmount; o.bank += bankAmount; o.cheque += chq; o.count++;
+    o.total = o.cash + o.bank + o.cheque;
+  });
+  return Object.values(map).filter(o=>o.total > 0.004).sort((a,b)=>b.total - a.total || a.name.localeCompare(b.name));
+}
+function recoveryByClientInner(){
+  const periods = recoveryPeriods(), cur = periods.find(x=>x.id === (FILTER.recoveryPeriod || 'week')) || periods[0];
+  const rows = recoveryByClientData(cur);
+  const grand = rows.reduce((s,o)=>s+o.total, 0);
+  const sum = k => rows.reduce((s,o)=>s+o[k], 0);
+  const chips = periods.map(x=>`<button type="button" class="wg-chip${x.id===cur.id?' on':''}" data-rcp="${x.id}">${x.label}</button>`).join('');
+  const when = cur.from ? `${fmtDate(cur.from)} to ${fmtDate(cur.to)}` : 'since the first entry';
+  const body = rows.length ? `<div class="rbc-hero"><div class="rbc-big">${fmtRs(grand)}</div><div class="rbc-sub">received from ${rows.length} client${rows.length===1?'':'s'} · ${when}</div>
+      <div class="rbc-modes">${sum('cash')?`<span>Cash <b>${fmtRs(sum('cash'))}</b></span>`:''}${sum('bank')?`<span>Bank <b>${fmtRs(sum('bank'))}</b></span>`:''}${sum('cheque')?`<span>Cheque <b>${fmtRs(sum('cheque'))}</b></span>`:''}</div></div>
+    ${rows.map((o,i)=>{
+      const pct = grand > 0 ? Math.max(3, Math.round(o.total/grand*100)) : 0;
+      const split = [o.cash?`Cash ${fmtRs(o.cash)}`:'', o.bank?`Bank ${fmtRs(o.bank)}`:'', o.cheque?`Cheque ${fmtRs(o.cheque)}`:''].filter(Boolean).join(' · ');
+      return `<div class="rbc-row"><span class="rk">${i+1}</span><span class="nm">${escHtml(o.name)}</span><span class="am">${fmtRs(o.total)}</span>
+        <span class="bar"><i style="width:${pct}%"></i></span><span class="sp">${split}</span><span class="pc">${Math.round(o.total/grand*100)}%</span></div>`;
+    }).join('')}
+    ${rows.length>1?`<div class="rbc-row tot"><span class="nm">Total</span><span class="am">${fmtRs(grand)}</span></div>`:''}`
+    : `<div class="empty">No payments received ${cur.from?'in this period':'yet'}.</div>`;
+  return `<div class="wg-chips" style="margin-bottom:12px">${chips}</div>${body}`;
+}
+function recoveryByClientCardHtml(){
+  if(!DATA.recovery.length) return '';
+  return `<div class="card" id="recByClient"><h2>Received by Client</h2><div id="recByClientBody">${recoveryByClientInner()}</div></div>`;
+}
+
 function recoveryPanel(){
   const filterVal = FILTER.recovery || '';
   const filteredRecovery = filterVal ? DATA.recovery.filter(r=>r.client===filterVal) : DATA.recovery;
@@ -446,7 +500,7 @@ function recoveryPanel(){
     </div>
     ${clientTable}
   ${sumCardClose()}`;
-  return `${summary}${pendingChequesCardHtml()}${bouncedChequesCardHtml()}${unlinkedReplacedCardHtml()}<div class="card"><div class="card-head"><h2>Log Payment Received</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+  return `${summary}${recoveryByClientCardHtml()}${pendingChequesCardHtml()}${bouncedChequesCardHtml()}${unlinkedReplacedCardHtml()}<div class="card"><div class="card-head"><h2>Log Payment Received</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>A single payment can be part cash, part bank transfer, and part cheques, all at once — fill in whichever apply. Leave any that don't apply at 0 / empty.</p>
     <div class="grid cols-3">
       ${field('Date','r_date','date',`value="${todayStr()}" autofocus`)}
