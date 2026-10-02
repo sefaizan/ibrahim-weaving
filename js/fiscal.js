@@ -165,7 +165,7 @@ function fiscalReportHtml(sel){
     ${r.check === null ? '' : fiscalLine('Check: position \u2212 closing capital', money(r.check))}
     <p class="note" style="margin:8px 0 0">Personal loans given (${money(r.position.personalLoans)}) are kept apart and not counted. Fixed assets are never included.</p>
     ${notes.map(n=> `<p class="note" style="margin:6px 0 0"><b>Note:</b> ${escHtml(n)}</p>`).join('')}
-    <div class="form-actions" style="margin-top:10px"><button class="ghost" type="button" id="fiscalPdf">Download PDF</button></div></div>`;
+    <div class="form-actions fy-static" style="margin-top:10px"><button class="ghost" type="button" id="fiscalPdf">Download PDF</button></div></div>`;
 }
 // v3.17.63 — the app's own figures as at the day before an opening date, used to pre-fill the opening position (all editable).
 function fiscalAutoOpening(openDate){
@@ -204,19 +204,19 @@ function fiscalOpeningCardHtml(year){
     ${greyRows}
     ${rows('Employee loans per employee (Rs)', names(DATA.employees), 'fo_el', op.empLoans || {}, 'el', auto.el)}
     <p style="margin:12px 0 4px"><b>Opening capital: ${money(t.total)}</b> <span class="note">(cash ${money(t.cash)} + receivables ${money(t.receivables)} + yarn ${money(t.yarn)} + grey cloth ${money(t.grey)} + employee loans ${money(t.empLoans)} \u2212 bills ${money(t.bills)})</span></p>
-    <div class="form-actions"><button class="primary" type="button" id="fiscalSaveOpening">Save opening position</button></div>
+    <div class="form-actions fy-static"><button class="primary" type="button" id="fiscalSaveOpening">Save opening position</button></div>
     <div id="fiscalOpeningCheck"></div></div>`;
 }
 function fiscalValuationCardHtml(){
   const quals = (DATA.qualities || []).map(x=> x && x.name).filter(Boolean);
   const rows = (DATA.stockValuations || []).slice().sort((a, b)=> a.date < b.date ? 1 : -1).map(v=>
     `<tr><td>${escHtml(fmtDate(v.date))}</td><td class="num">${fmtRs(v.yarn)}</td><td class="num">${fmtRs(v.bills)}</td><td>${escHtml(Object.keys(v.greyRates || {}).map(k=> k + ' ' + v.greyRates[k]).join(', '))}</td><td><button class="ghost" type="button" data-del="stockValuations:${escHtml(String(v.id))}">Delete</button></td></tr>`).join('');
-  return `<div class="card"><div class="card-head"><h2>Stock valuation</h2></div>
+  return `<div class="card"><div class="card-head"><h2>Quarterly Stock Valuation</h2></div>
     <p class="note" style="margin:0 0 8px">Do this at the end of each quarter (and on 31 Dec). Yarn is the value at purchase price, warp and weft together. Grey cloth meters come from the app; type the rate per meter you value each quality at (the last deal rate).</p>
     <div class="grid cols-2">${field('Date', 'sv_date', 'date', `value="${todayStr()}"`)}${field('Yarn in hand (Rs)', 'sv_yarn', 'number')}</div>
     <div class="grid cols-2">${field('Bills due (Rs)', 'sv_bills', 'number')}</div>
     ${quals.map((n, i)=> `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">Rate per meter \u2014 ${escHtml(n)}</span><span style="width:34%"><input type="number" inputmode="decimal" id="sv_r${i}" style="width:100%"></span></div>`).join('')}
-    <div class="form-actions"><button class="primary" type="button" id="fiscalAddValuation">Add valuation</button></div>
+    <div class="form-actions fy-static"><button class="primary" type="button" id="fiscalAddValuation">Add valuation</button></div>
     ${rows ? `<div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Yarn</th><th>Bills</th><th>Grey rates</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}</div>`;
 }
 function fiscalPanel(){
