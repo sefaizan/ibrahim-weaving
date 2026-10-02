@@ -182,9 +182,50 @@ function fiscalAutoOpening(openDate){
   const v = fiscalLatestValuation(prev), rates = (v && v.greyRates) || {};
   return { prev, rc, el, gm, rates };
 }
+// v3.17.69 — year-end carry-over: the previous period's closing position / capital against this year's opening position.
+function fiscalPrevPeriod(date){
+  const prev = fiscalDayBefore(date);
+  return { prev, period: fiscalPeriods(new Date().getFullYear()).find(p=> p.to === prev) || null };
+}
+function fiscalCarryCheckHtml(year, op){
+  const date = (op && op.date) || year + '-01-01', pp = fiscalPrevPeriod(date), prev = pp.prev;
+  const pos = fiscalPositionAt(prev), prevClose = pp.period ? fiscalReport(pp.period.from, pp.period.to).closingCapital : null;
+  const label = pp.period ? pp.period.label : 'Previous year', open = op ? fiscalOpeningTotals(op).total : null;
+  const ref = prevClose !== null ? prevClose : pos.total, diff = open === null ? null : open - ref;
+  const st = diff === null ? `<span class="note">Not saved yet \u2014 tap \u201cCarry over\u201d, check the figures, then save.</span>`
+    : Math.abs(diff) < 1 ? `<b style="color:#1b7846">\u2714 Matches \u2014 ${escHtml(String(year))} opens exactly where ${escHtml(label)} closed.</b>`
+    : `<b style="color:#b02a2a">Differs by ${fmtRs(diff)}</b> <span class="note">\u2014 compare cash, receivables per client, stock and bills with the closing figures above.</span>`;
+  return `<div style="border-top:1px solid var(--line);margin-top:12px;padding-top:8px"><h3 style="margin:0 0 4px">Year-end carry-over</h3>
+    ${fiscalLine(label + ' \u2014 closing position at ' + fmtDate(prev), fmtRs(pos.total))}
+    ${prevClose !== null ? fiscalLine(label + ' \u2014 closing capital (its report)', fmtRs(prevClose)) : ''}
+    ${fiscalLine('Opening capital ' + year, open === null ? '\u2014' : fmtRs(open))}
+    <p style="margin:6px 0 0">${st}</p>
+    <div class="form-actions fy-static"><button class="ghost vo-hide" type="button" id="fiscalCarry">Carry over ${escHtml(label)} closing</button></div></div>`;
+}
+// Fill every figure of the opening form from the app's closing position at the end of the day before `date`.
+function fiscalApplyAuto(date, force){
+  const a = fiscalAutoOpening(date), put = (el, val)=>{ el.value = val ? val : ''; };
+  if(force){
+    const pos = fiscalPositionAt(a.prev), set = (id, val)=>{ const el = document.getElementById(id); if(el) put(el, val); };
+    set('fo_cash', pos.cash); set('fo_yarn', pos.yarn); set('fo_bills', pos.bills);
+  }
+  document.querySelectorAll('[data-fo]').forEach(el=>{
+    if(el.dataset.man && !force) return;
+    if(force) delete el.dataset.man;
+    const k = el.dataset.key, kind = el.dataset.fo;
+    put(el, kind === 'rc' ? a.rc[k] : kind === 'el' ? a.el[k] : kind === 'gm' ? a.gm[k] : a.rates[k]);
+  });
+  let any = false;
+  document.querySelectorAll('.fo-gq').forEach(row=>{
+    const k = row.getAttribute('data-gq'), has = !!(a.gm[k] || row.querySelector('[data-fo="gm"]').value || row.querySelector('[data-fo="gr"]').value);
+    row.style.display = has ? 'flex' : 'none'; if(has) any = true;
+  });
+  const none = document.getElementById('fo_greyNone'); if(none) none.style.display = any ? 'none' : 'block';
+}
 function fiscalOpeningCardHtml(year){
   const op = fiscalOpeningFor(year) || {}, t = fiscalOpeningTotals(op), money = fmtRs;
   const saved = !!fiscalOpeningFor(year), auto = fiscalAutoOpening(op.date || year + '-01-01');
+  const dp = saved ? null : fiscalPositionAt(auto.prev), dv = (k, x)=> saved ? (op[k] || '') : (dp[x] || '');
   const inp = (id, val, kind, key)=> `<input type="number" inputmode="decimal" id="${id}" data-fo="${kind}" placeholder="${({gm:'Meters',gr:'Rate per meter'})[kind] || 'Amount (Rs)'}" data-key="${escHtml(key || '')}"${saved ? ' data-man="1"' : ''} value="${val === undefined || val === null || val === 0 ? '' : val}" style="width:100%">`;
   const names = a => (a || []).map(x=> (x && x.name) ? x.name : '').filter(Boolean);
   const rows = (title, list, prefix, map, kind, autoMap)=> list.length ? `<h3 style="margin:12px 0 4px">${title}</h3>` + list.map((n, i)=>
@@ -197,13 +238,14 @@ function fiscalOpeningCardHtml(year){
   }).join('') : '';
   return `<div class="card"><div class="card-head"><h2>Opening position ${escHtml(String(year))}</h2></div>
     <p class="note" style="margin:0 0 8px">The position management gives you on 1 January ${escHtml(String(year))}. Fixed assets and personal loans are left out. The total is that year\u2019s opening capital.</p>
-    <div class="grid cols-2">${field('Date', 'fo_date', 'date', `value="${op.date || year + '-01-01'}"`)}${field('Cash and bank (Rs)', 'fo_cash', 'number', `value="${op.cash || ''}"`)}</div>
-    <div class="grid cols-2">${field('Yarn in hand, warp + weft (Rs)', 'fo_yarn', 'number', `value="${op.yarn || ''}"`)}${field('Bills due (Rs)', 'fo_bills', 'number', `value="${op.bills || ''}"`)}</div>
+    <div class="grid cols-2">${field('Date', 'fo_date', 'date', `value="${op.date || year + '-01-01'}"`)}${field('Cash and bank (Rs)', 'fo_cash', 'number', `value="${dv('cash', 'cash')}"`)}</div>
+    <div class="grid cols-2">${field('Yarn in hand, warp + weft (Rs)', 'fo_yarn', 'number', `value="${dv('yarn', 'yarn')}"`)}${field('Bills due (Rs)', 'fo_bills', 'number', `value="${dv('bills', 'bills')}"`)}</div>
     <p class="note" style="margin:0 0 4px">Receivables, grey cloth and employee loans are filled in from the app\u2019s own figures at the end of the day before the date above. Change any figure that differs.</p>
     ${rows('Receivables per client (Rs)', names(DATA.clients), 'fo_rc', op.receivables || {}, 'rc', auto.rc)}
     ${greyRows}
     ${rows('Employee loans per employee (Rs)', names(DATA.employees), 'fo_el', op.empLoans || {}, 'el', auto.el)}
     <p style="margin:12px 0 4px"><b>Opening capital: ${money(t.total)}</b> <span class="note">(cash ${money(t.cash)} + receivables ${money(t.receivables)} + yarn ${money(t.yarn)} + grey cloth ${money(t.grey)} + employee loans ${money(t.empLoans)} \u2212 bills ${money(t.bills)})</span></p>
+    ${fiscalCarryCheckHtml(year, saved ? op : null)}
     <div class="form-actions fy-static"><button class="primary" type="button" id="fiscalSaveOpening">Save opening position</button></div>
     <div id="fiscalOpeningCheck"></div></div>`;
 }
@@ -263,27 +305,17 @@ function fiscalWire(){
     if(!DATA.fiscalOpenings || Array.isArray(DATA.fiscalOpenings)) DATA.fiscalOpenings = {};
     DATA.fiscalOpenings[String(FISCAL_OPEN_YEAR)] = op;
     await save(); switchTab('fiscal');
-    const prev = fiscalDayBefore(op.date), calc = fiscalPositionAt(prev).total, mgmt = fiscalOpeningTotals(op).total;
-    const box = document.getElementById('fiscalOpeningCheck');
-    if(box) box.innerHTML = `<p class="note">App\u2019s own position at ${escHtml(fmtDate(prev))}: ${fmtRs(calc)}. Management\u2019s: ${fmtRs(mgmt)}. Difference: ${fmtRs(mgmt - calc)}.</p>`;
   };
   // Opening position: typing marks a figure as yours; changing the date refreshes only the figures you have not touched.
   document.querySelectorAll('[data-fo]').forEach(el=>{ el.addEventListener('input', ()=>{ el.dataset.man = '1'; }); });
   const fod = document.getElementById('fo_date');
-  if(fod) fod.addEventListener('change', ()=>{
-    if(!fod.value) return;
-    const a = fiscalAutoOpening(fod.value), put = (el, val)=>{ el.value = val ? val : ''; };
-    document.querySelectorAll('[data-fo]').forEach(el=>{
-      if(el.dataset.man) return; const k = el.dataset.key, kind = el.dataset.fo;
-      put(el, kind === 'rc' ? a.rc[k] : kind === 'el' ? a.el[k] : kind === 'gm' ? a.gm[k] : a.rates[k]);
-    });
-    let any = false;
-    document.querySelectorAll('.fo-gq').forEach(row=>{
-      const k = row.getAttribute('data-gq'), has = !!(a.gm[k] || row.querySelector('[data-fo="gm"]').value || row.querySelector('[data-fo="gr"]').value);
-      row.style.display = has ? 'flex' : 'none'; if(has) any = true;
-    });
-    const none = document.getElementById('fo_greyNone'); if(none) none.style.display = any ? 'none' : 'block';
-  });
+  if(fod) fod.addEventListener('change', ()=>{ if(fod.value) fiscalApplyAuto(fod.value, false); });
+  const cb = document.getElementById('fiscalCarry');
+  if(cb) cb.onclick = ()=>{
+    const d = (fod && fod.value) || FISCAL_OPEN_YEAR + '-01-01';
+    fiscalApplyAuto(d, true);
+    showToast('Carried over the closing position at ' + fmtDate(fiscalDayBefore(d)) + '. Check the figures, then tap Save.');
+  };
   wireDelete('stockValuations');
 }
 // v3.17.68 — one row per calendar month of the selected period (for the charts and table in the PDF).
