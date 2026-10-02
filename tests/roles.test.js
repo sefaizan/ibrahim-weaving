@@ -158,7 +158,7 @@ describe('the People card', () => {
     const html = run(`cloudPeopleListHtml(${JSON.stringify(R())}, ${NOW})`);
     assert.match(html, /Production operator/); assert.match(html, /No role yet/);
     assert.match(html, /Production VAE/); assert.match(html, /data-cp-role=/); assert.match(html, /data-cp-saveperms=/);
-    assert.equal((html.match(/data-cp-perm="worker@example\.com\|/g) || []).length, 11 * 4, 'every section has V A E D boxes');
+    assert.equal((html.match(/data-cp-perm="worker@example\.com\|/g) || []).length, 12 * 4, 'every section has V A E D boxes');
     assert.match(html, /data-cp-access="norole@example\.com" disabled/, 'no sections grid until a role is chosen');
   });
   test('the add form has the role picker listing the presets', () => {
@@ -360,7 +360,7 @@ describe('the Roles card and the actions behind it', () => {
     assert.match(html, /data-rl-edit="business_viewer"/); assert.match(html, /data-rl-new="1"/); assert.match(html, /data-rl-save="new"/);
     assert.doesNotMatch(html, /data-rl-edit="custom"/, 'the fixed Custom role has no editor');
     assert.match(html, /data-rl-delete="business_viewer" disabled/, 'an unchanged built-in cannot be reset');
-    assert.equal((html.match(/data-rl-perm="new\|/g) || []).length, 44, 'the new-role form has every section and letter');
+    assert.equal((html.match(/data-rl-perm="new\|/g) || []).length, 48, 'the new-role form has every section and letter');
     assert.match(run('cloudRolesCardHtml()'), /Roles/);
   });
   test('the Settings page shows the Roles card only to the verified owner, after People', () => {

@@ -107,7 +107,7 @@ describe('the People card', () => {
   test('each person gets one Needs approval box per section, ticked where it is on, and a summary line', () => {
     const r = rec({ [WORKER]: entry({ role: 'production_operator', needsApproval: { production: true, wages: true } }), 'b@example.com': entry({ role: 'business_viewer' }) });
     const html = run(`cloudPeopleListHtml(${JSON.stringify(r)}, ${NOW})`);
-    assert.equal((html.match(/data-cp-appr="worker@example\.com\|/g) || []).length, 11);
+    assert.equal((html.match(/data-cp-appr="worker@example\.com\|/g) || []).length, 12);
     assert.equal((html.match(/data-cp-appr="worker@example\.com\|(production|wages)" checked/g) || []).length, 2);
     assert.match(html, /Needs your approval: Production, Wages/);
     assert.equal((html.match(/Needs your approval:/g) || []).length, 1, 'no summary line for a person with none on');

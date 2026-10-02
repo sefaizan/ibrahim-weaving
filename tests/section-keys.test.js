@@ -18,7 +18,7 @@ const VIEWER = 'viewer@example.com', VIEWER2 = 'viewer2@example.com', OPERATOR =
 const DAY = 86400000, NOW = Date.now();
 const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const j = v => v === undefined ? v : JSON.parse(JSON.stringify(v));
-const ALL = ['production', 'reference', 'sales', 'recovery', 'expenses', 'wages', 'loans', 'family', 'materials', 'business', 'tools'];
+const ALL = ['production', 'reference', 'sales', 'recovery', 'expenses', 'wages', 'loans', 'family', 'materials', 'business', 'stock', 'tools'];
 const VIEWER_SECS = ['production', 'reference', 'sales', 'recovery', 'business'];
 const OPERATOR_SECS = ['production', 'reference', 'business'];
 const HIDDEN_FROM_VIEWER = ALL.filter(s => VIEWER_SECS.indexOf(s) < 0);
