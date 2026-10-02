@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-ui-polish-wages-recovery-style">
+<meta name="app-build" content="2026-10-02-release3-ux-enhance">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -904,7 +904,7 @@
   .wg-sheet{ position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:auto; background:var(--card); border-radius:20px 20px 0 0; padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)); z-index:61; display:none; max-height:92vh; overflow-y:auto; box-shadow:var(--elev-3); } .wg-sheet.on{ display:block; }
   .wg-qa{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
 
-  /* ===== UI polish v3.17.42 — forms, cards, tables, tap targets (CSS-only, overrides above) ===== */
+  /* ===== UI polish v3.17.43 — forms, cards, tables, tap targets (CSS-only, overrides above) ===== */
   main{ padding:18px 16px 96px; }
   .card{ padding:20px; border-radius:16px; box-shadow:var(--elev-1); transition:box-shadow .15s; }
   .card:focus-within{ box-shadow:var(--elev-2); }
@@ -956,7 +956,7 @@
   @media (prefers-reduced-motion:reduce){ .card, button.primary{ transition:none; } }
   @media print{ th{ position:static; } .card{ box-shadow:none; } }
 
-  /* ===== v3.17.42b — Wages/Recovery look applied to every page ===== */
+  /* ===== v3.17.43b — Wages/Recovery look applied to every page ===== */
   /* Summary tiles: same teal gradient hero language as Wages "wg-hero" / Recovery "rbc-hero" (non-Overview pages) */
   #panels > .panel:not(:has(.ov-page)) .grid:has(> .stat.compact){ background:linear-gradient(165deg,var(--rust),var(--rust-deep)); border-radius:16px; padding:14px; gap:10px; box-shadow:var(--elev-2); }
   #panels > .panel:not(:has(.ov-page)) .stat.compact{ background:rgba(255,255,255,.12); border:0; border-radius:12px; padding:10px 12px; }
@@ -986,6 +986,40 @@
     .wg-sheet button.primary, .wg-sheet .form-actions{ position:static; box-shadow:none; }
   }
   [data-theme="dark"] #panels > .panel:not(:has(.ov-page)) .stat.compact{ background:rgba(255,255,255,.08); }
+
+  /* ===== v3.17.43 — UX enhancements (pairs with js/ux-enhance.js) ===== */
+  label .req{ color:var(--danger,#C0392B); font-weight:800; }
+  .field-err{ color:var(--danger,#B3261E); font-size:12.5px; font-weight:600; margin-top:5px; display:flex; gap:6px; }
+  .field-err::before{ content:"⚠"; }
+  .qd{ display:flex; gap:6px; margin-top:6px; }
+  .qd button{ min-height:30px; padding:3px 12px; font-size:12px; font-weight:600; border-radius:999px; background:var(--rust-tonal); color:var(--rust-deep); border:0; cursor:pointer; margin:0; }
+  .log-filter{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:8px 0; }
+  .log-filter input[type="search"]{ flex:1 1 180px; min-width:0; }
+  .lf-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .lf-chip{ min-height:36px; padding:4px 14px; border-radius:999px; font-size:12.5px; font-weight:600; background:var(--paper-dim); border:1px solid var(--line); color:var(--ink); cursor:pointer; margin:0; }
+  .lf-chip.on{ background:var(--rust); border-color:var(--rust); color:#fff; }
+  .lf-count{ font-size:12px; color:var(--ink-soft); }
+  tr[hidden]{ display:none !important; }
+  .note-fold{ margin-top:12px; border-top:1px dashed var(--line); padding-top:8px; }
+  .note-fold summary{ cursor:pointer; font-size:13px; font-weight:700; color:var(--rust-deep); min-height:36px; display:flex; align-items:center; }
+  /* Recovery / any 2-col form with an empty spacer: use the full row instead of leaving half of it blank */
+  .grid > div:empty{ display:none; }
+  .grid.cols-2:has(> .field:only-child){ grid-template-columns:minmax(0,1fr); }
+  /* Minimum readable text and tap size */
+  .appbar-titles .sub, .ov-glance .ov-kpi .label, .ov-glance .ov-sub, .sel-group-label, .view-badge{ font-size:12px; }
+  .rc-info .rc-fill button, .lf-chip, .qd button{ min-height:40px; }
+  .qd button{ min-height:34px; }
+  /* Backup floating button must never sit on top of the pinned Save bar */
+  @media (max-width:720px){
+    .form-actions{ padding-right:74px; }
+    .fab-backup{ bottom:calc(76px + env(safe-area-inset-bottom, 0px)); }
+  }
+  /* Urdu / right-to-left */
+  html[dir="rtl"] .field-err, html[dir="rtl"] .qd, html[dir="rtl"] .log-filter, html[dir="rtl"] .lf-chips{ direction:rtl; }
+  html[dir="rtl"] th, html[dir="rtl"] td{ text-align:right; }
+  html[dir="rtl"] input[type="number"], html[dir="rtl"] input[type="date"], html[dir="rtl"] input[type="time"]{ direction:ltr; text-align:right; }
+  html[dir="rtl"] .form-actions{ padding-right:10px; padding-left:74px; }
+  html[dir="rtl"] .fab-backup{ right:auto; left:16px; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1016,7 +1050,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.42</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.43</span></span>
     </div>
   </header>
 
@@ -1053,6 +1087,7 @@
 <script src="./js/proposals.js"></script>
 <script src="./js/autobackup.js"></script>
 <script src="./js/i18n.js"></script>
+<script src="./js/ux-enhance.js"></script>
 <script src="./js/lock-init.js"></script>
 <script>
 if('serviceWorker' in navigator){
