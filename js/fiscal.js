@@ -138,7 +138,7 @@ function fiscalReportHtml(sel){
   if(sel.from && !r.openStock.known) notes.push('No stock valuation before ' + fmtDate(sel.from) + ': opening stock is counted as 0.');
   if(sel.to > today) notes.push('This period has not ended: figures are up to today.');
   const ocap = r.openingCapital === null ? '\u2014' : money(r.openingCapital);
-  return `<div class="card"><h2>${escHtml(sel.label)}</h2>
+  return `<div class="card" id="fyReport"><h2>${escHtml(sel.label)}</h2>
     ${fiscalLine('Opening capital', ocap, '')}
     ${sel.from ? '' : '<p class="note" style="margin:0 0 6px">The first period has no opening position: it runs from the very first entry.</p>'}
     ${fiscalLine('Sales', money(r.sales))}
@@ -262,6 +262,97 @@ function fiscalValuationCardHtml(){
     <div class="form-actions fy-static"><button class="primary" type="button" id="fiscalAddValuation">Add valuation</button></div>
     ${rows ? `<div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Yarn</th><th>Bills</th><th>Grey rates</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}</div>`;
 }
+// v3.17.71 — Years at a glance: summary strip, closing-capital chart and one tappable row per year (cached until the data changes).
+let FISCAL_HIST = { sig: '', rows: [] }, FISCAL_ALL = false;
+function fiscalSig(){ const t = JSON.stringify(DATA); let h = 5381; for(let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) | 0; return t.length + ':' + h + ':' + new Date().toISOString().slice(0, 10); }
+function fiscalHistory(){
+  const sig = fiscalSig(); if(FISCAL_HIST.sig === sig) return FISCAL_HIST.rows;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = fiscalPeriods(new Date().getFullYear()).filter(p=> !p.from || p.from <= today).map(p=> ({ p, r: fiscalReport(p.from, p.to) }));
+  FISCAL_HIST = { sig, rows }; return rows;
+}
+function fiscalCompact(n){ const a = Math.abs(n || 0), sg = n < 0 ? '-' : '', t = (x, d)=> String(+x.toFixed(d));
+  return a >= 1e7 ? sg + t(a / 1e7, 1) + 'Cr' : a >= 1e5 ? sg + t(a / 1e5, 1) + 'L' : a >= 1e3 ? sg + t(a / 1e3, 1) + 'k' : sg + Math.round(a); }
+function fiscalDelta(a, b){
+  if(a === null || a === undefined || b === null || b === undefined || !b) return '';
+  const p = (a - b) / Math.abs(b) * 100;
+  if(Math.abs(p) < 0.5) return '<em class="fh-d">\u2013 0%</em>';
+  return `<em class="fh-d ${p > 0 ? 'up' : 'dn'}">${p > 0 ? '\u25B2' : '\u25BC'} ${Math.abs(Math.round(p))}%</em>`;
+}
+function fiscalYearTag(p){ return p.id === 'first' ? 'First' : p.id; }
+function fiscalChartHtml(rows){
+  let pts = rows.filter(x=> x.r.closingCapital !== null);
+  if(pts.length < 2) return '';
+  const total = pts.length; if(!FISCAL_ALL && total > 10) pts = pts.slice(-10);
+  const n = pts.length, slot = Math.max(44, Math.min(64, Math.floor(320 / n))), W = n * slot, H = 150, top = 22, bot = 22, ph = H - top - bot;
+  const vals = pts.map(x=> x.r.closingCapital), mx = Math.max(0, ...vals), mn = Math.min(0, ...vals), span = (mx - mn) || 1;
+  const py = v=> top + ph * (1 - (v - mn) / span), zero = py(0), cur = String(new Date().getFullYear());
+  const bars = pts.map((x, i)=>{
+    const v = x.r.closingCapital, cx = i * slot + slot / 2, bw = Math.min(28, slot - 14), yy = py(v), isCur = x.p.id === cur;
+    const ty = v >= 0 ? Math.min(yy, zero) - 4 : Math.max(yy, zero) + 11;
+    return `<g data-fhbar="${escHtml(x.p.id)}" class="fh-bar"><rect x="${i * slot}" y="0" width="${slot}" height="${H}" fill="transparent"/>
+      <rect class="${isCur ? 'cur' : v < 0 ? 'neg' : 'b'}" x="${cx - bw / 2}" y="${Math.min(yy, zero)}" width="${bw}" height="${Math.max(1, Math.abs(zero - yy))}" rx="3"/>
+      <text class="v" x="${cx}" y="${ty}" text-anchor="middle">${fiscalCompact(v)}</text>
+      <text class="y${isCur ? ' cur' : ''}" x="${cx}" y="${H - 6}" text-anchor="middle">${x.p.id === 'first' ? 'First' : '\u2019' + x.p.id.slice(-2)}</text></g>`;
+  }).join('');
+  return `<div class="fh-chart-head"><b>Closing capital</b>${total > 10 ? `<button class="ghost fh-mini" type="button" id="fhAll">${FISCAL_ALL ? 'Last 10' : 'All ' + total}</button>` : ''}</div>
+    <div class="fh-chart" id="fhChart"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Closing capital by year"><line x1="0" x2="${W}" y1="${zero}" y2="${zero}" class="z"/>${bars}</svg></div>`;
+}
+function fiscalHistoryHtml(){
+  const rows = fiscalHistory(), money = fmtRs;
+  if(!rows.some(x=> x.r.sales || x.r.closingCapital !== null)) return `<div class="card"><h2>Year Report</h2><p class="note" style="margin:0">No figures yet. Once you add sales and an opening position, every year appears here at a glance.</p></div>`;
+  const last = rows[rows.length - 1], pv = rows.length > 1 ? rows[rows.length - 2] : null, c = last.r, q = pv ? pv.r : null;
+  const tile = (lbl, val, cls, dl)=> `<div class="fh-tile"><i>${lbl}</i><b class="${cls || ''}">${val}</b>${dl || '<em class="fh-d">\u2014</em>'}</div>`;
+  const strip = `<div class="fh-strip">${tile('Capital now', c.closingCapital === null ? '\u2014' : fiscalCompact(c.closingCapital), '', q && fiscalDelta(c.closingCapital, q.closingCapital))}
+    ${tile('Sales ' + fiscalYearTag(last.p), fiscalCompact(c.sales), '', q && fiscalDelta(c.sales, q.sales))}
+    ${tile('Profit', fiscalCompact(c.profitAfter), c.profitAfter < 0 ? 'neg' : 'pos', q && fiscalDelta(c.profitAfter, q.profitAfter))}</div>
+    <p class="fh-sub">${pv ? '% against ' + escHtml(pv.p.label) + (last.p.to > new Date().toISOString().slice(0, 10) ? ' (this year so far)' : '') : 'Year-on-year starts from your second year.'}</p>`;
+  const list = rows.slice().reverse().map(x=>{
+    const i = rows.indexOf(x), prev = i ? rows[i - 1].r : null, r = x.r, id = escHtml(x.p.id), isCur = x.p === last.p;
+    const arrow = fiscalDelta(r.closingCapital, prev && prev.closingCapital).replace('fh-d', 'fh-d sm');
+    return `<div class="fh-row${isCur ? ' cur' : ''}" id="fhrow_${id}"><div class="fh-top">
+      <button class="fh-toggle" type="button" data-fhtoggle="${id}" aria-expanded="false" title="${escHtml(money(r.sales))} sales">
+        <span class="fh-yr">${escHtml(fiscalYearTag(x.p))}${isCur ? '<small>current</small>' : ''}</span>
+        <span class="fh-fig"><i>Sales</i><b>${fiscalCompact(r.sales)}</b></span>
+        <span class="fh-fig"><i>Profit</i><b class="${r.profitAfter < 0 ? 'neg' : 'pos'}">${fiscalCompact(r.profitAfter)}</b></span>
+        <span class="fh-fig"><i>Capital</i><b>${r.closingCapital === null ? '\u2014' : fiscalCompact(r.closingCapital)}</b>${arrow}</span></button>
+      <button class="ghost fh-pdf" type="button" data-fhpdf="${id}" aria-label="PDF report ${escHtml(x.p.label)}">PDF</button></div>
+      <div class="fh-body" id="fhbody_${id}" hidden></div></div>`;
+  }).join('');
+  return `<div class="card fh"><h2>Year Report</h2>${strip}${fiscalChartHtml(rows)}</div>
+    <div class="card fh"><div class="fh-chart-head"><b>All years</b><button class="ghost fh-mini" type="button" id="fhCsv">Export CSV</button></div>${list}</div>`;
+}
+function fiscalRowBodyHtml(id){
+  const rows = fiscalHistory(), i = rows.findIndex(x=> x.p.id === id); if(i < 0) return '';
+  const p = rows[i].p, r = rows[i].r, pv = i ? rows[i - 1].r : null, L = fiscalLine, money = fmtRs, dl = (a, b)=> pv ? ' ' + fiscalDelta(a, b) : '';
+  const mo = fiscalMonthly({ from: p.from, to: p.to });
+  const table = mo.length >= 2 ? `<div style="overflow-x:auto"><table><thead><tr><th>Month</th><th style="text-align:right">Sales</th><th style="text-align:right">Result</th></tr></thead><tbody>${mo.map(m=> `<tr><td>${escHtml(m.label)}</td><td class="num" style="text-align:right">${money(m.sales)}</td><td class="num" style="text-align:right;color:var(--${m.result < 0 ? 'red' : 'green'})">${money(m.result)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return `${L('Opening capital', r.openingCapital === null ? '\u2014' : money(r.openingCapital))}
+    ${L('Sales', money(r.sales) + dl(r.sales, pv && pv.sales))}
+    ${L('Profit before drawings', money(r.profitBefore))}
+    ${L('Drawings', '\u2212 ' + money(r.drawings))}
+    ${L('Profit after drawings', '<b>' + money(r.profitAfter) + '</b>' + dl(r.profitAfter, pv && pv.profitAfter))}
+    ${L('Closing capital', r.closingCapital === null ? '\u2014' : '<b>' + money(r.closingCapital) + '</b>' + dl(r.closingCapital, pv && pv.closingCapital))}
+    ${table}<div class="form-actions fy-static"><button class="ghost" type="button" data-fhopen="${escHtml(id)}">Open full report</button></div>`;
+}
+function fiscalToggleRow(id, scroll){
+  const body = document.getElementById('fhbody_' + id), row = document.getElementById('fhrow_' + id); if(!body || !row) return;
+  const open = body.hidden; if(open && !body.dataset.done){ body.innerHTML = fiscalRowBodyHtml(id); body.dataset.done = '1'; wireFiscalOpen(body); }
+  body.hidden = !open; row.classList.toggle('open', open);
+  const t = row.querySelector('[data-fhtoggle]'); if(t) t.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if(open && scroll) row.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+function wireFiscalOpen(root){
+  root.querySelectorAll('[data-fhopen]').forEach(b=> b.onclick = ()=>{ FISCAL_SEL = { period: b.dataset.fhopen, q: 'full' }; switchTab('fiscal'); setTimeout(()=>{ const c = document.getElementById('fyReport'); if(c) c.scrollIntoView({ block: 'start' }); }, 60); });
+}
+function fiscalPdfFor(id){ const old = FISCAL_SEL; FISCAL_SEL = { period: id, q: 'full' }; try{ fiscalPdf(); } finally { FISCAL_SEL = old; } }
+function fiscalCsv(){
+  const rows = fiscalHistory(), q = x=> '"' + String(x).replace(/"/g, '""') + '"', n = x=> (x === null || x === undefined) ? '' : Math.round(x);
+  const out = [['Year', 'Opening capital', 'Sales', 'Business expenses', 'Warp bought', 'Weft bought', 'Stock change', 'Profit before drawings', 'Drawings', 'Profit after drawings', 'Closing capital'].map(q).join(',')]
+    .concat(rows.map(x=> [q(x.p.label), n(x.r.openingCapital), n(x.r.sales), n(x.r.bizExp), n(x.r.warp), n(x.r.weft), n(x.r.stockChange), n(x.r.profitBefore), n(x.r.drawings), n(x.r.profitAfter), n(x.r.closingCapital)].join(',')));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + out.join('\r\n')], { type: 'text/csv' })); a.download = 'Year-Report-All-Years.csv';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
 function fiscalPanel(){
   const sel = fiscalSelected();
   if(!FISCAL_SEL.period) FISCAL_SEL.period = sel.p.id;
@@ -271,11 +362,11 @@ function fiscalPanel(){
   // Dropdowns, not buttons: they stay one line tall however many years there are (newest first).
   const periodOpts = sel.ps.slice().reverse().map(p=> opt(p.id, p.label, p.id === sel.p.id)).join('');
   const quarterOpts = opt('full', 'Full period', !sel.q) + sel.p.quarters.map(q=> opt(q.id, q.label, sel.q && q.id === sel.q.id)).join('');
-  return `<div class="card"><h2>Year Report</h2>
-    <div class="grid cols-2">
+  return `${fiscalHistoryHtml()}
+    <details class="card fh-pick"><summary>Pick a year or quarter</summary><div class="grid cols-2" style="margin-top:10px">
       <div class="field"><label>Year</label><select id="fy_period">${periodOpts}</select></div>
       <div class="field"><label>Show</label><select id="fy_q">${quarterOpts}</select></div>
-    </div></div>
+    </div></details>
     ${fiscalReportHtml(sel)}
     ${fiscalValuationCardHtml()}
     ${years.length > 1 ? `<div class="card"><div class="field" style="margin:0"><label>Opening position for</label><select id="fy_open">${years.slice().reverse().map(y=> opt(y, 'Opening ' + y, y === FISCAL_OPEN_YEAR)).join('')}</select></div></div>` : ''}
@@ -298,6 +389,12 @@ function fiscalWire(){
   if(fyQ) fyQ.onchange = ()=>{ FISCAL_SEL.q = fyQ.value; switchTab('fiscal'); };
   if(fyO) fyO.onchange = ()=>{ FISCAL_OPEN_YEAR = Number(fyO.value); switchTab('fiscal'); };
   const pdf = document.getElementById('fiscalPdf'); if(pdf) pdf.onclick = ()=> fiscalPdf();
+  document.querySelectorAll('[data-fhtoggle]').forEach(b=> b.onclick = ()=> fiscalToggleRow(b.dataset.fhtoggle, false));
+  document.querySelectorAll('[data-fhpdf]').forEach(b=> b.onclick = ()=> fiscalPdfFor(b.dataset.fhpdf));
+  document.querySelectorAll('[data-fhbar]').forEach(g=> g.onclick = ()=>{ const id = g.dataset.fhbar, body = document.getElementById('fhbody_' + id); if(body && body.hidden) fiscalToggleRow(id, true); else { const row = document.getElementById('fhrow_' + id); if(row) row.scrollIntoView({ block: 'start', behavior: 'smooth' }); } });
+  const fa = document.getElementById('fhAll'); if(fa) fa.onclick = ()=>{ FISCAL_ALL = !FISCAL_ALL; switchTab('fiscal'); };
+  const fc = document.getElementById('fhCsv'); if(fc) fc.onclick = ()=> fiscalCsv();
+  const fch = document.getElementById('fhChart'); if(fch) fch.scrollLeft = fch.scrollWidth;
   const add = document.getElementById('fiscalAddValuation');
   if(add) add.onclick = async ()=>{
     const date = v('sv_date'); if(!date){ showToast('Pick a date'); return; }
@@ -359,6 +456,12 @@ function fiscalPdf(){
   const D = n => (Math.round(n || 0) ? '-' : '') + 'Rs ' + Math.abs(Math.round(n || 0)).toLocaleString('en-IN');   // a deduction, always shown with a minus
   const todayIso = new Date().toISOString().slice(0, 10), pos = sel.to > todayIso ? todayIso : sel.to;
   let y = 46;
+  // v3.17.71 — last year's figures for the "Last year" and "Change" columns (the same quarter of last year when a quarter is shown)
+  let pr = null, prLabel = '';
+  if(sel.q){ const mm = /^q(\d{4})(Q\d)$/.exec(sel.q.id); if(mm){ const pid = 'q' + (Number(mm[1]) - 1) + mm[2]; sel.ps.forEach(p=> p.quarters.forEach(q=>{ if(q.id === pid){ pr = fiscalReport(q.from, q.to); prLabel = q.label; } })); } }
+  else { const pi = sel.ps.indexOf(sel.p); if(pi > 0){ const pp = sel.ps[pi - 1]; pr = fiscalReport(pp.from, pp.to); prLabel = pp.label; } }
+  const pct = (a, b)=> (a === null || a === undefined || b === null || b === undefined || !b) ? null : (a - b) / Math.abs(b) * 100;
+  const pctTxt = v=> v === null ? '-' : (v > 0.5 ? '+' : '') + Math.round(v) + '%';
   // ---- letterhead (same look as the receipts) ----
   if(typeof BIZ_LOGO_PNG !== 'undefined' && typeof BIZ_LOGO_RATIO !== 'undefined'){
     const lh = 44, lw = lh * BIZ_LOGO_RATIO; doc.addImage(BIZ_LOGO_PNG, 'PNG', (W - lw) / 2, y - 24, lw, lh); y += lh - 4;
@@ -372,50 +475,59 @@ function fiscalPdf(){
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text(sel.label, W / 2, y, { align: 'center' }); y += 15;
   doc.setFontSize(9); doc.setTextColor(...SOFT); doc.text('Prepared on ' + fmtDate(new Date().toISOString().slice(0, 10)), W / 2, y, { align: 'center' }); y += 28;
   // ---- key figures ----
-  const kp = [['SALES', R(r.sales), INK], ['PROFIT AFTER DRAWINGS', R(r.profitAfter), r.profitAfter < 0 ? RED : GREEN], ['CLOSING CAPITAL', r.closingCapital === null ? '-' : R(r.closingCapital), NAVY]];
+  const kp = [['SALES', R(r.sales), INK, 'sales'], ['PROFIT AFTER DRAWINGS', R(r.profitAfter), r.profitAfter < 0 ? RED : GREEN, 'profitAfter'], ['CLOSING CAPITAL', r.closingCapital === null ? '-' : R(r.closingCapital), NAVY, 'closingCapital']];
   const cw = (X2 - m) / 3;
   kp.forEach((k, i)=>{
     const cx = m + cw * i + cw / 2;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...SOFT); doc.text(k[0], cx, y, { align: 'center' });
     doc.setFontSize(14); doc.setTextColor(...k[2]); doc.text(k[1], cx, y + 20, { align: 'center' });
+    const pc = pr ? pct(r[k[3]], pr[k[3]]) : null;
+    if(pr){ doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...(pc === null ? SOFT : pc < 0 ? RED : GREEN)); doc.text(pctTxt(pc) + ' vs last year', cx, y + 33, { align: 'center' }); }
     if(i){ doc.setDrawColor(...LINE); doc.line(m + cw * i, y - 8, m + cw * i, y + 28); }
   });
-  y += 50;
+  y += 56;
   // ---- helpers ----
   const heading = t=>{ doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...NAVY); doc.text(t.toUpperCase(), m, y); y += 5; doc.setDrawColor(...NAVY); doc.setLineWidth(0.8); doc.line(m, y, X2, y); doc.setLineWidth(0.4); y += 4; };
   let zi = 0;
   const row = (label, val, o = {})=>{
-    const h = o.big ? 24 : 19;
+    const h = o.big ? 24 : (o.yoy ? 17 : 19);
     if(o.rule){ doc.setDrawColor(...INK); doc.setLineWidth(0.8); doc.line(m, y + 2, X2, y + 2); doc.setLineWidth(0.4); y += 2; zi = 0; }
     if(!o.big && !o.rule && zi++ % 2 === 0){ doc.setFillColor(...ZEBRA); doc.rect(m, y, X2 - m, h, 'F'); }
     doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(o.big ? 12.5 : 10.5);
     doc.setTextColor(...(o.labelColor || INK)); doc.text(label, m + 8, y + h / 2 + 3.5);
-    doc.setTextColor(...(o.color || INK)); doc.text(val, X2 - 8, y + h / 2 + 3.5, { align: 'right' });
+    doc.setTextColor(...(o.color || INK)); doc.text(val, o.yoy ? X2 - 170 : X2 - 8, y + h / 2 + 3.5, { align: 'right' });
+    if(o.yoy){ doc.setFont('helvetica', 'normal'); doc.setFontSize(o.big ? 11 : 9.5); doc.setTextColor(...SOFT); doc.text(o.pv, X2 - 92, y + h / 2 + 3.5, { align: 'right' }); doc.setTextColor(...(o.cc || SOFT)); doc.text(o.ch, X2 - 8, y + h / 2 + 3.5, { align: 'right' }); }
     y += h;
   };
   const gap = n=>{ y += n; zi = 0; };
+  const yr = (label, key, fmt, o = {})=>{
+    const cv = r[key], pv = pr ? pr[key] : null, p = pct(cv, pv), hasP = pv !== null && pv !== undefined;
+    row(label, cv === null ? '-' : fmt(cv), Object.assign({}, o, { yoy: true, pv: hasP ? fmt(pv) : '-', ch: pctTxt(p), cc: o.good ? (p === null ? SOFT : p < 0 ? RED : GREEN) : SOFT }));
+  };
+  const colHead = ()=>{ doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...SOFT); doc.text('THIS PERIOD', X2 - 170, y + 9, { align: 'right' }); doc.text('LAST YEAR', X2 - 92, y + 9, { align: 'right' }); doc.text('CHANGE', X2 - 8, y + 9, { align: 'right' }); y += 14; zi = 0; };
   // ---- profit for the period ----
-  heading('Profit for the period');
-  row('Sales', R(r.sales), { bold: true });
-  row('Business expenses (including wages)', D(r.bizExp), { color: RED });
-  row('Warp bought', D(r.warp), { color: RED });
-  row('Weft bought', D(r.weft), { color: RED });
-  row('Stock change', R(r.stockChange), { color: r.stockChange < 0 ? RED : INK });
-  row('Profit before drawings', R(r.profitBefore), { bold: true, rule: true, color: r.profitBefore < 0 ? RED : GREEN });
+  heading('Profit for the period'); colHead();
+  yr('Sales', 'sales', R, { bold: true, good: true });
+  yr('Business expenses (including wages)', 'bizExp', D, { color: RED });
+  yr('Warp bought', 'warp', D, { color: RED });
+  yr('Weft bought', 'weft', D, { color: RED });
+  yr('Stock change', 'stockChange', R, { color: r.stockChange < 0 ? RED : INK });
+  yr('Profit before drawings', 'profitBefore', R, { bold: true, rule: true, good: true, color: r.profitBefore < 0 ? RED : GREEN });
   gap(8);
-  row('Drawings \u2014 family expenses', D(r.drawingsFamily), { color: RED });
-  row('Drawings \u2014 personal expenses', D(r.drawingsPersonal), { color: RED });
-  row('Total drawings', D(r.drawings), { bold: true, rule: true, color: RED });
+  yr('Drawings \u2014 family expenses', 'drawingsFamily', D, { color: RED });
+  yr('Drawings \u2014 personal expenses', 'drawingsPersonal', D, { color: RED });
+  yr('Total drawings', 'drawings', D, { bold: true, rule: true, color: RED });
   gap(8);
-  row('Profit after drawings', R(r.profitAfter), { bold: true, big: true, rule: true, color: r.profitAfter < 0 ? RED : GREEN });
+  yr('Profit after drawings', 'profitAfter', R, { bold: true, big: true, rule: true, good: true, color: r.profitAfter < 0 ? RED : GREEN });
   gap(16);
   // ---- capital ----
-  heading('Capital');
-  row('Opening capital', r.openingCapital === null ? '-' : R(r.openingCapital));
-  row('Add: profit after drawings', R(r.profitAfter), { color: r.profitAfter < 0 ? RED : INK });
-  row('Closing capital', r.closingCapital === null ? '-' : R(r.closingCapital), { bold: true, big: true, rule: true, color: NAVY });
+  heading('Capital'); colHead();
+  yr('Opening capital', 'openingCapital', R);
+  yr('Add: profit after drawings', 'profitAfter', R, { color: r.profitAfter < 0 ? RED : INK });
+  yr('Closing capital', 'closingCapital', R, { bold: true, big: true, rule: true, good: true, color: NAVY });
   gap(16);
   // ---- position ----
+  if(y + 200 > H - 48){ doc.addPage(); y = 56; }
   heading('Financial position as at ' + fmtDate(pos));
   row('Cash and bank', R(r.position.cash));
   row('Receivables (money to receive)', R(r.position.receivables));
@@ -427,6 +539,7 @@ function fiscalPdf(){
   gap(14);
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(...SOFT);
   doc.text('Personal loans given (' + R(r.position.personalLoans) + ') and fixed assets are not counted in the position.', m, y);
+  if(pr){ y += 12; doc.text('Last year = ' + prLabel + (pr.from === null && !sel.q ? ' (a longer period, Dec 2025 to Dec 2026)' : '') + '. Change = % against last year; - means no figure to compare.', m, y, { maxWidth: X2 - m }); }
   if(r.notes && r.notes.length){ y += 12; r.notes.forEach(n=>{ doc.text('Note: ' + n, m, y, { maxWidth: X2 - m }); y += 11; }); }
   // ---- monthly comparison (pages 2 and 3) ----
   const months = fiscalMonthly(sel);
