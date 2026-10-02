@@ -286,27 +286,196 @@ function fiscalWire(){
   });
   wireDelete('stockValuations');
 }
+// v3.17.68 — one row per calendar month of the selected period (for the charts and table in the PDF).
+function fiscalMonthly(sel){
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], p2 = n=> (n < 10 ? '0' : '') + n;
+  const todayIso = new Date().toISOString().slice(0, 10), last = sel.to > todayIso ? todayIso : sel.to;
+  let first = sel.from;
+  if(!first){
+    let mn = '';
+    Object.keys(DATA).forEach(k=>{ const a = DATA[k]; if(Array.isArray(a)) a.forEach(e=>{ const d = e && e.date; if(typeof d === 'string' && /^20\d\d-\d\d-\d\d$/.test(d) && (!mn || d < mn)) mn = d; }); });
+    first = mn || last;
+  }
+  if(first > last) return [];
+  const out = []; let y = +first.slice(0, 4), mo = +first.slice(5, 7); const ey = +last.slice(0, 4), em = +last.slice(5, 7);
+  while((y < ey || (y === ey && mo <= em)) && out.length < 36){
+    const ms = y + '-' + p2(mo) + '-01', me = y + '-' + p2(mo) + '-' + p2(new Date(y, mo, 0).getDate());
+    const from = ms < first ? first : ms, to = me > last ? last : me;
+    const s = computeStats('range:' + from + ':' + to), c = computeStats('range::' + to);
+    out.push({ label: MON[mo - 1] + ' ' + String(y).slice(2), sales: s.salesAmtMonth || 0, received: s.receivedMonth || 0,
+      purchases: (s.warpCostMonth || 0) + (s.weftCostMonth || 0), expenses: s.bizExpMonth || 0,
+      family: s.famExpMonth || 0, personal: s.personalExpMonth || 0, receivables: c.receivable || 0 });
+    mo++; if(mo > 12){ mo = 1; y++; }
+  }
+  out.forEach(r=>{ r.result = r.sales - r.purchases - r.expenses; });
+  return out;
+}
 function fiscalPdf(){
   if(typeof window.jspdf === 'undefined'){ showToast('PDF library is still loading \u2014 try again in a moment.'); return; }
-  const sel = fiscalSelected(), r = fiscalReport(sel.from, sel.to), biz = (DATA.businessInfo && DATA.businessInfo.name) || '';
+  const sel = fiscalSelected(), r = fiscalReport(sel.from, sel.to), biz = DATA.businessInfo || {};
   const { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth(), m = 40; let y = 50;
-  const put = (label, val, bold)=>{ doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(11); doc.text(label, m, y); doc.text(val, W - m, y, { align: 'right' }); y += 18; };
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(biz || 'Year Report', W / 2, y, { align: 'center' }); y += 22;
-  doc.setFontSize(12); doc.text('Report: ' + sel.label, W / 2, y, { align: 'center' }); y += 28;
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), m = 48, X2 = W - m;
+  const NAVY = [24, 52, 94], INK = [30, 30, 30], SOFT = [110, 110, 110], RED = [176, 42, 42], GREEN = [27, 120, 70], LINE = [200, 205, 215], ZEBRA = [246, 248, 251];
   const R = n => (n < 0 ? '-' : '') + 'Rs ' + Math.abs(Math.round(n || 0)).toLocaleString('en-IN');
-  put('Opening capital', r.openingCapital === null ? '-' : R(r.openingCapital));
-  put('Sales', R(r.sales)); put('Business expenses (incl. wages)', '-' + R(r.bizExp).replace('-', ''));
-  put('Warp bought', '-' + R(r.warp)); put('Weft bought', '-' + R(r.weft));
-  put('Stock change', R(r.stockChange)); put('Profit before drawings', R(r.profitBefore), true); y += 6;
-  doc.setDrawColor(21, 101, 192); doc.rect(m - 6, y - 14, W - 2 * m + 12, 76);
-  put('DRAWINGS - Family expenses', '-' + R(r.drawingsFamily)); put('DRAWINGS - Personal expenses', '-' + R(r.drawingsPersonal)); put('Total drawings', '-' + R(r.drawings), true); y += 14;
-  put('Profit after drawings', R(r.profitAfter), true);
-  put('Closing capital', r.closingCapital === null ? '-' : R(r.closingCapital), true); y += 10;
-  doc.setFont('helvetica', 'bold'); doc.text('Position at ' + fmtDate(sel.to > new Date().toISOString().slice(0, 10) ? new Date().toISOString().slice(0, 10) : sel.to), m, y); y += 18;
-  put('Cash and bank', R(r.position.cash)); put('Receivables', R(r.position.receivables)); put('Employee loans', R(r.position.empLoans));
-  put('Yarn in hand', R(r.position.yarn)); put('Grey cloth in hand', R(r.position.grey)); put('Bills due', '-' + R(r.position.bills).replace('-', ''));
-  put('Total position', R(r.position.total), true);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text('Personal loans given (' + R(r.position.personalLoans) + ') and fixed assets are not counted.', m, y + 6);
+  const D = n => (Math.round(n || 0) ? '-' : '') + 'Rs ' + Math.abs(Math.round(n || 0)).toLocaleString('en-IN');   // a deduction, always shown with a minus
+  const todayIso = new Date().toISOString().slice(0, 10), pos = sel.to > todayIso ? todayIso : sel.to;
+  let y = 46;
+  // ---- letterhead (same look as the receipts) ----
+  if(typeof BIZ_LOGO_PNG !== 'undefined' && typeof BIZ_LOGO_RATIO !== 'undefined'){
+    const lh = 44, lw = lh * BIZ_LOGO_RATIO; doc.addImage(BIZ_LOGO_PNG, 'PNG', (W - lw) / 2, y - 24, lw, lh); y += lh - 4;
+  } else { doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...NAVY); doc.text(biz.name || 'Ibrahim Weaving', W / 2, y + 4, { align: 'center' }); y += 22; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...SOFT);
+  if(biz.address){ doc.text(biz.address, W / 2, y, { align: 'center' }); y += 13; }
+  if(biz.phone){ doc.text('Phone: ' + biz.phone, W / 2, y, { align: 'center' }); y += 13; }
+  y += 6; doc.setDrawColor(...NAVY); doc.setLineWidth(1.6); doc.line(m, y, X2, y); doc.setLineWidth(0.4); doc.line(m, y + 3, X2, y + 3); y += 30;
+  // ---- title ----
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...NAVY); doc.text('YEAR REPORT', W / 2, y, { align: 'center' }); y += 20;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11.5); doc.setTextColor(...INK); doc.text(sel.label, W / 2, y, { align: 'center' }); y += 15;
+  doc.setFontSize(9); doc.setTextColor(...SOFT); doc.text('Prepared on ' + fmtDate(new Date().toISOString().slice(0, 10)), W / 2, y, { align: 'center' }); y += 28;
+  // ---- key figures ----
+  const kp = [['SALES', R(r.sales), INK], ['PROFIT AFTER DRAWINGS', R(r.profitAfter), r.profitAfter < 0 ? RED : GREEN], ['CLOSING CAPITAL', r.closingCapital === null ? '-' : R(r.closingCapital), NAVY]];
+  const cw = (X2 - m) / 3;
+  kp.forEach((k, i)=>{
+    const cx = m + cw * i + cw / 2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...SOFT); doc.text(k[0], cx, y, { align: 'center' });
+    doc.setFontSize(14); doc.setTextColor(...k[2]); doc.text(k[1], cx, y + 20, { align: 'center' });
+    if(i){ doc.setDrawColor(...LINE); doc.line(m + cw * i, y - 8, m + cw * i, y + 28); }
+  });
+  y += 50;
+  // ---- helpers ----
+  const heading = t=>{ doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...NAVY); doc.text(t.toUpperCase(), m, y); y += 5; doc.setDrawColor(...NAVY); doc.setLineWidth(0.8); doc.line(m, y, X2, y); doc.setLineWidth(0.4); y += 4; };
+  let zi = 0;
+  const row = (label, val, o = {})=>{
+    const h = o.big ? 24 : 19;
+    if(o.rule){ doc.setDrawColor(...INK); doc.setLineWidth(0.8); doc.line(m, y + 2, X2, y + 2); doc.setLineWidth(0.4); y += 2; zi = 0; }
+    if(!o.big && !o.rule && zi++ % 2 === 0){ doc.setFillColor(...ZEBRA); doc.rect(m, y, X2 - m, h, 'F'); }
+    doc.setFont('helvetica', o.bold ? 'bold' : 'normal'); doc.setFontSize(o.big ? 12.5 : 10.5);
+    doc.setTextColor(...(o.labelColor || INK)); doc.text(label, m + 8, y + h / 2 + 3.5);
+    doc.setTextColor(...(o.color || INK)); doc.text(val, X2 - 8, y + h / 2 + 3.5, { align: 'right' });
+    y += h;
+  };
+  const gap = n=>{ y += n; zi = 0; };
+  // ---- profit for the period ----
+  heading('Profit for the period');
+  row('Sales', R(r.sales), { bold: true });
+  row('Business expenses (including wages)', D(r.bizExp), { color: RED });
+  row('Warp bought', D(r.warp), { color: RED });
+  row('Weft bought', D(r.weft), { color: RED });
+  row('Stock change', R(r.stockChange), { color: r.stockChange < 0 ? RED : INK });
+  row('Profit before drawings', R(r.profitBefore), { bold: true, rule: true, color: r.profitBefore < 0 ? RED : GREEN });
+  gap(8);
+  row('Drawings \u2014 family expenses', D(r.drawingsFamily), { color: RED });
+  row('Drawings \u2014 personal expenses', D(r.drawingsPersonal), { color: RED });
+  row('Total drawings', D(r.drawings), { bold: true, rule: true, color: RED });
+  gap(8);
+  row('Profit after drawings', R(r.profitAfter), { bold: true, big: true, rule: true, color: r.profitAfter < 0 ? RED : GREEN });
+  gap(16);
+  // ---- capital ----
+  heading('Capital');
+  row('Opening capital', r.openingCapital === null ? '-' : R(r.openingCapital));
+  row('Add: profit after drawings', R(r.profitAfter), { color: r.profitAfter < 0 ? RED : INK });
+  row('Closing capital', r.closingCapital === null ? '-' : R(r.closingCapital), { bold: true, big: true, rule: true, color: NAVY });
+  gap(16);
+  // ---- position ----
+  heading('Financial position as at ' + fmtDate(pos));
+  row('Cash and bank', R(r.position.cash));
+  row('Receivables (money to receive)', R(r.position.receivables));
+  row('Employee loans', R(r.position.empLoans));
+  row('Yarn in hand', R(r.position.yarn));
+  row('Grey cloth in hand', R(r.position.grey));
+  row('Bills due', D(r.position.bills), { color: RED });
+  row('Total position', R(r.position.total), { bold: true, big: true, rule: true, color: NAVY });
+  gap(14);
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(...SOFT);
+  doc.text('Personal loans given (' + R(r.position.personalLoans) + ') and fixed assets are not counted in the position.', m, y);
+  if(r.notes && r.notes.length){ y += 12; r.notes.forEach(n=>{ doc.text('Note: ' + n, m, y, { maxWidth: X2 - m }); y += 11; }); }
+  // ---- monthly comparison (pages 2 and 3) ----
+  const months = fiscalMonthly(sel);
+  if(months.length >= 2){
+    const CH = { sales: NAVY, purchases: [214, 120, 40], expenses: [32, 140, 140], family: [130, 80, 160], personal: [150, 155, 175], received: GREEN };
+    const compact = n=>{ const a = Math.abs(n), sg = n < 0 ? '-' : '', t = (v, d)=> String(+v.toFixed(d)); return a >= 1e7 ? sg + t(a / 1e7, 1) + ' Cr' : a >= 1e5 ? sg + t(a / 1e5, 1) + ' L' : a >= 1e3 ? sg + Math.round(a / 1e3) + 'k' : sg + Math.round(a); };
+    const nice = v=>{ if(v <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; };
+    const newPage = (title)=>{
+      doc.addPage(); y = 48;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...NAVY); doc.text(title, m, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...SOFT); doc.text(sel.label, X2, y, { align: 'right' });
+      y += 8; doc.setDrawColor(...NAVY); doc.setLineWidth(1.2); doc.line(m, y, X2, y); doc.setLineWidth(0.4); y += 22;
+    };
+    // kind: 'bar' (clustered, negatives allowed) or 'line'. series: [{ name, color, vals, colorFn? }]
+    const chart = (title, kind, series, plotH)=>{
+      const n = months.length, x0 = m + 38, pw = X2 - x0 - 4;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INK); doc.text(title, m, y);
+      let lx = X2; doc.setFontSize(8);
+      series.slice().reverse().forEach(se=>{ if(!se.name) return; const tw = doc.getTextWidth(se.name); doc.setFont('helvetica', 'normal'); doc.setTextColor(...SOFT); doc.text(se.name, lx, y, { align: 'right' }); doc.setFillColor(...se.color); doc.rect(lx - tw - 11, y - 6, 7, 7, 'F'); lx -= tw + 22; });
+      y += 10;
+      const all = [].concat(...series.map(se=> se.vals)), mx = Math.max(0, ...all), mn = Math.min(0, ...all);
+      const top = nice(mx || 1), bot = mn < 0 ? -nice(-mn) : 0, span = top - bot, py = v=> y + plotH * (1 - (v - bot) / span);
+      const ticks = 4;
+      for(let i = 0; i <= ticks; i++){
+        const v = bot + span * i / ticks, gy = py(v);
+        doc.setDrawColor(...(Math.abs(v) < 1e-9 ? SOFT : [225, 228, 235])); doc.setLineWidth(Math.abs(v) < 1e-9 ? 0.7 : 0.4); doc.line(x0, gy, X2, gy);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SOFT); doc.text(compact(v), x0 - 4, gy + 2.4, { align: 'right' });
+      }
+      doc.setLineWidth(0.4);
+      const gw = pw / n, step = Math.max(1, Math.ceil(26 / gw));
+      if(kind === 'bar'){
+        const ns = series.length, bw = Math.min(16, gw * 0.78 / ns), zero = py(0);
+        months.forEach((_, i)=>{
+          const cx = x0 + gw * (i + 0.5), start = cx - bw * ns / 2;
+          series.forEach((se, k)=>{
+            const v = se.vals[i]; if(!v) return;
+            const c = se.colorFn ? se.colorFn(v) : se.color, yy = py(v);
+            doc.setFillColor(...c); doc.rect(start + bw * k, Math.min(yy, zero), bw - 0.6, Math.max(0.6, Math.abs(zero - yy)), 'F');
+          });
+        });
+      } else {
+        const se = series[0], pts = se.vals.map((v, i)=> [x0 + gw * (i + 0.5), py(v)]);
+        doc.setDrawColor(...se.color); doc.setLineWidth(1.6);
+        for(let i = 1; i < pts.length; i++) doc.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+        doc.setLineWidth(0.4); doc.setFillColor(...se.color);
+        pts.forEach((pt, i)=>{
+          doc.circle(pt[0], pt[1], 2.1, 'F');
+          if(n <= 14 || i % step === 0){ doc.setFont('helvetica', 'bold'); doc.setFontSize(6.8); doc.setTextColor(...INK); doc.text(compact(se.vals[i]), pt[0], pt[1] - 5, { align: 'center' }); }
+        });
+      }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...SOFT);
+      months.forEach((mo, i)=>{ if(i % step === 0) doc.text(mo.label, x0 + gw * (i + 0.5), y + plotH + 11, { align: 'center' }); });
+      y += plotH + 30;
+    };
+    const col = k=> months.map(r=> r[k]);
+    newPage('Monthly comparison');
+    chart('Sales vs purchases (warp + weft)', 'bar', [{ name: 'Sales', color: CH.sales, vals: col('sales') }, { name: 'Purchases', color: CH.purchases, vals: col('purchases') }], 120);
+    chart('Where the money went: business expenses, family and personal', 'bar', [{ name: 'Business expenses', color: CH.expenses, vals: col('expenses') }, { name: 'Family', color: CH.family, vals: col('family') }, { name: 'Personal', color: CH.personal, vals: col('personal') }], 120);
+    chart('Monthly result (sales less purchases and business expenses)', 'bar', [{ name: '', color: GREEN, vals: col('result'), colorFn: v=> v < 0 ? RED : GREEN }], 120);
+    chart('Receivables at month end (money still to receive)', 'line', [{ name: 'Receivables', color: NAVY, vals: col('receivables') }], 120);
+    // table
+    newPage('Month by month');
+    const cols = [['Month', 'l', 0.10], ['Sales', 'r', 0.14], ['Received', 'r', 0.14], ['Purchases', 'r', 0.14], ['Expenses', 'r', 0.13], ['Family', 'r', 0.11], ['Personal', 'r', 0.10], ['Receivables', 'r', 0.14]];
+    const tw = X2 - m; let cx = m; const cpos = cols.map(c=>{ const o = { x: cx, w: tw * c[2], a: c[1] }; cx += o.w; return o; });
+    const cell = (i, t, bold)=>{ const c = cpos[i]; doc.setFont('helvetica', bold ? 'bold' : 'normal'); if(c.a === 'r') doc.text(t, c.x + c.w - 6, y, { align: 'right' }); else doc.text(t, c.x + 6, y); };
+    const head = ()=>{ doc.setFillColor(...NAVY); doc.rect(m, y - 12, tw, 19, 'F'); doc.setFontSize(8); doc.setTextColor(255, 255, 255); cols.forEach((c, i)=> cell(i, c[0], true)); y += 20; };
+    const num = n=> Math.round(n || 0).toLocaleString('en-IN');
+    head(); doc.setFontSize(8);
+    months.forEach((r, i)=>{
+      if(y > H - 80){ doc.addPage(); y = 56; head(); }
+      if(i % 2 === 0){ doc.setFillColor(...ZEBRA); doc.rect(m, y - 11, tw, 17, 'F'); }
+      doc.setFontSize(8); doc.setTextColor(...INK);
+      cell(0, r.label, true); cell(1, num(r.sales)); cell(2, num(r.received)); cell(3, num(r.purchases)); cell(4, num(r.expenses)); cell(5, num(r.family)); cell(6, num(r.personal)); cell(7, num(r.receivables));
+      y += 17;
+    });
+    const sum = k=> months.reduce((t, r)=> t + (r[k] || 0), 0);
+    y += 3; doc.setDrawColor(...INK); doc.setLineWidth(0.8); doc.line(m, y - 11, X2, y - 11); doc.setLineWidth(0.4);
+    doc.setFontSize(8.5); doc.setTextColor(...NAVY);
+    cell(0, 'Total', true); cell(1, num(sum('sales')), true); cell(2, num(sum('received')), true); cell(3, num(sum('purchases')), true); cell(4, num(sum('expenses')), true); cell(5, num(sum('family')), true); cell(6, num(sum('personal')), true); cell(7, num(months[months.length - 1].receivables), true);
+    y += 16; doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(...SOFT);
+    doc.text('All amounts in Rs. Purchases = warp + weft bought. Receivables = closing balance of the last month. Expenses include wages.', m, y);
+  }
+  // ---- footer on every page ----
+  const pages = doc.getNumberOfPages();
+  for(let i = 1; i <= pages; i++){
+    doc.setPage(i); doc.setDrawColor(...LINE); doc.line(m, H - 40, X2, H - 40);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...SOFT);
+    doc.text((biz.name || 'Ibrahim Weaving') + ' \u2014 Year Report \u2014 ' + sel.label, m, H - 27); doc.text('Page ' + i + ' of ' + pages, X2, H - 27, { align: 'right' });
+  }
   doc.save('Year-Report-' + sel.label.replace(/[^A-Za-z0-9]+/g, '-') + '.pdf');
 }
