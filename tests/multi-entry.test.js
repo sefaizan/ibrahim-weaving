@@ -63,6 +63,17 @@ describe('loom cards', () => {
     const html = load(data).mbCardHtml('9');
     assert.doesNotMatch(html, /placeholder="\/16"/); assert.match(html, /class="mb-line"/); assert.doesNotMatch(html, /---/);
   });
+  test('loom checkboxes use the aligned grid in Multiple Entries and in Settings > Loom Assignments', () => {
+    assert.match(panels, /class="loom-pick-grid">\$\{looms\.map/); assert.match(read('js/shell.js'), /loom-pick-grid/); assert.match(read('js/shell.js'), /<label class="loom-pick">/);
+    assert.match(read('index.html'), /\.loom-pick-grid\{display:grid/);
+  });
+  test('name dropdowns get most of the row; the arrow has room (CSS, not inline widths)', () => {
+    const html = load(data).mbCardHtml('9'); assert.doesNotMatch(html, /style="flex:3"/);
+    assert.match(read('index.html'), /\.mb-rw \.sel-wrap\{flex:1 1 62%/); assert.match(read('index.html'), /\.sel-wrap \.sel-fake\{padding-right:46px\}/);
+  });
+  test('the Overview Period card is the compact variant', () => {
+    assert.match(read('js/overview.js'), /class="card ov-period-card">\s*<div class="card-head"><h2>Period<\/h2>/); assert.match(read('index.html'), /\.ov-period-card \.chip\{padding:5px 11px/);
+  });
   test('the card sits on the Production page, above Bulk Import', () => {
     assert.ok(panels.indexOf('${multiEntryCardHtml()}') < panels.indexOf('<h2>Bulk Import</h2>'));
     assert.ok(panels.indexOf('${multiEntryCardHtml()}') > panels.indexOf('id="addProduction"'));
