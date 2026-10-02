@@ -270,7 +270,7 @@ function overviewPanel(){
     ${remindersBanner()}
     ${beamsEndingCard()}
     ${backupNagBanner()}
-    <div class="card">
+    <div class="card ov-period-card">
       <div class="card-head"><h2>Period</h2><span id="monthBadge"></span></div>
       <div class="chip-row" id="ov_chips">
         <button type="button" class="chip" data-period="">All Time</button>

@@ -338,7 +338,7 @@ function loomAssignmentsSection(){
     return `<div class="card"><h2>Loom Assignments</h2><div class="empty">Add some Looms above first.</div></div>`;
   }
   const loomChecks = DATA.looms.map(l=>
-    `<label style="display:inline-flex;align-items:center;gap:6px;margin:0 14px 8px 0;font-weight:400">
+    `<label class="loom-pick">
       <input type="checkbox" class="la_loom_pick" value="${escHtml(l.name)}"> ${escHtml(l.name)}
     </label>`).join('');
   const rows = DATA.looms.map(l=>{
@@ -354,7 +354,7 @@ function loomAssignmentsSection(){
       <div class="card-head"><h2>Loom Assignments</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Set which two employees usually run each loom. Picking a loom in Log Production will auto-fill these two — still fully editable there. A 3rd employee (a fill-in for someone on leave, or an outside worker) is handled separately on the entry form as before, and isn't part of this assignment.</p>
       <div class="group-label vo-hide" style="margin-top:0">Quick Assign</div>
-      <div class="vo-hide" style="margin-bottom:10px">${loomChecks}</div>
+      <div class="vo-hide loom-pick-grid" style="margin-bottom:10px">${loomChecks}</div>
       <div class="grid cols-2 vo-hide">
         ${employeeSelectField('Employee 1','la_qa_e1')}
         ${employeeSelectField('Employee 2','la_qa_e2')}

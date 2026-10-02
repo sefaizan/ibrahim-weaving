@@ -117,7 +117,7 @@ function mbGroups(){
 function mbCardHtml(name){
   const a = loomAssignmentFor(name) || {};
   const eo = sel => '<option value="">—</option>' + DATA.employees.filter(e=>e.active!==false).map(e=>`<option${e.name===sel?' selected':''}>${escHtml(e.name)}</option>`).join('');
-  const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1" style="flex:3">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr" style="flex:2;min-width:0"></div>`;
+  const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr"></div>`;
   return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
     <label>Gzana (meters and sixteenths)</label>
@@ -136,7 +136,7 @@ function multiEntryCardHtml(){
         ${selectField('Quality (applies to all looms)','mb_quality',DATA.qualities)}
       </div>
       <div class="group-label">Looms</div>
-      <div class="mb-picks">${looms.map(n=>`<label class="mb-lk"><input type="checkbox" class="mb_pk" value="${escHtml(n)}"> ${escHtml(n)}</label>`).join('')}</div>
+      <div class="loom-pick-grid">${looms.map(n=>`<label class="loom-pick"><input type="checkbox" class="mb_pk" value="${escHtml(n)}"> ${escHtml(n)}</label>`).join('')}</div>
       <div class="chip-row mb-quick"><button type="button" class="chip" data-mb-all>All</button>${mbGroups().map((g,i)=>`<button type="button" class="chip" data-mb-grp="${i}">${escHtml(g.label)}</button>`).join('')}<button type="button" class="chip" data-mb-none>None</button></div>
       <div id="mb_cards">${looms.map(mbCardHtml).join('')}</div>
       <div class="calc-amount" id="mb_totals">Total Gzana: — · Assigned: — · Diff: —</div>
