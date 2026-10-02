@@ -272,3 +272,19 @@ GOOD TO KNOW
       buttons follow the same rules as the old ones (hidden on view-only phones and where a role may not add in Wages; a change that needs
       approval becomes a proposal). New file: js/wages-ui.js. TO GO BACK: put the 3.17.37 copies of index.html, service-worker.js,
       js/panels-wages-receipts.js, js/wiring.js and js/view-only.js back and delete js/wages-ui.js.
+
+YEAR REPORT (Tools > Year Report, v3.17.59)
+  - Periods: the FIRST period runs from the very first entry (Dec 2025) to 31 Dec 2026 and has no opening position. From 2027 each year is
+    Jan-Dec. Every period has quarter chips (Q1-Q4; the first period also has Q4 2025 and Q1-Q4 2026) and a Download PDF button.
+  - Stock valuation (do it at each quarter end and on 31 Dec): date, yarn value (warp + weft together, purchase price), bills due, and the
+    rate per meter for each quality. Grey cloth meters come from the app (produced less sold); only the rate is typed.
+  - Opening position (on 1 Jan of each year from 2027): cash and bank, receivables per client, yarn, grey cloth (meters x rate per quality),
+    employee loans per employee, bills due. The total is that year's opening capital. Fixed assets and personal loans are never included.
+  - The maths: profit before drawings = sales - (business expenses incl. wages + warp + weft) + closing stock - opening stock. Drawings
+    (family + personal expenses) are their own boxed line. Profit after drawings = before - drawings. Closing capital = opening capital +
+    profit after drawings. The position (cash + receivables + employee loans + yarn + grey cloth - bills due) is shown with a Check line
+    (position - closing capital): about 0 means everything is entered. A quarter opens with the capital the previous quarter closed with.
+  - On 1 Jan 2027, after saving the opening position, the page shows the app's own position at 31 Dec 2026 next to management's figure
+    and the difference. Enter a stock valuation dated 31 Dec 2026 first so that comparison is fair.
+  - Without a valuation on or before a period's last day, stock counts as 0 and the page says so (so early quarters of the first period show
+    low or negative profit until valuations are added). Data is saved with the Tools section; nothing to change in the Firebase console.
