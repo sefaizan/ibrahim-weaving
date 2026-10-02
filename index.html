@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-44-wage-paisa">
+<meta name="app-build" content="2026-10-02-release3-v3-17-45-add-device">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1020,6 +1020,15 @@
   html[dir="rtl"] input[type="number"], html[dir="rtl"] input[type="date"], html[dir="rtl"] input[type="time"]{ direction:ltr; text-align:right; }
   html[dir="rtl"] .form-actions{ padding-right:10px; padding-left:74px; }
   html[dir="rtl"] .fab-backup{ right:auto; left:16px; }
+
+  /* Add-a-device checklist (Cloud Sync) */
+  .adddev{ background:var(--rust-tonal); border-radius:14px; padding:12px 14px; margin-top:12px; }
+  .ad-title{ font-weight:800; font-size:13.5px; color:var(--rust-deep); margin-bottom:6px; }
+  .adddev ol{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  .ad-step{ display:flex; align-items:center; gap:10px; font-size:14px; color:var(--ink-soft); }
+  .ad-n{ flex:0 0 24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; background:var(--paper-dim); color:var(--ink-soft); }
+  .ad-step.done{ color:var(--ink); } .ad-step.done .ad-n{ background:var(--rust); color:#fff; }
+  .ad-step.now{ color:var(--ink); font-weight:700; } .ad-step.now .ad-n{ background:var(--rust-deep); color:#fff; box-shadow:0 0 0 4px var(--rust-tonal); }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1050,7 +1059,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.44</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.45</span></span>
     </div>
   </header>
 
