@@ -2026,8 +2026,8 @@ function cloudSyncSection(){
       <details id="cloudJoinEnc" style="${cloudIsOwner() ? '' : 'display:none;'}margin-top:14px;border-top:1px solid var(--field-border);padding-top:12px">
         <summary style="cursor:pointer;font-weight:600;min-height:36px">Advanced: use another device\'s encryption key</summary><p class="note" style="display:none">${encEnabled() ? 'Adopt a different device\'s key' : 'Join an already-encrypted cloud copy'}</p>
         <p class="note" style="margin:0 0 8px">If the cloud copy is encrypted (saved by a device with Encrypt Data on), this device needs that same key before it can read it — enter the PIN used on that other device, plus this device's own current PIN and recovery answer:</p>
-        <input type="password" id="cloudJoinSharedPin" placeholder="PIN from the other device" style="width:100%;margin-bottom:8px" inputmode="numeric">
-        <input type="password" id="cloudJoinLocalPin" placeholder="This device's current PIN" style="width:100%;margin-bottom:8px" inputmode="numeric">
+        <input type="password" id="cloudJoinSharedPin" placeholder="PIN used on the OTHER device" style="width:100%;margin-bottom:8px" inputmode="numeric">
+        <input type="password" id="cloudJoinLocalPin" placeholder="This device's own PIN" style="width:100%;margin-bottom:8px" inputmode="numeric">
         <input type="text" id="cloudJoinLocalAnswer" placeholder="This device's recovery answer" style="width:100%;margin-bottom:8px">
         <button class="ghost" id="cloudJoinBtn" type="button" style="width:100%">Join Encrypted Sync</button>
         <p class="note" id="cloudJoinStatus" style="margin:6px 0 0"></p>

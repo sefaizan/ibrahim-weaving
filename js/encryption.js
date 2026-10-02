@@ -192,7 +192,13 @@ async function joinEncryptedSync(sharedPin, localPin, localAnswer, remote){
   if(!(await checkRecoveryAnswer(localAnswer))) return "This device's recovery answer is incorrect.";
   let dek;
   try{ dek = await encUnwrap(remote.keyWrap, sharedPin, remote.iter || ENC_ITER); }
-  catch(e){ return "Couldn't unlock the shared key — check the PIN from the other device."; }
+  catch(e){
+    // The cloud copy of the key is wrapped with the PIN of whichever phone synced last, which may be this one
+    // (the PINs are allowed to differ in length, e.g. 4 digits on one phone and 6 on another). Both are PINs the
+    // person typed themselves, so trying this phone's PIN as a second chance weakens nothing.
+    try{ dek = await encUnwrap(remote.keyWrap, localPin, remote.iter || ENC_ITER); }
+    catch(e2){ return "Couldn't unlock the shared key \u2014 check the PIN from the other device (its PIN can be a different length). If that PIN was changed recently, open the app on that device, tap Sync Now, then try again."; }
+  }
   let vaultJson;
   try{ vaultJson = await encOpenWith(dek, remote.vault); JSON.parse(vaultJson); }
   catch(e){ return 'Shared key did not match the cloud keys.'; }

@@ -91,7 +91,7 @@ function viewOnlySaveBlocked(){
 // are deliberately not listed.
 const VIEW_ONLY_WRITE_SELECTOR = [
   '.form-actions',
-  '[data-edit]', '[data-del]', '[data-finish]', '[data-add]', '[data-cancel]', '[data-toggle-active]',
+  '[data-edit]', '[data-del]', '[data-finish]', '[data-add]', '[data-cancel]:not(#pinShowChange):not(#pinShowDisable)', '[data-toggle-active]',
   '[data-move]', '[data-cheque]', '[data-replace-cheque]', '[data-link-replacement]', '[data-rh-edit]', '[data-rh-del]',
   '[data-l-ok]', '[data-l-toggle]', '[data-l-return]', '[data-l-confirm]', '[data-l-cancel]', '[data-l-box]',
   '[data-toggle-form]', '[data-form-body]', '[data-snap-restore]', '[data-quick-add]', '[data-wage-add]', '[data-undo-id]',
