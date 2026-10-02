@@ -306,3 +306,9 @@ POLISH (v3.17.61)
 WAGES FULL TABLES (v3.17.62)
   - Wages > "Full tables (all columns)": the Employee column is no longer pinned; both tables scroll sideways as one block and use the same
     table wrapper as the other pages. TO GO BACK: put the 3.17.61 copies of index.html, service-worker.js, package.json, js/wages-ui.js back.
+
+YEAR REPORT AUTO-FILL (v3.17.63)
+  - Opening position: Receivables per client, Grey cloth in hand (meters, plus the rate from the latest valuation) and Employee loans per employee
+    are filled in from the app's own figures at the end of the day before the opening date. Everything stays editable; changing the date refreshes
+    only the figures you have not typed over. Grey cloth lists only qualities that have stock on that day. Once an opening is saved, its saved
+    figures are shown as they are. TO GO BACK: put the 3.17.62 copies of index.html, service-worker.js, package.json, js/fiscal.js back.
