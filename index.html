@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-57-form-align">
+<meta name="app-build" content="2026-10-02-release3-v3-17-58-more-details">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1041,7 +1041,7 @@
   input[type="radio"]{ border-radius:50%; }
   label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ font-weight:500; }
 
-  /* ===== v3.17.57 — Form beautification (CSS-only, final override) ===== */
+  /* ===== v3.17.58 — Form beautification (CSS-only, final override) ===== */
   .card > h2:first-child{ display:flex; align-items:center; gap:10px; font-size:17px; font-weight:800; color:var(--rust-deep); }
   .card > h2:first-child::before{ content:""; width:4px; height:20px; border-radius:4px; background:var(--rust); }
   .grid{ align-items:start; }
@@ -1062,7 +1062,7 @@
     .fab-backup{ bottom:calc(92px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px; }
   }
 
-  /* v3.17.57 — rows share one label line + one control line + one extras line, so a wrapped label
+  /* v3.17.58 — rows share one label line + one control line + one extras line, so a wrapped label
      (e.g. "Cheque Owner Name (optional)") or Today/Yesterday chips never push neighbours out of line */
   .grid{ row-gap:0; margin-bottom:-14px; }
   .grid > *{ margin-bottom:14px; }
@@ -1071,6 +1071,16 @@
   .grid > .field > :nth-child(n+3){ grid-row:3; grid-column:1; }
   .grid > .field > .qd + .field-err{ margin-top:44px; }
   .grid > .field > label{ align-self:end; }
+
+  /* v3.17.58 — "More details" fold */
+  details.more-fold{ margin:14px 0 0; border:1px dashed var(--line); border-radius:12px; padding:0 12px; background:var(--paper-dim); }
+  details.more-fold > summary{ cursor:pointer; list-style:none; min-height:44px; display:flex; align-items:center; font-size:13.5px; font-weight:700; color:var(--rust-deep); }
+  details.more-fold > summary::-webkit-details-marker{ display:none; }
+  details.more-fold > summary::after{ content:"▾"; margin-inline-start:auto; transition:transform .15s; }
+  details.more-fold[open] > summary::after{ transform:rotate(180deg); }
+  details.more-fold[open]{ padding-bottom:12px; background:transparent; }
+  details.more-fold > div:not(.grid){ margin-top:0 !important; }
+  details.more-fold .group-label{ display:none; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1101,7 +1111,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.57</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.58</span></span>
     </div>
   </header>
 
