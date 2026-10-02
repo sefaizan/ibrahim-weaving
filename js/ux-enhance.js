@@ -13,7 +13,7 @@
     REQ.forEach(id => {
       const el = (root || document).querySelector('#' + id);
       const lab = el && el.closest('.field') && el.closest('.field').querySelector('label');
-      if(lab && !lab.dataset.req){ lab.dataset.req = '1'; lab.insertAdjacentHTML('beforeend', ' <span class="req" aria-hidden="true">*</span>'); }
+      if(lab && !lab.dataset.req && !/optional|اختیاری/i.test(lab.textContent)){ lab.dataset.req = '1'; lab.insertAdjacentHTML('beforeend', ' <span class="req" aria-hidden="true">*</span>'); }
     });
   }
   function clearErr(box){ const e = box && box.querySelector('.field-err'); if(e) e.remove(); }
