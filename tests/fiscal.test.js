@@ -153,3 +153,20 @@ describe('year-end carry-over (v3.17.69)', () => {
     assert.match(h, /2027 \u2014 closing capital/);
   });
 });
+
+describe('dropdown pickers (v3.17.70)', () => {
+  test('years and quarters are dropdowns, not buttons, newest year first, so 50 years still fit on one line', () => {
+    load();
+    const h = run('fiscalPanel()');
+    assert.match(h, /id="fy_period"/); assert.match(h, /id="fy_q"/);
+    assert.doesNotMatch(h, /data-fy-period|data-fy-q|data-fy-open/);
+    assert.doesNotMatch(run('fiscalPanel()'), /id="fy_open"/);
+    assert.ok(h.indexOf('>2027<') < h.indexOf('First period'));
+    assert.equal(j(run('fiscalPeriods(2076)')).length, 51);
+  });
+  test('the page opens on the latest period that has started, not the oldest', () => {
+    load();
+    const s = j(run('(function(){ const x = fiscalSelected(); return { id: x.p.id, n: x.ps.length }; })()'));
+    assert.ok(s.n >= 2); assert.equal(s.id, new Date().getFullYear() >= 2027 ? String(Math.max(2027, new Date().getFullYear())) : 'first');
+  });
+});
