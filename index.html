@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-48-glance-tiles">
+<meta name="app-build" content="2026-10-02-release3-v3-17-49-checkbox-size">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1035,6 +1035,11 @@
   .ov-glance .ov-kpi.k-stock{ border-left-color:var(--rust-deep); }
   .ov-glance .ov-kpis-q .ov-kpi:last-child:nth-child(odd){ grid-column:1 / -1; }
   .ov-glance .ov-kpi.k-stock .label{ font-size:12px; font-weight:700; color:var(--ink); }
+
+  /* Checkboxes / radios keep their natural size (the 44px form-field rule must not stretch them) */
+  input[type="checkbox"], input[type="radio"]{ width:20px; height:20px; min-height:0; padding:0; flex:none; border-radius:5px; accent-color:var(--rust); cursor:pointer; box-shadow:none; }
+  input[type="radio"]{ border-radius:50%; }
+  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ font-weight:500; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1065,7 +1070,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.48</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.49</span></span>
     </div>
   </header>
 
