@@ -44,6 +44,7 @@ const TABS = [
   {id:'weft', label:'Weft (Bana)', icon:'texture', group:'Materials'},
   {id:'warpbeams', label:'Warp (Tana) Beam', icon:'inventory_2', group:'Materials'},
   {id:'checkpoints', label:'Cash Checkpoints', icon:'savings', group:'Tools'},
+  {id:'fiscal', label:'Year Report', icon:'assessment', group:'Tools'},
   {id:'graphs', label:'Graphs', icon:'monitoring', group:'Tools'},
   {id:'inbox', label:'Approvals', icon:'inbox', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
   {id:'audit', label:'Audit', icon:'monitoring', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
@@ -740,6 +741,8 @@ async function ensureDataDefaults(){
   if(!DATA.loomAssignments) DATA.loomAssignments = [];
   if(!DATA.wageRateHistory) DATA.wageRateHistory = {};
   if(!DATA.businessInfo) DATA.businessInfo = {};
+  if(!Array.isArray(DATA.stockValuations)) DATA.stockValuations = [];          // Year Report (js/fiscal.js)
+  if(!DATA.fiscalOpenings || typeof DATA.fiscalOpenings !== 'object' || Array.isArray(DATA.fiscalOpenings)) DATA.fiscalOpenings = {};
   // One-time migration: wage rates used to be a single flat "current rate" per quality
   // (DATA.wageRates), applied to ALL historical production regardless of date — so updating
   // a rate today silently rewrote already-settled wages for past months. Rates now have a

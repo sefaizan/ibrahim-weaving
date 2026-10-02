@@ -9,7 +9,7 @@ function renderPanel(id){
     expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel, ownerloans: ownerLoansPanel,
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
     loans: loansPanel, ratecalc: ratecalcPanel,
-    checkpoints: checkpointsPanel, settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
+    checkpoints: checkpointsPanel, fiscal: typeof fiscalPanel === 'function' ? fiscalPanel : () => '', settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
     inbox: typeof proposalsInboxPanel === 'function' ? proposalsInboxPanel : () => '', // owner only (js/proposals.js)
     audit: typeof auditPanel === 'function' ? auditPanel : () => '', // owner only (js/audit.js)
   };
@@ -1255,6 +1255,7 @@ function wirePanel(id){
        rc_picks:'picks', rc_weftCount:'weftCount', rc_weftRate:'weftRate', rc_pickRate:'pickRate', rc_extra:'extra'},
       recalc);
   }
+  if(id==='fiscal' && typeof fiscalWire === 'function') fiscalWire();
   if(id==='checkpoints'){
     document.getElementById('saveOpening').onclick = async ()=>{
       DATA.openingBalance = Number(v('ob')||0); await save(); switchTab('checkpoints');

@@ -160,7 +160,7 @@ const PERM_ACTION_WORDS = { a: 'add entries', e: 'change entries', d: 'delete en
 const PERM_ALL_TOTALS = ['production', 'reference', 'sales', 'recovery', 'expenses', 'wages', 'loans', 'family', 'materials']; // what Overview / Graphs add up
 // Which section(s) a drawer tab needs to be seen. '*' = the whole-business pages.
 const PERM_TAB_SECTIONS = {
-  graphs: '*', // (overview is decided card by card: permsOverviewAllowed)
+  graphs: '*', fiscal: '*', // (overview is decided card by card: permsOverviewAllowed)
   production: ['production'], warpbeams: ['production'],
   sale: ['sales'], recovery: ['recovery'], expense: ['expenses'], wages: ['wages'], loans: ['loans'],
   family: ['family'], personal: ['family'], personalloans: ['family'],
