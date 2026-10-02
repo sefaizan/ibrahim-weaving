@@ -100,8 +100,39 @@
     });
   }
 
+  /* ---- 1b. rarely-used optional fields tucked under "More details" (opens itself when they hold data) ---- */
+  function hasVal(box){ return $$('input,select,textarea', box).some(e => e.type==='checkbox' ? e.checked : (e.value||'').trim() !== ''); }
+  function foldFields(root, ids, title, label){
+    const first = root.querySelector('#' + ids[0]); if(!first || first.closest('.more-fold')) return;
+    const fields = ids.map(i => { const e = root.querySelector('#' + i); return e && e.closest('.field'); }).filter(Boolean);
+    if(!fields.length) return;
+    const lastGrid = fields[fields.length-1].closest('.grid');
+    const det = document.createElement('details'); det.className = 'more-fold';
+    det.innerHTML = '<summary>' + title + '</summary><div class="grid cols-2"></div>';
+    lastGrid.parentNode.insertBefore(det, lastGrid.nextSibling);
+    const g = det.querySelector('.grid');
+    fields.forEach(f => { const old = f.parentNode; g.appendChild(f); if(old && old.classList.contains('grid') && !old.querySelector('.field')) old.remove(); });
+    /* empty spacer grids left behind */
+    $$('.grid', root).forEach(x => { if(!x.children.length || (x.children.length===1 && x.firstElementChild.matches('div:empty'))) x.remove(); });
+  }
+  function foldBlock(root, anchorId, title){
+    const a = root.querySelector('#' + anchorId); if(!a || a.closest('.more-fold')) return;
+    const blk = a.parentNode; if(!blk || blk.matches('.card,.panel')) return;
+    const det = document.createElement('details'); det.className = 'more-fold';
+    det.innerHTML = '<summary>' + title + '</summary>';
+    blk.parentNode.insertBefore(det, blk); det.appendChild(blk);
+  }
+  function autoOpen(root){
+    $$('details.more-fold', root).forEach(d => { if(!d.open && hasVal(d)) d.open = true; });
+    const rows = root.querySelector('#r_chequeRows');
+    const cf = rows && rows.closest('.more-fold'); if(cf && rows.children.length) cf.open = true;
+  }
+
   function enhance(){
     const root = panels(); if(!root) return;
+    foldFields(root, ['s_inv','s_dyeing'], 'More details — invoice no, dyeing');
+    foldBlock(root, 'r_chequeRows', '+ Cheques (optional)');
+    autoOpen(root);
     markRequired(root);
     $$('.log-scroll', root).forEach(addLogBar);
     $$('input[type="date"]', root).forEach(addDateChips);
@@ -113,6 +144,7 @@
     const root = panels(); if(!root) return;
     new MutationObserver(sched).observe(root, {childList:true, subtree:true});
     enhance();
+    root.addEventListener('click', () => setTimeout(() => autoOpen(root), 200));
 
     /* ---- 7. Enter = next field, last field = save ---- */
     root.addEventListener('keydown', e => {
