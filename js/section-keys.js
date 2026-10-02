@@ -341,6 +341,21 @@ function skCodeBoxHtml(email, code){
     </div>
     <div class="note" style="margin:6px 0 0">New code: the old one stops working and they must type the new one.</div>`;
 }
+// The code shown must really open the bundle in the cloud. If it does not (the bundle was made with an older
+// secret, or an older code), publish the bundle again with the code being shown. Never throws.
+async function skEnsureBundleOpens(db, ring, email, a, code){
+  try{
+    const snap = await db.collection('keys').doc(email).get();
+    const d = snap.exists ? snap.data() : null;
+    if(d && d.bundle){
+      try{ await encOpenWith(await skCodeKey(code, bytesFromB64(d.salt), d.iter || SK_ITER), d.bundle); return true; }catch(e){}
+    }
+    const entry = ring.pub && ring.pub[email];
+    if(!entry || !entry.s || !entry.s.length) return false;
+    await skPublishBundle(db, ring, email, skCodeVer(a), entry.s.filter(sec=> ring.s[sec]));
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
 async function skPeopleCode(box, email){
   const el = cloudPeopleFind(box, 'data-cp-codebox', email);
   if(!el) return;
@@ -356,7 +371,9 @@ async function skPeopleCode(box, email){
     await skReconcile(db, rec);
     const ring = await skRingLoad();
     if(!(ring.pub && ring.pub[email])){ el.innerHTML = '<p class="note" style="margin:0">Nothing to unlock yet: their role does not include any section (or their approval has ended).</p>'; return; }
-    el.innerHTML = skCodeBoxHtml(email, await skAccessCode(ring, email, skCodeVer(a)));
+    const shownCode = await skAccessCode(ring, email, skCodeVer(a));
+    await skEnsureBundleOpens(db, ring, email, a, shownCode);
+    el.innerHTML = skCodeBoxHtml(email, shownCode);
     const copy = el.querySelector('[data-cp-codecopy]');
     if(copy) copy.onclick = async ()=>{ try{ await navigator.clipboard.writeText(copy.getAttribute('data-cp-codeval')); copy.textContent = 'Copied'; }catch(e){ copy.textContent = 'Copy failed'; } };
     const fresh = el.querySelector('[data-cp-newcode]');
