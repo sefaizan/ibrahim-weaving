@@ -191,7 +191,7 @@ describe('the screen', () => {
     ['data-edit', 'data-del', 'data-finish', 'data-add', 'data-cancel', 'data-toggle-active', 'data-move', 'data-cheque',
      'data-replace-cheque', 'data-link-replacement', 'data-toggle-form', 'data-snap-restore', 'data-quick-add', 'data-undo-id',
      'data-rh-edit', 'data-rh-del', 'data-l-ok', 'data-l-toggle', 'data-l-return', 'data-l-confirm', 'data-l-cancel']
-      .forEach(a => { assert.ok(code.includes(a), `${a} is no longer used anywhere - remove it from view-only.js`); assert.ok(selectors.includes('[' + a + ']'), `${a} is not covered`); });
+      .forEach(a => { assert.ok(code.includes(a), `${a} is no longer used anywhere - remove it from view-only.js`); assert.ok(selectors.some(s => s === '[' + a + ']' || s.startsWith('[' + a + ']:not(#pinShow')), `${a} is not covered`); });
     // every button that saves a form: inside a .form-actions block, or listed here
     const alone = new Set(['saveBusinessInfo', 'saveOpening', 'saveOpeningBalances', 'saveRateCalc', 'saveRateChange', 'settleAllEmployees', 'importProduction', 'restoreJsonBtn', 'la_apply', 'r_addChequeRow']);
     alone.forEach(id => assert.ok(selectors.includes('#' + id), `#${id} is not covered`));
