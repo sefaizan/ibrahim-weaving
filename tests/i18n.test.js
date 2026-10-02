@@ -56,7 +56,8 @@ describe('it can never change the ledger', () => {
     const code = src.replace(/\/\*[\s\S]*?\*\//, '').replace(/\/\/.*$/gm, '');
     assert.ok(!/\bDATA\b/.test(code), 'must not touch DATA');
     assert.ok(!/\bsave\s*\(/.test(code), 'must not call save()');
-    assert.ok(!/cloud|firebase|firestore/i.test(code), 'must not touch the cloud');
+    const noText = code.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, '""'); // dictionary wording may say "Cloud"
+    assert.ok(!/cloud|firebase|firestore/i.test(noText), 'must not touch the cloud');
   });
   test('the choice is kept only in this phone\'s storage under its own key', () => {
     assert.match(src, /const I18N_KEY = 'khata-lang'/);
