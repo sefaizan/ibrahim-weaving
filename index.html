@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-v3-17-56-form-polish">
+<meta name="app-build" content="2026-10-02-release3-v3-17-57-form-align">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1041,7 +1041,7 @@
   input[type="radio"]{ border-radius:50%; }
   label:has(> input[type="checkbox"]), label:has(> input[type="radio"]){ font-weight:500; }
 
-  /* ===== v3.17.56 — Form beautification (CSS-only, final override) ===== */
+  /* ===== v3.17.57 — Form beautification (CSS-only, final override) ===== */
   .card > h2:first-child{ display:flex; align-items:center; gap:10px; font-size:17px; font-weight:800; color:var(--rust-deep); }
   .card > h2:first-child::before{ content:""; width:4px; height:20px; border-radius:4px; background:var(--rust); }
   .grid{ align-items:start; }
@@ -1053,7 +1053,6 @@
   .qd{ margin-top:8px; }
   .qd button{ background:var(--rust-tonal); color:var(--rust-deep); font-weight:700; }
   .qd button:active{ background:var(--rust); color:#fff; }
-  .grid + .grid{ margin-top:14px !important; }
   .form-actions{ gap:10px; }
   .form-actions button.primary{ border-radius:14px; min-height:50px; font-size:15px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.18); }
   @media (max-width:720px){
@@ -1062,6 +1061,16 @@
     html[dir="rtl"] .form-actions{ padding-left:10px; }
     .fab-backup{ bottom:calc(92px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px; }
   }
+
+  /* v3.17.57 — rows share one label line + one control line + one extras line, so a wrapped label
+     (e.g. "Cheque Owner Name (optional)") or Today/Yesterday chips never push neighbours out of line */
+  .grid{ row-gap:0; margin-bottom:-14px; }
+  .grid > *{ margin-bottom:14px; }
+  .grid + .grid{ margin-top:14px !important; }
+  .grid > .field{ display:grid; grid-row:span 3; grid-template-rows:subgrid; row-gap:0; align-content:start; }
+  .grid > .field > :nth-child(n+3){ grid-row:3; grid-column:1; }
+  .grid > .field > .qd + .field-err{ margin-top:44px; }
+  .grid > .field > label{ align-self:end; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1092,7 +1101,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.56</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.57</span></span>
     </div>
   </header>
 
