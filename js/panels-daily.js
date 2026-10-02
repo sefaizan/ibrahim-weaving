@@ -458,6 +458,29 @@ function recoveryByClientInner(){
     : `<div class="empty">No payments received ${cur.from?'in this period':'yet'}.</div>`;
   return `<div class="wg-chips" style="margin-bottom:12px">${chips}</div>${body}`;
 }
+// What a client still owes, as the Recovery page's Client-wise Breakdown works it out: sales - received -
+// bounced. `exceptId` leaves one payment out, so editing it does not count that payment twice.
+function clientOutstanding(name, exceptId){
+  if(!name) return {receivable:0, bounced:0};
+  const sales = activeSaleRows().filter(r=>r.client===name).reduce((t,r)=>t+(Number(r.amount)||0),0);
+  const mine = DATA.recovery.filter(r=>r.client===name && r.id!==exceptId);
+  const received = mine.reduce((t,r)=>t+recoveryReceivableAmount(r),0);
+  const bounced = mine.reduce((t,r)=>t+recoveryBouncedAmount(r),0);
+  return {receivable: sales - received - bounced, bounced};
+}
+// The small line under the Client box of the payment form: what is outstanding, plus one-tap "fill" buttons.
+function recoveryClientInfoHtml(name, exceptId){
+  if(!name) return '';
+  const o = clientOutstanding(name, exceptId), r = o.receivable;
+  const money = x => fmtRs(Math.abs(x));
+  let line;
+  if(r > 0.004) line = `<span class="rc-owe">Outstanding <b>${money(r)}</b></span>`;
+  else if(r < -0.004) line = `<span class="rc-adv">Paid ahead <b>${money(r)}</b></span>`;
+  else line = `<span>Nothing outstanding</span>`;
+  if(o.bounced > 0.004) line += ` · <span class="rc-owe">Bounced <b>${money(o.bounced)}</b></span>`;
+  const fill = r > 0.004 ? `<div class="rc-fill"><span>Fill ${money(r)} as</span><button type="button" class="ghost" data-rfill="bank">Bank</button><button type="button" class="ghost" data-rfill="cash">Cash</button></div>` : '';
+  return `<div class="rc-line">${line}</div>${fill}`;
+}
 function recoveryByClientCardHtml(){
   if(!DATA.recovery.length) return '';
   return `<div class="card" id="recByClient"><h2>Received by Client</h2><div id="recByClientBody">${recoveryByClientInner()}</div></div>`;
@@ -507,6 +530,7 @@ function recoveryPanel(){
       ${field('Time','r_time','time',`value="${nowStr()}"`)}
       ${clientSelectField('Client','r_client')}
     </div>
+    <div id="r_clientInfo" class="rc-info" hidden></div>
     <div class="grid cols-2" style="margin-top:12px">
       ${field('Bank Transfer Amount (Rs)','r_bank','number','placeholder="0"')}
       <div></div>

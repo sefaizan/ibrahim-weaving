@@ -476,12 +476,22 @@ function wirePanel(id){
     // Live total across Cash + Bank Transfer + all cheque rows, so the whole payment's
     // combined value is visible before saving — nothing here is auto-filled into a single
     // "Amount" field anymore, since the total is now genuinely a sum of separate parts.
+    let outstandingNow = null; // the chosen client's outstanding amount (null until a client is picked)
     const updateTotalPreview = ()=>{
       const chequeTotal = chequeRows.reduce((s,c)=>s+(Number(c.amount)||0),0);
-      const total = Number(v('r_cash')||0) + Number(v('r_bank')||0) + chequeTotal;
-      document.getElementById('r_totalPreview').textContent = `Total: ${fmtRs2(total)}`;
+      const cash = Number(v('r_cash')||0), bank = Number(v('r_bank')||0);
+      const total = cash + bank + chequeTotal;
+      const parts = [cash ? `Cash ${fmtRs(cash)}` : '', bank ? `Bank ${fmtRs(bank)}` : '', chequeTotal ? `Cheques ${fmtRs(chequeTotal)}` : ''].filter(Boolean);
+      let html = `Total: ${fmtRs2(total)}`;
+      if(parts.length > 1) html += `<div class="rc-split">${parts.join(' · ')}</div>`;
+      if(total > 0 && outstandingNow != null){
+        const left = outstandingNow - total;
+        html += `<div class="rc-split">${left > 0.004 ? `Still outstanding after this: ${fmtRs(left)}` : left < -0.004 ? `Paid ahead after this: ${fmtRs(-left)}` : 'Settles this client in full ✓'}</div>`;
+      }
+      document.getElementById('r_totalPreview').innerHTML = html;
     };
-    const addChequeRow = ()=>{ chequeRows.push({id:uid(), amount:'', chequeNo:'', bank:'', owner:'', chequeDate:'', status:'Pending'}); renderChequeRows(); updateTotalPreview(); };
+    // A new cheque starts with the bank and owner of the one above it (several cheques usually come from the same place).
+    const addChequeRow = ()=>{ const last = chequeRows[chequeRows.length-1]; chequeRows.push({id:uid(), amount:'', chequeNo:'', bank:last?last.bank||'':'', owner:last?last.owner||'':'', chequeDate:'', status:'Pending'}); renderChequeRows(); updateTotalPreview(); };
     document.getElementById('r_addChequeRow').onclick = addChequeRow;
     document.getElementById('r_cash').addEventListener('input', updateTotalPreview);
     document.getElementById('r_bank').addEventListener('input', updateTotalPreview);
@@ -499,7 +509,25 @@ function wirePanel(id){
     // changes and filled from the record when a payment is edited.
     let replaceState = {};
     const editingPaymentId = ()=> (EDITING && EDITING.key==='recovery') ? EDITING.id : null;
+    // Outstanding / paid-ahead line under the Client box, with one-tap fill buttons; also feeds the live total.
+    const refreshClientInfo = ()=>{
+      const box = document.getElementById('r_clientInfo'), name = v('r_client');
+      if(!box) return;
+      box.innerHTML = recoveryClientInfoHtml(name, editingPaymentId());
+      box.hidden = !name;
+      outstandingNow = name ? clientOutstanding(name, editingPaymentId()).receivable : null;
+      updateTotalPreview();
+    };
+    const clientInfoBox = document.getElementById('r_clientInfo');
+    if(clientInfoBox) clientInfoBox.addEventListener('click', (e)=>{
+      const b = e.target.closest('[data-rfill]'); if(!b || outstandingNow == null || outstandingNow <= 0.004) return;
+      const amt = String(Math.round(outstandingNow*100)/100);
+      if(b.dataset.rfill === 'cash'){ document.getElementById('r_cash').value = amt; showCash(); }
+      else document.getElementById('r_bank').value = amt;
+      updateTotalPreview();
+    });
     const renderReplaceRows = ()=>{
+      refreshClientInfo();
       const wrap = document.getElementById('r_replaceWrap');
       const rowsEl = document.getElementById('r_replaceRows');
       const client = v('r_client');
