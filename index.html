@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-03-release3-multi-entry-polish">
+<meta name="app-build" content="2026-10-03-release3-wages-full-tables">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -898,7 +898,6 @@
   table.wg-q tfoot td{ font-weight:700; border-top:1px solid var(--line); }
   .wg-fine{ font-size:12px; color:var(--ink-soft); margin-top:6px; }
   .wg-full > summary{ cursor:pointer; font-weight:700; color:var(--rust); }
-  table.wg-sticky th:first-child, table.wg-sticky td:first-child{ position:sticky; left:0; background:var(--card); z-index:1; }
   .wg-fab{ position:fixed; left:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:56px; height:56px; border-radius:18px; border:0; background:var(--gold); color:#fff; font-size:32px; line-height:1; padding:0; margin:0; box-shadow:var(--elev-3); cursor:pointer; z-index:30; }
   .wg-sheetbg{ position:fixed; inset:0; background:rgba(15,12,30,0.45); z-index:60; display:none; } .wg-sheetbg.on{ display:block; }
   .wg-sheet{ position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:auto; background:var(--card); border-radius:20px 20px 0 0; padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)); z-index:61; display:none; max-height:92vh; overflow-y:auto; box-shadow:var(--elev-3); } .wg-sheet.on{ display:block; }
@@ -1132,7 +1131,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.61</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.62</span></span>
     </div>
   </header>
 

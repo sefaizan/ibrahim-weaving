@@ -302,3 +302,7 @@ POLISH (v3.17.61)
   - Loom checkboxes (Production > Multiple Entries and Settings > Loom Assignments) now sit in an aligned grid. Employee dropdowns on Multiple
     Entries are wider (meters boxes narrower) and every dropdown keeps its arrow clear of the text. The Overview "Period" card is shorter.
     TO GO BACK: put the 3.17.60 copies of index.html, service-worker.js, package.json, js/shell.js, js/panels-daily.js, js/overview.js back.
+
+WAGES FULL TABLES (v3.17.62)
+  - Wages > "Full tables (all columns)": the Employee column is no longer pinned; both tables scroll sideways as one block and use the same
+    table wrapper as the other pages. TO GO BACK: put the 3.17.61 copies of index.html, service-worker.js, package.json, js/wages-ui.js back.
