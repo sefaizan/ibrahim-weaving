@@ -297,3 +297,8 @@ MULTIPLE ENTRIES (Production page, v3.17.60)
     -> Employee 1 -> Employee 2 -> next loom. Each loom saves as an ordinary production entry (time = now, beam blank like Bulk Import).
     The single Log Production form is unchanged. TO GO BACK: put the 3.17.59 copies of index.html, service-worker.js, package.json,
     js/panels-daily.js, js/wiring.js, js/view-only.js back.
+
+POLISH (v3.17.61)
+  - Loom checkboxes (Production > Multiple Entries and Settings > Loom Assignments) now sit in an aligned grid. Employee dropdowns on Multiple
+    Entries are wider (meters boxes narrower) and every dropdown keeps its arrow clear of the text. The Overview "Period" card is shorter.
+    TO GO BACK: put the 3.17.60 copies of index.html, service-worker.js, package.json, js/shell.js, js/panels-daily.js, js/overview.js back.
