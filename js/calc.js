@@ -184,6 +184,9 @@ function nextDayStr(dateStr){
   return d.toISOString().slice(0,10);
 }
 
+// Wage amounts are shown to 2 decimals, so differences are taken on whole paisa. Otherwise a hidden
+// fraction (e.g. earned 9533.3249 vs paid 9533.32) leaves "Rs 0.00" flagged as owed/credit, or "-0.00".
+function paisaDiff(a, b){ return (Math.round(a * 100) - Math.round(b * 100)) / 100 || 0; }
 // Running wage balance for one employee, since their last "settled" mark (or all-time if
 // never settled). Owed = wages earned (meters×rate + diff share + dated bonuses) in that
 // window. Paid = cash handed over via Wage Payments in that window. A settlement carries
@@ -206,7 +209,7 @@ function computeEmployeeWageBalance(empName){
   const paymentsSince = DATA.wagePayments.filter(p=>p.employee===empName && (!sinceDate || p.date > sinceDate));
   const paid = paymentsSince.reduce((s,p)=>s+(Number(p.amount)||0),0);
   const owed = earned + bonus;
-  return {owed, paid, carryForward, balance: carryForward + owed - paid, lastSettled: lastSettlement ? lastSettlement.date : null};
+  return {owed, paid, carryForward, balance: paisaDiff(carryForward + owed, paid), lastSettled: lastSettlement ? lastSettlement.date : null};
 }
 
 // Running loan balance for one employee — completely separate from wages/bonuses. Loan
@@ -1244,5 +1247,5 @@ function sumWagePaymentsInRange(empName, fromDate, toDate){
 function computeEmployeeWageNetForPeriod(empName, fromDate, toDate){
   const earned = computeEmployeeWagesForPeriod(empName, fromDate, toDate);
   const paid = sumWagePaymentsInRange(empName, fromDate, toDate);
-  return {earned, paid, net: earned - paid};
+  return {earned, paid, net: paisaDiff(earned, paid)};
 }
