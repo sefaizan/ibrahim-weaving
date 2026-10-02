@@ -1101,6 +1101,9 @@
   .ov-period-card .card-head h2{font-size:16px}
   .ov-period-card .chip-row{gap:6px}
   .ov-period-card .chip{padding:5px 11px;font-size:12px}
+  /* v3.17.65: Year Report buttons stay in the page flow (no floating bar) */
+  .form-actions.fy-static{ position:static !important; bottom:auto !important; box-shadow:none !important; background:none !important; border:0 !important; padding:4px 0 0 !important; margin:14px 0 0 !important; }
+  .form-actions.fy-static button{ flex:0 0 auto !important; width:auto !important; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1131,7 +1134,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.63</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.65</span></span>
     </div>
   </header>
 
