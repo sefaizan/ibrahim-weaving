@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v196';
+const CACHE_VERSION = 'v197';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
