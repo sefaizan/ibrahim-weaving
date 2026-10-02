@@ -288,3 +288,12 @@ YEAR REPORT (Tools > Year Report, v3.17.59)
     and the difference. Enter a stock valuation dated 31 Dec 2026 first so that comparison is fair.
   - Without a valuation on or before a period's last day, stock counts as 0 and the page says so (so early quarters of the first period show
     low or negative profit until valuations are added). Data is saved with the Tools section; nothing to change in the Firebase console.
+
+MULTIPLE ENTRIES (Production page, v3.17.60)
+  - A new card above Bulk Import: pick the date and quality once, tick the looms (or tap a pair button such as "Iftkhar + Nawaz (1-8)" - the
+    buttons are built from Settings > Loom Assignments), then per loom type Gzana (meters, then sixteenths), Employee 1 meters, Employee 2 meters.
+    Employee 2 fills with what is left (editable); "+ Add a third employee" is per loom; names default from Loom Assignments and can be changed.
+    Diff = Gzana - employee meters, shown per loom and in total; saving is blocked if employees exceed the Gzana. Enter/Tab move Gzana -> sixteenths
+    -> Employee 1 -> Employee 2 -> next loom. Each loom saves as an ordinary production entry (time = now, beam blank like Bulk Import).
+    The single Log Production form is unchanged. TO GO BACK: put the 3.17.59 copies of index.html, service-worker.js, package.json,
+    js/panels-daily.js, js/wiring.js, js/view-only.js back.

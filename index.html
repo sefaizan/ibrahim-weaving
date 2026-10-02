@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-03-release3-year-report">
+<meta name="app-build" content="2026-10-03-release3-multi-entry-production">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1081,6 +1081,16 @@
   details.more-fold[open]{ padding-bottom:12px; background:transparent; }
   details.more-fold > div:not(.grid){ margin-top:0 !important; }
   details.more-fold .group-label{ display:none; }
+  /* v3.17.60 — Multiple Entries (looms sheet) */
+  .mb-picks{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 8px}
+  .mb-lk{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:400;margin:0}
+  .mb-quick{margin-bottom:12px}
+  .mb-card{border:1px solid var(--line,rgba(128,128,128,.3));border-radius:12px;padding:10px;margin-bottom:8px}
+  .mb-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .mb-df{font-size:13px;font-weight:600}
+  .mb-rw{display:flex;gap:6px;align-items:center}
+  .mb-line{flex:0 0 14px;height:1.5px;background:currentColor;opacity:.45}
+  .mb-tg{margin-top:6px}
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1111,7 +1121,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.59</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.60</span></span>
     </div>
   </header>
 
