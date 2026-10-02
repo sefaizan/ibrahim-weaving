@@ -131,3 +131,25 @@ describe('the page', () => {
     assert.match(wi, /fiscal: typeof fiscalPanel/); assert.match(wi, /fiscalWire\(\)/); assert.match(core, /DATA\.stockValuations = \[\]/); assert.match(core, /DATA\.fiscalOpenings = \{\}/);
   });
 });
+
+describe('year-end carry-over (v3.17.69)', () => {
+  test('opening card shows the carry-over check and button; unsaved year says so', () => {
+    load();
+    const h = run('fiscalOpeningCardHtml(2027)');
+    assert.match(h, /Year-end carry-over/); assert.match(h, /id="fiscalCarry"/); assert.match(h, /Not saved yet/);
+  });
+  test('a saved opening that equals the previous closing position matches; a different one shows the difference', () => {
+    load({ sale: [sale('s1', '2026-05-01', 100, 50000)], recovery: [rec('r1', '2026-06-01', 20000)] });
+    const pos = j(run("fiscalPositionAt('2026-12-31')"));
+    const ok = { date: '2027-01-01', cash: pos.cash, yarn: 0, bills: 0, receivables: { Acme: pos.receivables }, empLoans: {}, grey: [] };
+    const good = run(`fiscalCarryCheckHtml(2027, ${JSON.stringify(ok)})`);
+    assert.match(good, /Matches/);
+    const bad = run(`fiscalCarryCheckHtml(2027, ${JSON.stringify(Object.assign({}, ok, { cash: ok.cash + 500 }))})`);
+    assert.match(bad, /Differs by Rs 500/);
+  });
+  test('2028 compares against the closing capital of 2027, from its own report', () => {
+    load({ fiscalOpenings: { 2027: { date: '2027-01-01', cash: 1000, yarn: 0, bills: 0, receivables: {}, empLoans: {}, grey: [] } } });
+    const h = run('fiscalCarryCheckHtml(2028, null)');
+    assert.match(h, /2027 \u2014 closing capital/);
+  });
+});
