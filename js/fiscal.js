@@ -167,23 +167,42 @@ function fiscalReportHtml(sel){
     ${notes.map(n=> `<p class="note" style="margin:6px 0 0"><b>Note:</b> ${escHtml(n)}</p>`).join('')}
     <div class="form-actions" style="margin-top:10px"><button class="ghost" type="button" id="fiscalPdf">Download PDF</button></div></div>`;
 }
+// v3.17.63 — the app's own figures as at the day before an opening date, used to pre-fill the opening position (all editable).
+function fiscalAutoOpening(openDate){
+  const prev = fiscalDayBefore(openDate), s = computeStats('range::' + prev), r4 = x => Math.round((Number(x) || 0) * 10000) / 10000;
+  const rc = {}, el = {}, gm = {};
+  (s.receivablesByClient || []).forEach(c=>{ const x = Math.round((Number(c.receivable) || 0) * 100) / 100; if(Math.abs(x) > 0.004) rc[c.name] = x; });
+  (DATA.employees || []).forEach(e=>{
+    if(!e || !e.name) return;
+    const rows = (DATA.loanPayments || []).filter(p=> p.employee === e.name && p.date && p.date <= prev);
+    const given = rows.filter(p=> p.type !== 'Loan Repaid').reduce((a, p)=> a + (Number(p.amount) || 0), 0), back = rows.filter(p=> p.type === 'Loan Repaid').reduce((a, p)=> a + (Number(p.amount) || 0), 0);
+    const x = Math.round((given - back) * 100) / 100; if(Math.abs(x) > 0.004) el[e.name] = x;
+  });
+  (s.stockByQuality || []).forEach(q=>{ if(q.stock > 0) gm[q.name] = r4(q.stock); });
+  const v = fiscalLatestValuation(prev), rates = (v && v.greyRates) || {};
+  return { prev, rc, el, gm, rates };
+}
 function fiscalOpeningCardHtml(year){
   const op = fiscalOpeningFor(year) || {}, t = fiscalOpeningTotals(op), money = fmtRs;
-  const inp = (id, val)=> `<input type="number" inputmode="decimal" id="${id}" value="${val === undefined || val === null || val === 0 ? '' : val}" style="width:100%">`;
+  const saved = !!fiscalOpeningFor(year), auto = fiscalAutoOpening(op.date || year + '-01-01');
+  const inp = (id, val, kind, key)=> `<input type="number" inputmode="decimal" id="${id}" data-fo="${kind}" data-key="${escHtml(key || '')}"${saved ? ' data-man="1"' : ''} value="${val === undefined || val === null || val === 0 ? '' : val}" style="width:100%">`;
   const names = a => (a || []).map(x=> (x && x.name) ? x.name : '').filter(Boolean);
-  const rows = (title, list, prefix, map)=> list.length ? `<h3 style="margin:12px 0 4px">${title}</h3>` + list.map((n, i)=>
-    `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">${escHtml(n)}</span><span style="width:40%">${inp(prefix + i, map[n])}</span></div>`).join('') : '';
-  const greyRows = names(DATA.qualities).length ? '<h3 style="margin:12px 0 4px">Grey cloth in hand (meters and rate per meter)</h3>' + names(DATA.qualities).map((n, i)=>{
-    const g = (op.grey || []).find(x=> x.quality === n) || {};
-    return `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">${escHtml(n)}</span><span style="width:26%">${inp('fo_gm' + i, g.meters)}</span><span style="width:26%">${inp('fo_gr' + i, g.rate)}</span></div>`;
+  const rows = (title, list, prefix, map, kind, autoMap)=> list.length ? `<h3 style="margin:12px 0 4px">${title}</h3>` + list.map((n, i)=>
+    `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">${escHtml(n)}</span><span style="width:40%">${inp(prefix + i, saved ? map[n] : autoMap[n], kind, n)}</span></div>`).join('') : '';
+  const anyGrey = names(DATA.qualities).some(n=> auto.gm[n] || (op.grey || []).some(x=> x.quality === n && (x.meters || x.rate)));
+  const greyRows = names(DATA.qualities).length ? '<h3 style="margin:12px 0 4px">Grey cloth in hand (meters and rate per meter)</h3><div id="fo_greyNone" class="note" style="display:' + (anyGrey ? 'none' : 'block') + '">No grey cloth in stock on this date.</div>' + names(DATA.qualities).map((n, i)=>{
+    const g = (op.grey || []).find(x=> x.quality === n) || {}, m = saved ? g.meters : auto.gm[n], r = saved ? g.rate : auto.rates[n];
+    const show = !!(m || r || auto.gm[n]);
+    return `<div class="fo-gq" data-gq="${escHtml(n)}" style="display:${show ? 'flex' : 'none'};gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">${escHtml(n)}</span><span style="width:26%">${inp('fo_gm' + i, m, 'gm', n)}</span><span style="width:26%">${inp('fo_gr' + i, r, 'gr', n)}</span></div>`;
   }).join('') : '';
   return `<div class="card"><div class="card-head"><h2>Opening position ${escHtml(String(year))}</h2></div>
     <p class="note" style="margin:0 0 8px">The position management gives you on 1 January ${escHtml(String(year))}. Fixed assets and personal loans are left out. The total is that year\u2019s opening capital.</p>
     <div class="grid cols-2">${field('Date', 'fo_date', 'date', `value="${op.date || year + '-01-01'}"`)}${field('Cash and bank (Rs)', 'fo_cash', 'number', `value="${op.cash || ''}"`)}</div>
     <div class="grid cols-2">${field('Yarn in hand, warp + weft (Rs)', 'fo_yarn', 'number', `value="${op.yarn || ''}"`)}${field('Bills due (Rs)', 'fo_bills', 'number', `value="${op.bills || ''}"`)}</div>
-    ${rows('Receivables per client (Rs)', names(DATA.clients), 'fo_rc', op.receivables || {})}
+    <p class="note" style="margin:0 0 4px">Receivables, grey cloth and employee loans are filled in from the app\u2019s own figures at the end of the day before the date above. Change any figure that differs.</p>
+    ${rows('Receivables per client (Rs)', names(DATA.clients), 'fo_rc', op.receivables || {}, 'rc', auto.rc)}
     ${greyRows}
-    ${rows('Employee loans per employee (Rs)', names(DATA.employees), 'fo_el', op.empLoans || {})}
+    ${rows('Employee loans per employee (Rs)', names(DATA.employees), 'fo_el', op.empLoans || {}, 'el', auto.el)}
     <p style="margin:12px 0 4px"><b>Opening capital: ${money(t.total)}</b> <span class="note">(cash ${money(t.cash)} + receivables ${money(t.receivables)} + yarn ${money(t.yarn)} + grey cloth ${money(t.grey)} + employee loans ${money(t.empLoans)} \u2212 bills ${money(t.bills)})</span></p>
     <div class="form-actions"><button class="primary" type="button" id="fiscalSaveOpening">Save opening position</button></div>
     <div id="fiscalOpeningCheck"></div></div>`;
@@ -248,6 +267,23 @@ function fiscalWire(){
     const box = document.getElementById('fiscalOpeningCheck');
     if(box) box.innerHTML = `<p class="note">App\u2019s own position at ${escHtml(fmtDate(prev))}: ${fmtRs(calc)}. Management\u2019s: ${fmtRs(mgmt)}. Difference: ${fmtRs(mgmt - calc)}.</p>`;
   };
+  // Opening position: typing marks a figure as yours; changing the date refreshes only the figures you have not touched.
+  document.querySelectorAll('[data-fo]').forEach(el=>{ el.addEventListener('input', ()=>{ el.dataset.man = '1'; }); });
+  const fod = document.getElementById('fo_date');
+  if(fod) fod.addEventListener('change', ()=>{
+    if(!fod.value) return;
+    const a = fiscalAutoOpening(fod.value), put = (el, val)=>{ el.value = val ? val : ''; };
+    document.querySelectorAll('[data-fo]').forEach(el=>{
+      if(el.dataset.man) return; const k = el.dataset.key, kind = el.dataset.fo;
+      put(el, kind === 'rc' ? a.rc[k] : kind === 'el' ? a.el[k] : kind === 'gm' ? a.gm[k] : a.rates[k]);
+    });
+    let any = false;
+    document.querySelectorAll('.fo-gq').forEach(row=>{
+      const k = row.getAttribute('data-gq'), has = !!(a.gm[k] || row.querySelector('[data-fo="gm"]').value || row.querySelector('[data-fo="gr"]').value);
+      row.style.display = has ? 'flex' : 'none'; if(has) any = true;
+    });
+    const none = document.getElementById('fo_greyNone'); if(none) none.style.display = any ? 'none' : 'block';
+  });
   wireDelete('stockValuations');
 }
 function fiscalPdf(){
