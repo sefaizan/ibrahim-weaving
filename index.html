@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-03-release3-year-report-autofill">
+<meta name="app-build" content="2026-10-03-release3-year-history-glance">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1104,6 +1104,29 @@
   /* v3.17.65: Year Report buttons stay in the page flow (no floating bar) */
   .form-actions.fy-static{ position:static !important; bottom:auto !important; box-shadow:none !important; background:none !important; border:0 !important; padding:4px 0 0 !important; margin:14px 0 0 !important; }
   .form-actions.fy-static button{ flex:0 0 auto !important; width:auto !important; }
+  /* v3.17.71: Year Report - years at a glance */
+  .fh-strip{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:6px 0 4px; }
+  .fh-tile{ background:var(--paper); border-radius:12px; padding:10px 8px; text-align:center; display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .fh-tile i{ font-style:normal; font-size:11px; color:var(--ink-soft); font-weight:600; }
+  .fh-tile b{ font-size:19px; line-height:1.2; }
+  .fh .pos, .fh-tile b.pos{ color:var(--green); } .fh .neg, .fh-tile b.neg{ color:var(--red); }
+  .fh-sub{ margin:2px 0 12px; font-size:11.5px; color:var(--ink-soft); text-align:center; }
+  .fh-d{ font-style:normal; font-size:11.5px; font-weight:700; color:var(--ink-soft); white-space:nowrap; } .fh-d.up{ color:var(--green); } .fh-d.dn{ color:var(--red); } .fh-d.sm{ font-size:10.5px; }
+  .fh-chart-head{ display:flex; align-items:center; justify-content:space-between; margin:8px 0 4px; min-height:44px; }
+  .fh-mini{ min-height:44px; padding:0 16px; }
+  .fh-chart{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .fh-chart svg{ display:block; max-width:none; } .fh-chart .z{ stroke:var(--line); stroke-width:1; }
+  .fh-bar{ cursor:pointer; } .fh-bar rect.b{ fill:var(--rust); } .fh-bar rect.cur{ fill:var(--gold); } .fh-bar rect.neg{ fill:var(--red); }
+  .fh-bar text{ font-size:10px; fill:var(--ink-soft); } .fh-bar text.v{ fill:var(--ink); font-weight:700; } .fh-bar text.cur{ fill:var(--gold); font-weight:700; }
+  .fh-row{ border-top:1px solid var(--line); } .fh-row.cur .fh-yr{ color:var(--gold); }
+  .card.fh{ overflow:visible !important; }
+  .fh-top{ display:flex; align-items:stretch; gap:6px; position:sticky; top:calc(var(--appbar-h) + env(safe-area-inset-top, 0px)); z-index:5; background:var(--card); }
+  .fh-toggle{ flex:1; min-width:0; min-height:56px; display:grid; grid-template-columns:52px repeat(3,1fr); gap:4px; align-items:center; text-align:left; background:none; border:0; padding:6px 2px; color:inherit; font:inherit; cursor:pointer; box-shadow:none; }
+  .fh-yr{ font-weight:800; font-size:15px; display:flex; flex-direction:column; } .fh-yr small{ font-size:9.5px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
+  .fh-fig{ display:flex; flex-direction:column; min-width:0; } .fh-fig i{ font-style:normal; font-size:10px; color:var(--ink-soft); } .fh-fig b{ font-size:13px; white-space:nowrap; }
+  .fh-pdf{ flex:0 0 auto; min-width:48px; min-height:44px; align-self:center; padding:0 10px; }
+  .fh-body{ padding:2px 0 10px; } .fh-row.open{ background:var(--paper); border-radius:10px; }
+  .fh-pick summary{ min-height:44px; display:flex; align-items:center; cursor:pointer; font-weight:700; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1134,7 +1157,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.70</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.71</span></span>
     </div>
   </header>
 
