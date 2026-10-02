@@ -122,7 +122,7 @@ describe('the page', () => {
   test('it shows chips for the periods and quarters, the drawings box, the valuation form and the opening card', () => {
     load();
     const h = run('fiscalPanel()');
-    assert.match(h, /First period/); assert.match(h, /Q1 2026/); assert.match(h, /Drawings \(owner/); assert.match(h, /Stock valuation/); assert.match(h, /Opening position 2027/);
+    assert.match(h, /First period/); assert.match(h, /Q1 2026/); assert.match(h, /Drawings \(owner/); assert.match(h, /Quarterly Stock Valuation/); assert.match(h, /Opening position 2027/);
     assert.match(h, /fiscalPdf/); assert.match(h, /Fixed assets are never included/);
   });
   test('wired in: a tab for owners / whole-business accounts, saved with the tools section, defaults for old backups', () => {
