@@ -172,7 +172,7 @@ const PERM_TAB_SECTIONS = {
 // The Settings master lists (input id new_<key>) and the section each belongs to.
 const PERM_LIST_SECTIONS = { qualities: 'reference', looms: 'reference', employees: 'reference', clients: 'sales', dyeingUnits: 'sales', banks: 'recovery', warpTypes: 'materials', weftTypes: 'materials', familyMembers: 'family' };
 // Buttons that save one Settings card, and the section (and letter) they change.
-const PERM_BUTTON_SECTIONS = { saveBusinessInfo: ['business', 'e'], saveOpening: ['tools', 'e'], saveOpeningBalances: ['tools', 'e'], saveRateCalc: ['tools', 'e'], saveRateChange: ['wages', 'e'], settleAllEmployees: ['wages', 'e'], la_apply: ['loans', 'e'] };
+const PERM_BUTTON_SECTIONS = { saveMultiProduction: ['production', 'a'], saveBusinessInfo: ['business', 'e'], saveOpening: ['tools', 'e'], saveOpeningBalances: ['tools', 'e'], saveRateCalc: ['tools', 'e'], saveRateChange: ['wages', 'e'], settleAllEmployees: ['wages', 'e'], la_apply: ['loans', 'e'] };
 const PERM_QUICK_ADD = { sale: 'sales', recovery: 'recovery' };
 // Overview: every card (and banner) is tagged with the sections whose data it shows, and a limited account sees it
 // only when it may VIEW ALL of them. A card that reads a section the role cannot see would show wrong (zero) figures,

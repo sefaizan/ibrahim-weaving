@@ -98,6 +98,53 @@ function warpPurchaseSelectField(label, id, extra=''){
 }
 
 /* ---------------- Panel renderers per sheet ---------------- */
+/* v3.17.60 — Multiple Entries (looms sheet): tick looms, then type Gzana (meters + sixteenths), Employee 1 and Employee 2
+   meters for each. Saves one ordinary production record per loom (same shape as Log Production / Bulk Import). */
+function mbLoomList(){ return DATA.looms.map(l=>l.name).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})); }
+function mbRangeLabel(names){
+  const nums = names.map(Number);
+  if(nums.some(n=>!Number.isInteger(n))) return names.join(', ');
+  nums.sort((a,b)=>a-b); const o=[]; let i=0;
+  while(i<nums.length){ let j=i; while(j+1<nums.length && nums[j+1]===nums[j]+1) j++; o.push(j>i ? nums[i]+'–'+nums[j] : ''+nums[i]); i=j+1; }
+  return o.join(', ');
+}
+// One quick button per employee pair in Settings > Loom Assignments (built from the data, so new pairs/looms appear on their own).
+function mbGroups(){
+  const g = {};
+  mbLoomList().forEach(n=>{ const a = loomAssignmentFor(n); const k = a ? [a.e1,a.e2].filter(Boolean).join(' + ') : ''; (g[k||'Unassigned'] = g[k||'Unassigned'] || []).push(n); });
+  return Object.entries(g).sort((x,y)=>(x[0]==='Unassigned')-(y[0]==='Unassigned')).map(([k,a])=>({label:k+' ('+mbRangeLabel(a)+')', looms:a}));
+}
+function mbCardHtml(name){
+  const a = loomAssignmentFor(name) || {};
+  const eo = sel => '<option value="">—</option>' + DATA.employees.filter(e=>e.active!==false).map(e=>`<option${e.name===sel?' selected':''}>${escHtml(e.name)}</option>`).join('');
+  const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1" style="flex:3">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr" style="flex:2;min-width:0"></div>`;
+  return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
+    <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
+    <label>Gzana (meters and sixteenths)</label>
+    <div class="mb-rw"><input class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
+    ${row(1,'Employee 1',a.e1)}${row(2,'Employee 2',a.e2)}
+    <div class="mb-e3" style="display:none">${row(3,'Employee 3','')}</div>
+    <button type="button" class="ghost mb-tg" tabindex="-1">+ Add a third employee</button></div>`;
+}
+function multiEntryCardHtml(){
+  const looms = mbLoomList();
+  return `<div class="card"><div class="card-head"><h2>Multiple Entries</h2></div>
+    ${formToggleBtn('multiEntry','Form')}
+    <div ${formBodyOpen('multiEntry')}>
+      <div class="grid cols-2">
+        ${field('Date (applies to all looms)','mb_date','date',`value="${todayStr()}"`)}
+        ${selectField('Quality (applies to all looms)','mb_quality',DATA.qualities)}
+      </div>
+      <div class="group-label">Looms</div>
+      <div class="mb-picks">${looms.map(n=>`<label class="mb-lk"><input type="checkbox" class="mb_pk" value="${escHtml(n)}"> ${escHtml(n)}</label>`).join('')}</div>
+      <div class="chip-row mb-quick"><button type="button" class="chip" data-mb-all>All</button>${mbGroups().map((g,i)=>`<button type="button" class="chip" data-mb-grp="${i}">${escHtml(g.label)}</button>`).join('')}<button type="button" class="chip" data-mb-none>None</button></div>
+      <div id="mb_cards">${looms.map(mbCardHtml).join('')}</div>
+      <div class="calc-amount" id="mb_totals">Total Gzana: — · Assigned: — · Diff: —</div>
+      <div class="note" id="mb_err" style="color:var(--rust);min-height:18px"></div>
+      <div class="form-actions"><button class="primary" id="saveMultiProduction">Save all entries</button></div>
+    </div></div>
+    `;
+}
 function productionPanel(){
   const qualityVal = FILTER.production || '';
   const fromVal = FILTER.productionFrom || '';
@@ -137,7 +184,7 @@ function productionPanel(){
       <button class="ghost" id="addProduction">Add Entry</button>
       <button class="ghost" id="cancelProduction" style="display:none">Cancel Edit</button>
     </div></div>
-    <div class="card"><div class="card-head"><h2>Bulk Import</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-bulkimport" title="Info">i</button></div>
+    ${multiEntryCardHtml()}<div class="card"><div class="card-head"><h2>Bulk Import</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-bulkimport" title="Info">i</button></div>
       ${formToggleBtn('bulkImport','Form')}
       <div ${formBodyOpen('bulkImport')}>
       <p class="note info-note" id="info-bulkimport" hidden>Paste one line per loom from your register (format shown below the date and quality) and they're all added at once, instead of typing each entry separately. If any line has a problem, nothing is imported and the problems are listed so you can fix the text and retry.</p>

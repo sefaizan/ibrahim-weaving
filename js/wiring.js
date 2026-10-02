@@ -344,6 +344,91 @@ function wirePanel(id){
       switchTab('production');
       showToast(`Imported ${newRecords.length} production entr${newRecords.length===1?'y':'ies'}.`);
     };
+
+    // v3.17.60 — Multiple Entries (looms sheet). Cursor order: Gzana meters -> sixteenths -> Employee 1 -> Employee 2 (-> Employee 3) -> next loom.
+    const mbRoot = document.getElementById('mb_cards');
+    if(mbRoot){
+      const q = (c,s)=>c.querySelector(s), num = el=>Number(el.value)||0;
+      const cards = ()=>[...mbRoot.querySelectorAll('.mb-card')];
+      const shown = ()=>cards().filter(c=>c.style.display!=='none');
+      const e3On = c=>q(c,'.mb-e3').style.display!=='none';
+      const total = c=>combineMtr16(q(c,'.mb_g').value, q(c,'.mb_s').value);
+      const assigned = c=>num(q(c,'.mb_m1'))+num(q(c,'.mb_m2'))+(e3On(c)?num(q(c,'.mb_m3')):0);
+      const autoSplit = c=>{
+        const m2 = q(c,'.mb_m2'), t = total(c);
+        if(m2.dataset.man || e3On(c) || !q(c,'.mb_n2').value || !(t>0)) return;
+        const rem = t - num(q(c,'.mb_m1')); if(rem < -1e-9) return;
+        m2.value = Math.floor(rem + 1e-9);
+      };
+      const calc = ()=>{
+        let T=0, A=0, bad=0;
+        shown().forEach(c=>{
+          const t = total(c), a = assigned(c), d = q(c,'.mb-df');
+          if(!(t>0)){ d.textContent='Diff: —'; d.style.color=''; return; }
+          const diff = Math.round((t-a)*16)/16;
+          d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
+          if(diff<0) bad++; T+=t; A+=a;
+        });
+        document.getElementById('mb_totals').textContent = `Total Gzana: ${fmtQtyMtr(T)} · Assigned: ${fmtQtyMtr(A)} · Diff: ${fmtQtyMtr(Math.round((T-A)*16)/16)}`;
+        document.getElementById('mb_err').textContent = bad ? `Employees exceed Gzana on ${bad} loom(s). Check the meters.` : '';
+      };
+      const setPicks = fn=>{
+        document.querySelectorAll('.mb_pk').forEach(p=>{ p.checked = fn(p.value); });
+        cards().forEach(c=>{ c.style.display = document.querySelector(`.mb_pk[value="${CSS.escape(c.dataset.loom)}"]`).checked ? 'block' : 'none'; });
+        calc();
+      };
+      const groups = mbGroups();
+      document.querySelector('[data-mb-all]').onclick = ()=>setPicks(()=>true);
+      document.querySelector('[data-mb-none]').onclick = ()=>setPicks(()=>false);
+      document.querySelectorAll('[data-mb-grp]').forEach(b=>{ b.onclick = ()=>{ const l = groups[Number(b.dataset.mbGrp)].looms; setPicks(n=>l.includes(n)); }; });
+      document.querySelectorAll('.mb_pk').forEach(p=>p.addEventListener('change', ()=>setPicks(n=>document.querySelector(`.mb_pk[value="${CSS.escape(n)}"]`).checked)));
+      mbRoot.addEventListener('input', e=>{
+        const c = e.target.closest('.mb-card'); if(!c) return;
+        if(e.target.classList.contains('mb_m2')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
+        if(e.target.matches('.mb_g,.mb_s,.mb_m1')) autoSplit(c);
+        calc();
+      });
+      mbRoot.addEventListener('focusin', e=>{ if(e.target.classList.contains('mb_f')) e.target.select(); });
+      mbRoot.addEventListener('keydown', e=>{
+        if(e.key!=='Enter' || !e.target.classList.contains('mb_f')) return;
+        e.preventDefault();
+        const seq = shown().flatMap(c=>[...c.querySelectorAll('.mb_f')].filter(i=>i.offsetParent)), n = seq[seq.indexOf(e.target)+1];
+        (n || document.getElementById('saveMultiProduction')).focus();
+      });
+      mbRoot.addEventListener('click', e=>{
+        if(!e.target.classList.contains('mb-tg')) return;
+        const c = e.target.closest('.mb-card'), w = q(c,'.mb-e3'), on = w.style.display==='none';
+        w.style.display = on ? 'block' : 'none';
+        e.target.textContent = on ? '− Remove third employee' : '+ Add a third employee';
+        if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; }
+        calc();
+      });
+      document.getElementById('saveMultiProduction').onclick = async ()=>{
+        const err = document.getElementById('mb_err'), date = v('mb_date'), quality = v('mb_quality');
+        const fail = m=>{ err.textContent = m; };
+        if(!date) return fail('Pick the date first.');
+        if(!quality) return fail('Pick a quality first.');
+        const list = shown(); if(!list.length) return fail('Tick at least one loom.');
+        const recs = [];
+        for(const c of list){
+          const loom = c.dataset.loom, t = total(c);
+          if(!(t>0)) return fail(`Loom ${loom}: enter the Gzana (total meters) first.`);
+          const r = {date, time:nowStr(), loom, quality, qty:t, beam:'', e1:'', e1m:0, e2:'', e2m:0, e3:'', e3m:0};
+          for(const n of (e3On(c)?[1,2,3]:[1,2])){
+            const name = q(c,'.mb_n'+n).value, m = num(q(c,'.mb_m'+n));
+            if(!name && m) return fail(`Loom ${loom}: pick Employee ${n} for ${m} meters.`);
+            r['e'+n] = name; r['e'+n+'m'] = m;
+          }
+          if(!r.e1) return fail(`Loom ${loom}: pick Employee 1.`);
+          if(assigned(c) - t > 1e-9) return fail(`Loom ${loom}: employee meters exceed the Gzana.`);
+          recs.push(r);
+        }
+        recs.forEach(r=>DATA.production.push({id:uid(), ...r}));
+        PAGE.production = 1;
+        await save(); switchTab('production');
+        showToast(`Saved ${recs.length} production entr${recs.length===1?'y':'ies'}.`);
+      };
+    }
   }
   if(id==='sale'){
     document.getElementById('addSale').onclick = async ()=>{
