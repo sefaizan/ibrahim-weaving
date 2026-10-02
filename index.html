@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-02-release3-recovery-by-client">
+<meta name="app-build" content="2026-10-02-release3-recovery-form-helpers">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -701,6 +701,13 @@
     font-size:16px; font-weight:800; color:var(--rust-deep); font-style:normal;
   }
   .calc-amount.over{ color:var(--red); border-color:var(--red); }
+  .calc-amount .rc-split{ font-size:12px; font-weight:600; color:var(--ink-soft); margin-top:3px; }
+  /* Recovery form: the chosen client's balance, right under the Client box */
+  .rc-info{ margin:8px 0 0; padding:9px 12px; background:var(--paper-dim); border-radius:var(--shape-sm); font-size:13px; }
+  .rc-info[hidden]{ display:none; }
+  .rc-info .rc-owe b{ color:var(--red); } .rc-info .rc-adv b{ color:#B7791F; }
+  .rc-info .rc-fill{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink-soft); }
+  .rc-info .rc-fill button{ min-height:32px; padding:4px 14px; margin:0; font-size:13px; }
   /* Row of action buttons at the bottom of an entry form (Add / Add & next / Cancel Edit).
      Buttons used to just flow inline, each with its own margin-top — fine with two, but a
      third button (e.g. Production's "Add & next loom" + "Add Entry" + "Cancel Edit") could
@@ -926,7 +933,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.40</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.41</span></span>
     </div>
   </header>
 
