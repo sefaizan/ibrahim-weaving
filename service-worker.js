@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v198';
+const CACHE_VERSION = 'v199';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
@@ -137,6 +137,17 @@ async function cacheFirst(event){
   }
 }
 
+// v3.17.72 — shown instead of a broken page when the app cannot be loaded at all (offline and nothing cached yet).
+// Self-contained (no files), so it works even when every other file is missing.
+function offlinePage(){
+  const html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#163B3D"><title>No internet</title>'
+    + '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#EDEFF1;color:#1B2126;font-family:Roboto,Arial,sans-serif;padding:24px;box-sizing:border-box}'
+    + '.c{max-width:360px;text-align:center;background:#fff;border-radius:20px;padding:28px 22px;box-shadow:0 2px 12px rgba(0,0,0,.12)}h1{font-size:20px;margin:10px 0 8px;color:#163B3D}p{margin:6px 0;font-size:14.5px;line-height:1.5;color:#626B72}'
+    + 'button{margin-top:16px;min-height:48px;padding:0 28px;border:0;border-radius:24px;background:#204E52;color:#fff;font-size:16px;font-weight:700}.u{direction:rtl;font-size:16px;color:#1B2126}</style></head>'
+    + '<body><div class="c"><div style="font-size:44px">\u{1F4F5}</div><h1>Please connect to the internet to open this app.</h1><p class="u">براہ کرم ایپ کھولنے کے لیے انٹرنیٹ سے جڑیں۔</p><p>The app could not be loaded because there is no internet connection. Your ledger data is safe on this phone. Once you are connected, reopen the app. After it has loaded once, it works without internet.</p><button onclick="location.reload()">Try again</button></div></body></html>';
+  return new Response(html, { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+}
+
 self.addEventListener('fetch', (event)=>{
   const req = event.request;
   if(req.method !== 'GET') return;
@@ -147,7 +158,7 @@ self.addEventListener('fetch', (event)=>{
     if(url.searchParams.has('__ck')) return;
     // Opening the app (any URL inside the scope) → the cached app shell.
     if(req.mode === 'navigate'){
-      event.respondWith(staleWhileRevalidate(event, scopeUrl('./index.html')));
+      event.respondWith(staleWhileRevalidate(event, scopeUrl('./index.html')).then(r=> (r && r.type !== 'error' && r.status !== 0) ? r : offlinePage(), ()=> offlinePage()));
       return;
     }
     if(url.href.startsWith(self.registration.scope)){

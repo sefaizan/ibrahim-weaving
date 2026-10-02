@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-03-release3-year-history-glance">
+<meta name="app-build" content="2026-10-03-release3-year-picker-offline">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1126,6 +1126,7 @@
   .fh-fig{ display:flex; flex-direction:column; min-width:0; } .fh-fig i{ font-style:normal; font-size:10px; color:var(--ink-soft); } .fh-fig b{ font-size:13px; white-space:nowrap; }
   .fh-pdf{ flex:0 0 auto; min-width:48px; min-height:44px; align-self:center; padding:0 10px; }
   .fh-body{ padding:2px 0 10px; } .fh-row.open{ background:var(--paper); border-radius:10px; }
+  .fh-pickgrid{ display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin-top:10px; } .fh-pickgrid .field{ min-width:0; margin:0; } .fh-pickgrid select{ width:100%; max-width:100%; min-width:0; text-overflow:ellipsis; }
   .fh-pick summary{ min-height:44px; display:flex; align-items:center; cursor:pointer; font-weight:700; }
 </style>
 <script src="./jspdf.umd.min.js"></script>
@@ -1157,7 +1158,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.71</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.72</span></span>
     </div>
   </header>
 
@@ -1197,6 +1198,22 @@
 <script src="./js/i18n.js"></script>
 <script src="./js/ux-enhance.js"></script>
 <script src="./js/lock-init.js"></script>
+<script>
+/* v3.17.72 — if the app's scripts could not load (no internet and nothing cached), show a clear message instead of a broken page. */
+(function(){
+  function check(){
+    if(typeof switchTab === 'function' && typeof DATA === 'object') return;
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#EDEFF1;padding:24px;box-sizing:border-box;font-family:Roboto,Arial,sans-serif';
+    d.innerHTML = '<div style="max-width:360px;text-align:center;background:#fff;border-radius:20px;padding:28px 22px;box-shadow:0 2px 12px rgba(0,0,0,.12)"><div style="font-size:44px">\uD83D\uDCF5</div>'
+      + '<h1 style="font-size:20px;margin:10px 0 8px;color:#163B3D">Please connect to the internet to open this app.</h1><p style="direction:rtl;font-size:16px;margin:6px 0">براہ کرم ایپ کھولنے کے لیے انٹرنیٹ سے جڑیں۔</p>'
+      + '<p style="font-size:14.5px;line-height:1.5;color:#626B72;margin:6px 0">The app could not be loaded because there is no internet connection. Your ledger data is safe on this phone. Once you are connected, reopen the app. After it has loaded once, it works without internet.</p>'
+      + '<button onclick="location.reload()" style="margin-top:16px;min-height:48px;padding:0 28px;border:0;border-radius:24px;background:#204E52;color:#fff;font-size:16px;font-weight:700">Try again</button></div>';
+    document.body.appendChild(d);
+  }
+  window.addEventListener('load', function(){ setTimeout(check, 400); });
+})();
+</script>
 <script>
 if('serviceWorker' in navigator){
   const hadController = !!navigator.serviceWorker.controller;
