@@ -140,7 +140,28 @@
   }
   let t = null;
   const sched = () => { clearTimeout(t); t = setTimeout(enhance, 120); };
+  // v3.17.64: every textbox gets a placeholder (from aria-label, its .field label, or its table column header).
+  function fillPlaceholders(root){
+    const SK = /^(hidden|date|time|datetime-local|month|checkbox|radio|file|color|range|button|submit)$/;
+    (root || document).querySelectorAll('input:not([placeholder]), textarea:not([placeholder])').forEach(el => {
+      if(SK.test(el.type || '')) return;
+      let t = el.getAttribute('aria-label') || '';
+      if(!t){ const f = el.closest('.field'); const l = f && f.querySelector('label'); if(l) t = l.textContent; }
+      if(!t){ const td = el.closest('td'); const tr = td && td.parentElement; const th = td && tr && tr.closest('table') && tr.closest('table').querySelectorAll('thead th')[td.cellIndex]; if(th) t = th.textContent; }
+      if(!t){ const p = el.previousElementSibling; if(p && p.tagName === 'LABEL') t = p.textContent; }
+      t = (t || '').replace(/\s+/g, ' ').replace(/\*/g, '').split(' \u2014 ')[0].trim();
+      if(!t) t = el.type === 'number' ? 'Enter amount' : 'Type here';
+      el.setAttribute('placeholder', t.length > 40 ? t.slice(0, 38) + '\u2026' : t);
+    });
+  }
+  let phTimer = 0;
+  function bootPlaceholders(){
+    fillPlaceholders();
+    new MutationObserver(() => { clearTimeout(phTimer); phTimer = setTimeout(() => fillPlaceholders(), 60); })
+      .observe(document.body, { childList: true, subtree: true });
+  }
   function boot(){
+    bootPlaceholders();
     const root = panels(); if(!root) return;
     new MutationObserver(sched).observe(root, {childList:true, subtree:true});
     enhance();

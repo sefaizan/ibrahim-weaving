@@ -185,7 +185,7 @@ function fiscalAutoOpening(openDate){
 function fiscalOpeningCardHtml(year){
   const op = fiscalOpeningFor(year) || {}, t = fiscalOpeningTotals(op), money = fmtRs;
   const saved = !!fiscalOpeningFor(year), auto = fiscalAutoOpening(op.date || year + '-01-01');
-  const inp = (id, val, kind, key)=> `<input type="number" inputmode="decimal" id="${id}" data-fo="${kind}" data-key="${escHtml(key || '')}"${saved ? ' data-man="1"' : ''} value="${val === undefined || val === null || val === 0 ? '' : val}" style="width:100%">`;
+  const inp = (id, val, kind, key)=> `<input type="number" inputmode="decimal" id="${id}" data-fo="${kind}" placeholder="${({gm:'Meters',gr:'Rate per meter'})[kind] || 'Amount (Rs)'}" data-key="${escHtml(key || '')}"${saved ? ' data-man="1"' : ''} value="${val === undefined || val === null || val === 0 ? '' : val}" style="width:100%">`;
   const names = a => (a || []).map(x=> (x && x.name) ? x.name : '').filter(Boolean);
   const rows = (title, list, prefix, map, kind, autoMap)=> list.length ? `<h3 style="margin:12px 0 4px">${title}</h3>` + list.map((n, i)=>
     `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">${escHtml(n)}</span><span style="width:40%">${inp(prefix + i, saved ? map[n] : autoMap[n], kind, n)}</span></div>`).join('') : '';
@@ -215,7 +215,7 @@ function fiscalValuationCardHtml(){
     <p class="note" style="margin:0 0 8px">Do this at the end of each quarter (and on 31 Dec). Yarn is the value at purchase price, warp and weft together. Grey cloth meters come from the app; type the rate per meter you value each quality at (the last deal rate).</p>
     <div class="grid cols-2">${field('Date', 'sv_date', 'date', `value="${todayStr()}"`)}${field('Yarn in hand (Rs)', 'sv_yarn', 'number')}</div>
     <div class="grid cols-2">${field('Bills due (Rs)', 'sv_bills', 'number')}</div>
-    ${quals.map((n, i)=> `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">Rate per meter \u2014 ${escHtml(n)}</span><span style="width:34%"><input type="number" inputmode="decimal" id="sv_r${i}" style="width:100%"></span></div>`).join('')}
+    ${quals.map((n, i)=> `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span style="flex:1;min-width:0">Rate per meter \u2014 ${escHtml(n)}</span><span style="width:34%"><input type="number" inputmode="decimal" id="sv_r${i}" placeholder="Rate per meter" style="width:100%"></span></div>`).join('')}
     <div class="form-actions fy-static"><button class="primary" type="button" id="fiscalAddValuation">Add valuation</button></div>
     ${rows ? `<div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Date</th><th>Yarn</th><th>Bills</th><th>Grey rates</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}</div>`;
 }

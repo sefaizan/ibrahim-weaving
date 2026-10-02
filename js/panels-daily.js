@@ -7,9 +7,11 @@
 // data-keep-keyboard to leave a field on the default number keyboard, used where a minus sign is valid).
 function field(label, id, type='text', extra=''){
   if(type==='number' && !/inputmode=|data-keep-keyboard/.test(extra)) extra = `inputmode="decimal" ${extra}`;
+  if(!/placeholder=/.test(extra) && !/^(date|time|datetime-local|month|checkbox|radio|file|color)$/.test(type)) extra += ` placeholder="${String(label).replace(/<[^>]*>/g,'').replace(/"/g,'&quot;').split(' \u2014 ')[0]}"`;
   return `<div class="field"><label>${label}</label><input id="${id}" type="${type}" ${extra}></div>`;
 }
 function textareaField(label, id, extra=''){
+  if(!/placeholder=/.test(extra)) extra += ` placeholder="${String(label).replace(/<[^>]*>/g,'').replace(/"/g,'&quot;')}"`;
   return `<div class="field"><label>${label}</label><textarea id="${id}" rows="2" ${extra}></textarea></div>`;
 }
 function selectField(label, id, arr, extra=''){
