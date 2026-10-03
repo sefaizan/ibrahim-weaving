@@ -25,3 +25,21 @@ describe('entry split', () => {
     ['A','B','C'].forEach(n => closeTo(app.computeWageMeters(n, 'Q', null, null).diffShare, 0.5 / 3, n));
   });
 });
+
+describe('weft type label', () => {
+  test('shows name (count N); a type without a count is just its name', () => {
+    assert.equal(app.weftTypeLabel({ name: 'Nishat', count: 36 }), 'Nishat (count 36)');
+    assert.equal(app.weftTypeLabel({ name: 'Nishat', count: 30 }), 'Nishat (count 30)');
+    assert.equal(app.weftTypeLabel({ name: '20/1 Carded' }), '20/1 Carded');
+    assert.equal(app.weftTypeLabel({ name: 'X', count: 0 }), 'X');
+  });
+});
+
+describe('quality auto name', () => {
+  test('picks and warp type make the name; nothing until both are given', () => {
+    assert.equal(app.qualityAutoName('150.144', 44), '44 - 150.144');
+    assert.equal(app.qualityAutoName('150.144 Micro', '46'), '46 - 150.144 Micro');
+    assert.equal(app.qualityAutoName('', 44), '');
+    assert.equal(app.qualityAutoName('150.144', 0), '');
+  });
+});
