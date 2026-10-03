@@ -17,6 +17,6 @@ describe('offline message', () => {
   test('version, badge and cache stay in step', () => {
     const v = JSON.parse(read('package.json')).version;
     assert.match(read('index.html'), new RegExp('id="appVersionTag">v' + v.replace(/\./g, '\\.') + '<'));
-    assert.equal(v, '3.17.81'); assert.match(read('service-worker.js'), /CACHE_VERSION = 'v209'/);
+    assert.equal(v, '3.17.82'); assert.match(read('service-worker.js'), /CACHE_VERSION = 'v210'/);
   });
 });
