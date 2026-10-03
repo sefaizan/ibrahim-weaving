@@ -7,7 +7,7 @@
 function navTabAllowed(id){ return typeof permsTabAllowed === 'function' ? permsTabAllowed(id) : true; }
 function renderNav(active){
   const nav = document.getElementById('tabs');
-  const head = `<div class="drawer-head"><div class="mark"><img src="${APP_MARK_PNG}" alt=""></div><div class="appname">Ibrahim Weaving</div><div class="appsub">Power Loom Ledger</div></div>`;
+  const head = `<div class="drawer-head"><div class="mark"><img src="${APP_MARK_PNG}" alt=""></div><div class="appname">Ibrahim Weaving</div><div class="appsub"><span>Power Loom Ledger</span><span class="drawer-ver" data-no-i18n>${(document.getElementById('appVersionTag')||{}).textContent||''}</span></div></div>`;
   // Grouped into sections (Daily / Money / Materials / Tools — see NAV_GROUPS) so a 16-tab
   // drawer scans faster than one flat list. A tab with no matching group (shouldn't happen,
   // but keeps this from silently dropping one if TABS and NAV_GROUPS ever drift) falls back
@@ -192,7 +192,7 @@ function settingsPanel(){
         <div class="field"><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
       </div>
       <div class="form-actions">
-        <button class="primary" id="add_${key}" data-add="${key}">Add ${title.slice(0,-1)}</button>
+        <button class="primary" id="add_${key}" data-add="${key}">Add ${/ies$/.test(title) ? title.slice(0,-3)+'y' : title.slice(0,-1)}</button>
         <button class="ghost" id="cancel_${key}" data-cancel="${key}" style="display:none">Cancel Edit</button>
       </div>
       <table style="margin-top:14px">

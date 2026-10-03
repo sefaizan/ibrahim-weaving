@@ -192,3 +192,31 @@
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
+
+/* v3.17.73 — Overview: the compact Period dropdown at the top only appears once the Period card has
+   scrolled out of view, so the page shows ONE period control at a time instead of two. Presentation only:
+   both controls stay in the page and stay wired together exactly as before. */
+(function(){
+  if(!('IntersectionObserver' in window)) return;
+  let io = null, watched = null, timer = null;
+  function sync(){
+    const card = document.querySelector('.ov-period-card');
+    const bar = document.querySelector('.ov-sticky');
+    if(!card || !bar){ if(io){ io.disconnect(); io = null; } watched = null; return; }
+    if(card === watched) return;
+    if(io) io.disconnect();
+    watched = card;
+    io = new IntersectionObserver(es => {
+      const e = es[es.length - 1];
+      // Show the compact bar only when the card is gone off the TOP (scrolled past), not while it is still below the fold.
+      const above = !e.isIntersecting && e.boundingClientRect.bottom < 120;
+      bar.classList.toggle('show', above);
+    }, { threshold: 0 });
+    io.observe(card);
+  }
+  function boot(){
+    sync();
+    new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(sync, 80); }).observe(document.body, { childList:true, subtree:true });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
