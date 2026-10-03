@@ -1,5 +1,5 @@
 'use strict';
-/* v3.17.72: when the app cannot load at all (no internet, nothing cached) the user sees a clear message, not a broken page. */
+/* v3.17.75: when the app cannot load at all (no internet, nothing cached) the user sees a clear message, not a broken page. */
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
@@ -17,6 +17,6 @@ describe('offline message', () => {
   test('version, badge and cache stay in step', () => {
     const v = JSON.parse(read('package.json')).version;
     assert.match(read('index.html'), new RegExp('id="appVersionTag">v' + v.replace(/\./g, '\\.') + '<'));
-    assert.equal(v, '3.17.72'); assert.match(read('service-worker.js'), /CACHE_VERSION = 'v199'/);
+    assert.equal(v, '3.17.75'); assert.match(read('service-worker.js'), /CACHE_VERSION = 'v203'/);
   });
 });
