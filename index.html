@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="2026-10-03-release3-year-picker-offline">
+<meta name="app-build" content="2026-10-03-release3-ui-polish">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1128,7 +1128,111 @@
   .fh-body{ padding:2px 0 10px; } .fh-row.open{ background:var(--paper); border-radius:10px; }
   .fh-pickgrid{ display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin-top:10px; } .fh-pickgrid .field{ min-width:0; margin:0; } .fh-pickgrid select{ width:100%; max-width:100%; min-width:0; text-overflow:ellipsis; }
   .fh-pick summary{ min-height:44px; display:flex; align-items:center; cursor:pointer; font-weight:700; }
-</style>
+  /* ===== v3.17.75 — Presentation polish (CSS-only, final override; no IDs, data or logic touched) ===== */
+  :root{
+    --ring: color-mix(in srgb, var(--rust) 38%, transparent);
+    --glass: color-mix(in srgb, var(--card) 95%, transparent);
+    --elev-card: 0 1px 2px rgba(16,32,36,.06), 0 6px 18px -8px rgba(16,32,36,.16);
+  }
+  :root[data-theme="dark"]{ --elev-card: 0 1px 2px rgba(0,0,0,.5), 0 8px 20px -8px rgba(0,0,0,.6); }
+  /* Header: soft highlight + hairline so it reads as a polished app bar */
+  header.appbar{ background:linear-gradient(165deg,var(--rust) 0%,var(--rust-deep) 100%); box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 6px 16px -6px rgba(10,30,32,.45); }
+  .appbar-titles h1{ letter-spacing:.2px; }
+  .app-version{ opacity:.7; }
+  /* Cards: crisper edge, softer depth */
+  .card{ box-shadow:var(--elev-card); border-color:color-mix(in srgb, var(--line) 80%, transparent); }
+  .card:focus-within{ box-shadow:0 0 0 1px var(--ring), var(--elev-card); }
+  /* Panels ease in instead of snapping */
+  @keyframes panelIn{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+  .panel.active{ animation:panelIn .22s ease-out; }
+  /* Overview: ONE period control at a time — the compact frosted dropdown floats in under the app bar only after the
+     Period card has scrolled away (js/ux-enhance.js toggles .show). Zero height in the flow, so nothing jumps. */
+  .ov-sticky{ height:0; padding:0; margin:0; border:0; background:none; align-items:flex-start; overflow:visible; opacity:0; pointer-events:none; transform:translateY(-8px); transition:opacity .18s ease, transform .18s ease; font-weight:700; color:var(--ink-soft); }
+  .ov-sticky.show{ opacity:1; pointer-events:auto; transform:none; }
+  .ov-sticky::before{ content:''; position:absolute; z-index:-1; left:-10px; right:-10px; top:0; height:54px; background:var(--glass); -webkit-backdrop-filter:saturate(1.4) blur(10px); backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--line); box-shadow:0 6px 14px -10px rgba(16,32,36,.35); }
+  .ov-sticky > *{ margin-top:8px; }
+  .ov-sticky > span{ line-height:38px; margin-inline:14px auto; }
+  .ov-sticky .sel-wrap{ margin-inline:0 14px; min-width:150px; }
+  .ov-sticky select{ margin:0; min-width:0; }
+  .ov-sticky .sel-fake{ min-height:38px; border-radius:999px; padding:4px 36px 4px 16px; font-weight:700; color:var(--rust-deep); background:var(--rust-tonal); border-color:transparent; }
+  /* At a Glance tiles: lifted white tiles with a tinted accent instead of flat grey blocks */
+  .ov-glance .ov-kpi{ background:linear-gradient(160deg,var(--card),var(--paper-dim)); border:1px solid var(--line); border-left:4px solid var(--rust); border-radius:12px; box-shadow:0 1px 2px rgba(16,32,36,.05); padding:12px 14px; }
+  .ov-glance .ov-kpi .label{ font-size:12px; letter-spacing:.2px; line-height:1.25; }
+  .ov-glance .ov-kpi .value{ font-size:20px; font-variant-numeric:tabular-nums; letter-spacing:-.2px; }
+  /* Chips & pills: one consistent, comfortable shape */
+  .lf-chip, .qd button{ transition:background .15s, color .15s, transform .1s; }
+  .lf-chip:active, .qd button:active{ transform:scale(.96); }
+  /* Inputs: never clip placeholder text mid-letter; show an ellipsis instead */
+  input, select{ text-overflow:ellipsis; }
+  input::placeholder, textarea::placeholder{ font-size:14px; text-overflow:ellipsis; }
+  @media (max-width:720px){ input::placeholder, textarea::placeholder{ font-size:13.5px; } }
+  /* Keyboard / switch-access focus is always visible */
+  button:focus-visible, summary:focus-visible, a:focus-visible, [role="button"]:focus-visible{ outline:3px solid var(--ring); outline-offset:2px; }
+  /* Tables: gentle row hover on devices that can hover */
+  @media (hover:hover){ tbody tr:hover td{ background:var(--rust-tonal); } }
+  /* Phone: pinned action bar is frosted and flush to the bottom edge (nothing peeks out beneath it),
+     and the Backup shortcut docks inside its right-hand gutter instead of covering the buttons */
+  @media (max-width:720px){
+    .form-actions{
+      bottom:0; margin:16px -10px 0; padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+      border:0; border-top:1px solid var(--line); border-radius:18px 18px 0 0;
+      background:var(--glass); -webkit-backdrop-filter:saturate(1.4) blur(12px); backdrop-filter:saturate(1.4) blur(12px);
+      box-shadow:0 -8px 20px -10px rgba(16,32,36,.28);
+    }
+    html[dir="rtl"] .form-actions{ padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px)); }
+    /* Screens with a pinned Save bar: the Backup shortcut rides just above it, so the buttons use the full width */
+    body:has(.panel.active .form-actions) .fab-backup{ bottom:calc(88px + env(safe-area-inset-bottom,0px)); }
+    .form-actions button.primary{ min-height:48px; }
+    .form-actions button.ghost{ min-height:48px; }
+    main{ padding-bottom:110px; }
+    .fab-backup{ width:48px; height:48px; border-radius:15px; right:14px; bottom:calc(21px + env(safe-area-inset-bottom,0px)); }
+    html[dir="rtl"] .fab-backup{ right:auto; left:14px; }
+  }
+  .backup-strip .bs-btn{ width:auto; flex:0 0 auto; margin:0; }
+  .fab-backup{ background:linear-gradient(145deg,#D97A3F,var(--gold)); box-shadow:0 8px 18px -6px rgba(193,101,45,.65), 0 2px 4px rgba(0,0,0,.2); }
+  .fab-backup:hover{ background:linear-gradient(145deg,#E58A50,#D2723A); }
+  /* Long dropdown values (e.g. "Loan In — you put money in") must shrink inside their column, never push past the card,
+     and never run underneath the chevron */
+  .grid > .field, .grid > *{ min-width:0; }
+  .sel-wrap{ min-width:0; max-width:100%; }
+  .sel-fake{ padding-right:38px; }
+  /* Desktop / laptop view: the app is drawn as a 420px phone, so it must use the PHONE layout whatever the window width
+     (the wide-screen rules above would otherwise spread 3-4 column forms past the edge of the frame). */
+  @media (min-width:721px){
+    .app-shell .grid.cols-2, .app-shell .grid.cols-3, .app-shell .grid.cols-4{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 10px; }
+    .app-shell .grid > .full, .app-shell .grid > .field:has(textarea), .app-shell .grid > :has(> textarea), .app-shell .grid > :has(> input[type="file"]){ grid-column:1 / -1; }
+    .app-shell .card{ padding:16px 14px; border-radius:14px; }
+    .app-shell #panels{ min-width:0; width:100%; }
+    .app-shell main{ padding:12px 10px 0; min-width:0; width:100%; }
+    .app-shell main::after{ content:''; display:block; height:110px; } /* end-of-page spacer (padding would stop the Save bar reaching the bottom edge) */
+    .app-shell input, .app-shell select, .app-shell textarea, .app-shell .sel-fake{ font-size:16px; }
+    .app-shell button.primary{ width:100%; margin-top:16px; }
+    .app-shell .backup-strip .bs-btn{ width:auto; margin:0; }
+    .app-shell #panels > .panel:not(:has(.ov-page)) .grid:has(> .stat.compact){ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .app-shell .form-actions{ position:sticky; bottom:0; z-index:5; margin:16px -10px 0; padding:10px 12px 10px; border:0; border-top:1px solid var(--line); border-radius:18px 18px 0 0; background:var(--glass); -webkit-backdrop-filter:saturate(1.4) blur(12px); backdrop-filter:saturate(1.4) blur(12px); box-shadow:0 -8px 20px -10px rgba(16,32,36,.28); }
+    .app-shell .form-actions button{ flex:1 1 0; width:auto; margin-top:0; }
+    .app-shell .form-actions button.primary{ min-width:0; }
+    .app-shell form button.primary, .app-shell .card > button.primary:last-child{ position:static; }
+    .app-shell .fab-backup{ width:48px; height:48px; border-radius:15px; right:14px; bottom:21px; }
+    .app-shell:has(.panel.active .form-actions) .fab-backup{ bottom:88px; }
+  }
+  /* Dark mode: text that sits on tonal/teal-tinted surfaces used the deep teal (fine on light, nearly invisible on dark) */
+  :root[data-theme="dark"]{ --on-tonal:#9ADBD2; }
+  :root[data-theme="dark"] :is(nav.tabs button.active, nav.tabs button.active .icon, .info-btn, .summary-chev, button.ghost, button.ghost:hover, button.rowbtn.edit, button.rowbtn.edit:hover, .group-label, .badge.month, .loom-no, .calc-amount, .qd button, .note-fold summary, .ad-title, .card > h2:first-child, details.more-fold > summary, .ov-sticky .sel-fake, .drawer-group-label){ color:var(--on-tonal); }
+  :root[data-theme="dark"] .qd button:active{ color:#fff; }
+  :root[data-theme="dark"] header.appbar, :root[data-theme="dark"] .drawer-head{ background:linear-gradient(165deg,#25605B,#163C39); }
+  :root[data-theme="dark"] .backup-strip{ background:#8E2F24; color:#fff; }
+  /* Header de-cluttered: the version tag moves into the menu header (still in the page, hidden here, so nothing that reads it breaks);
+     only the language pill and the week badge remain, and the row collapses when the sync badge isn't showing */
+  .appbar-meta .app-version{ display:none; }
+  .appbar-meta .meta-row:not(:has(.sync-badge:not([hidden]))){ display:none; }
+  .appbar-meta{ gap:4px; }
+  .appbar-meta .week-badge{ font-size:11px; padding:2px 10px; background:rgba(255,255,255,.2); }
+  .drawer-head .appsub{ display:flex; align-items:center; gap:8px; }
+  .drawer-head .drawer-ver{ font-size:10px; font-weight:700; padding:0 7px; line-height:16px; border-radius:20px; background:rgba(255,255,255,.18); color:rgba(255,255,255,.9); }
+  /* Slim, quiet scrollbars inside the desktop phone frame */
+  .app-shell #panels, nav.tabs{ scrollbar-width:thin; scrollbar-color:var(--field-border) transparent; }
+  </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -1158,7 +1262,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.72</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.17.75</span></span>
     </div>
   </header>
 
@@ -1199,7 +1303,7 @@
 <script src="./js/ux-enhance.js"></script>
 <script src="./js/lock-init.js"></script>
 <script>
-/* v3.17.72 — if the app's scripts could not load (no internet and nothing cached), show a clear message instead of a broken page. */
+/* v3.17.75 — if the app's scripts could not load (no internet and nothing cached), show a clear message instead of a broken page. */
 (function(){
   function check(){
     if(typeof switchTab === 'function' && typeof DATA === 'object') return;
