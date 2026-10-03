@@ -171,14 +171,17 @@ function productionPanel(){
     <div class="grid cols-2">
       ${employeeSelectField('Employee 1','p_e1')}
       ${field('Employee 1 Meters','p_e1m','number')}
+    </div>
+    <div id="p_e2wrap" class="grid cols-2" style="display:none;margin-top:12px">
       ${employeeSelectField('Employee 2 (optional)','p_e2')}
       ${field('Employee 2 Meters','p_e2m','number')}
     </div>
+    <button type="button" class="ghost" id="p_toggleE2" style="margin-top:10px">+ Add a second employee</button>
     <div id="p_e3wrap" class="grid cols-2" style="display:none;margin-top:12px">
       ${employeeSelectField('Employee 3','p_e3')}
       ${field('Employee 3 Meters','p_e3m','number')}
     </div>
-    <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px">+ Add a third employee</button>
+    <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px;display:none">+ Add a third employee</button>
     <div class="calc-amount" id="p_remainingPreview">Remaining to assign: —</div>
     <p class="note">Time helps tell entries apart when several looms are logged the same day — it doesn't need to be exact. Employee 2's meters auto-fill from what's left once Employee 1's are entered — still editable if the split isn't even.</p>
     <div class="form-actions">

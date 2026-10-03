@@ -286,6 +286,22 @@ function haptic(pattern){
 }
 // Small on-screen message (bottom of the screen) so Share buttons always show what happened.
 let _toastTimer = null;
+// Tiny "✓ Saved" confirmation under the app bar. Only shown when the save follows a tap/keypress of the person's own
+// (not for background saves such as a cloud merge), so it always means "the entry you just made is stored".
+let _lastGesture = 0, _tickTimer = null;
+try{
+  ['pointerdown','keydown'].forEach(ev=> document.addEventListener(ev, ()=>{ _lastGesture = Date.now(); }, true));
+}catch(e){ /* no DOM events here (tests) -- the tick simply never shows */ }
+function showSaveTick(){
+  try{
+    if(Date.now() - _lastGesture > 2500) return;
+    let el = document.getElementById('saveTick');
+    if(!el){ el = document.createElement('div'); el.id = 'saveTick'; el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); document.body.appendChild(el); }
+    el.innerHTML = '<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Saved</span>';
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(_tickTimer); _tickTimer = setTimeout(()=> el.classList.remove('show'), 1400);
+  }catch(e){ /* cosmetic only */ }
+}
 function showToast(msg, ms){
   let el = document.getElementById('appToast');
   if(!el){ el = document.createElement('div'); el.id = 'appToast'; el.setAttribute('role','status'); document.body.appendChild(el); }
@@ -672,6 +688,7 @@ async function save(){
       }
     }
   }
+  if(saveOk && typeof showSaveTick === 'function') showSaveTick(); // "✓ Saved" after the person's own action
   UNDO_PREV_PARTS = curParts; // baseline for detecting whatever gets saved *next*
   if(typeof updateWeekBadge === 'function') updateWeekBadge(); // header "Week Rs …" pill follows every change
   if(typeof autoBackupSchedule === 'function') autoBackupSchedule(); // emails a backup shortly after changes (Backup & Restore > Automatic email backup)

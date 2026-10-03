@@ -139,12 +139,25 @@ function wirePanel(id){
     // again hides it and clears whatever was typed, so a hidden field never gets submitted.
     const e3wrap = document.getElementById('p_e3wrap');
     const e3btn = document.getElementById('p_toggleE3');
-    const showE3 = ()=>{ e3wrap.style.display = 'grid'; e3btn.textContent = '− Remove third employee'; };
+    // Employee 2 is tucked away until it is needed: it opens by itself whenever Employee 2 (or their meters) has a value
+    // -- the loom's usual pair, an edit, a typed entry -- or when "+ Add a second employee" is tapped.
+    const e2wrap = document.getElementById('p_e2wrap'), e2btn = document.getElementById('p_toggleE2');
+    let e2Open = false;
+    const syncE2 = ()=>{
+      const need = e2Open || !!v('p_e2') || !!v('p_e2m') || e3wrap.style.display !== 'none';
+      e2wrap.style.display = need ? 'grid' : 'none';
+      e2btn.style.display = need ? 'none' : '';
+      e3btn.style.display = need ? '' : 'none';
+    };
+    e2btn.addEventListener('click', ()=>{ e2Open = true; syncE2(); });
+    document.getElementById('p_e2').addEventListener('change', syncE2);
+    const showE3 = ()=>{ e3wrap.style.display = 'grid'; e3btn.textContent = '− Remove third employee'; syncE2(); };
     const hideE3 = ()=>{
       e3wrap.style.display = 'none'; e3btn.textContent = '+ Add a third employee';
       document.getElementById('p_e3').value = '';
       document.getElementById('p_e3m').value = '';
       document.getElementById('p_e3m').dataset.manual = '';
+      syncE2();
     };
     // Live "Remaining to assign" readout: total Quantity Produced minus whatever's been split
     // across Employee 1/2/3 so far — lets you catch a mis-typed meter figure (or a loom left
@@ -239,7 +252,9 @@ function wirePanel(id){
       const a = loomAssignmentFor(v('p_loom'));
       document.getElementById('p_e1').value = a?.e1 || '';
       document.getElementById('p_e2').value = a?.e2 || '';
+      syncE2();
     });
+    syncE2(); // first paint, and coming back from "Add & next loom" with the next loom's pair already filled in
     // Enter is the form's default action: "Add & next loom" for a new entry, and
     // Update Entry while a row is being edited (the next-loom button is hidden then).
     ['p_date','p_quality','p_loom','p_qty','p_qty_16','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m'].forEach(id=>{
@@ -256,7 +271,7 @@ function wirePanel(id){
     wireEditGeneric('production','addProduction','cancelProduction',
       {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
       (rec)=>{
-        renderBeamToggle(false); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
+        renderBeamToggle(false); syncE2(); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
         document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
@@ -386,12 +401,18 @@ function wirePanel(id){
         const rem = t - num(q(c,'.mb_m1')); if(rem < -1e-9) return;
         m2.value = Math.floor(rem + 1e-9);
       };
+      // Three-way share, same rules as the single-entry form: Employee 2 and 3 untouched -> the rest (after Employee 1)
+      // is split evenly (Employee 2 gets the odd meter); one typed by hand -> the other takes what is left.
       const autoSplit3 = c=>{
-        const m3 = q(c,'.mb_m3'), t = total(c);
-        if(!e3On(c) || m3.dataset.man || !q(c,'.mb_n3').value || !(t>0)) return;
-        const rem = t - num(q(c,'.mb_m1')) - num(q(c,'.mb_m2'));
-        const whole = rem < -1e-9 ? 0 : Math.floor(rem + 1e-9);
-        m3.value = whole > 0 ? whole : '';
+        if(!e3On(c)) return;
+        const m2 = q(c,'.mb_m2'), m3 = q(c,'.mb_m3'), t = total(c);
+        if(!(t>0) || !q(c,'.mb_n2').value || !q(c,'.mb_n3').value) return;
+        const h2 = !!m2.dataset.man, h3 = !!m3.dataset.man; if(h2 && h3) return;
+        const whole = x => x < -1e-9 ? 0 : Math.floor(x + 1e-9), out = n => n > 0 ? n : '';
+        const rest = whole(t - num(q(c,'.mb_m1')));
+        if(!h2 && !h3){ const two = Math.ceil(rest/2); m2.value = out(two); m3.value = out(rest - two); }
+        else if(h2) m3.value = out(whole(rest - num(m2)));
+        else m2.value = out(whole(rest - num(m3)));
       };
       const calc = ()=>{
         let T=0, A=0, bad=0;
@@ -420,12 +441,12 @@ function wirePanel(id){
         if(e.target.classList.contains('mb_m2')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
         if(e.target.classList.contains('mb_m3')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
         if(e.target.matches('.mb_g,.mb_s,.mb_m1')) autoSplit(c);
-        if(e.target.matches('.mb_g,.mb_s,.mb_m1,.mb_m2')) autoSplit3(c);
+        if(e.target.matches('.mb_g,.mb_s,.mb_m1,.mb_m2,.mb_m3')) autoSplit3(c);
         calc();
       });
       mbRoot.addEventListener('change', e=>{
         const c = e.target.closest('.mb-card');
-        if(c && e.target.classList.contains('mb_n3')){ autoSplit3(c); calc(); }
+        if(c && e.target.matches('.mb_n2,.mb_n3')){ autoSplit3(c); calc(); }
       });
       mbRoot.addEventListener('focusin', e=>{ if(e.target.classList.contains('mb_f')) e.target.select(); });
       mbRoot.addEventListener('keydown', e=>{
@@ -439,7 +460,7 @@ function wirePanel(id){
         const c = e.target.closest('.mb-card'), w = q(c,'.mb-e3'), on = w.style.display==='none';
         w.style.display = on ? 'block' : 'none';
         e.target.textContent = on ? '− Remove third employee' : '+ Add a third employee';
-        if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; q(c,'.mb_m3').dataset.man=''; }
+        if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; q(c,'.mb_m3').dataset.man=''; autoSplit(c); }
         else autoSplit3(c);
         calc();
       });
