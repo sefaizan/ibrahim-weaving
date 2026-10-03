@@ -1783,30 +1783,55 @@ function wirePanel(id){
       document.querySelector(`[data-add="${key}"]`).onclick = async ()=>{
         const name = normalizeMasterName(v(`new_${key}`));
         if(!name) return;
+        // Weft types also carry a count; the same name may exist with different counts, so the name AND count together must be unique.
+        const isWeft = key === 'weftTypes';
+        const isQual = key === 'qualities';
+        const warpType = isQual ? String(v('new_qualities_warp')||'').trim() : '';
+        const picksRaw = isQual ? String(v('new_qualities_picks')||'').trim() : '';
+        const picks = picksRaw === '' ? null : Number(picksRaw);
+        if(isQual && picksRaw !== '' && !(picks > 0)){ showToast('Picks must be a number above zero (or leave it empty).', 5000); return; }
+        const countRaw = isWeft ? String(v('new_weftTypes_count')||'').trim() : '';
+        const count = countRaw === '' ? null : Number(countRaw);
+        if(isWeft && countRaw !== '' && !(count > 0)){ showToast('Count must be a number above zero (or leave it empty).', 5000); return; }
+        const labelOf = r => isWeft ? weftTypeLabel(r) : r.name;
+        const label = isWeft ? weftTypeLabel({name, count}) : name;
         const editingRec = (EDITING && EDITING.key===key) ? DATA[key].find(r=>r.id===EDITING.id) : null;
-        const clash = DATA[key].find(r=> r !== editingRec && masterNameKey(r.name) === masterNameKey(name));
-        if(clash){ showToast(`"${name}" is already in this list.`, 5000); return; }
+        const clash = DATA[key].find(r=> r !== editingRec && masterNameKey(labelOf(r)) === masterNameKey(label));
+        if(clash){ showToast(`"${label}" is already in this list.`, 5000); return; }
         if(editingRec){
-          const oldName = editingRec.name;
-          if(oldName !== name && typeof permsRenameBlocked === 'function'){
+          const oldName = labelOf(editingRec);
+          if(oldName !== label && typeof permsRenameBlocked === 'function'){
             const blocked = permsRenameBlocked(key); // Release 3: a rename reaches other sections (a quality's wage rates too); only a role that may edit all of them can do it
             if(blocked){ showToast('Not allowed \u2014 renaming \u201C' + oldName + '\u201D also changes ' + PERM_SECTION_NAME(blocked.sec) + ', which your role can\u2019t edit.', 6000); return; }
           }
+          if(isWeft){ if(count) editingRec.count = count; else delete editingRec.count; }
+          if(isQual){
+            if(warpType) editingRec.warpType = warpType; else delete editingRec.warpType;
+            if(picks) editingRec.picks = picks; else delete editingRec.picks;
+          }
           editingRec.name = name;
-          const changed = (oldName !== name) ? cascadeMasterRename(key, oldName, name) : 0;
+          const changed = (oldName !== label) ? cascadeMasterRename(key, oldName, label) : 0;
           EDITING = null;
-          NEXT_UNDO_LABEL = `Renamed "${oldName}" to "${name}"` + (changed ? ` (${changed} record${changed===1?'':'s'} updated)` : '');
+          NEXT_UNDO_LABEL = `Renamed "${oldName}" to "${label}"` + (changed ? ` (${changed} record${changed===1?'':'s'} updated)` : '');
           await save(); switchTab('settings');
           return;
         }
-        DATA[key].push({id:uid(), name});
+        const newRec = {id:uid(), name};
+        if(isWeft && count) newRec.count = count;
+        if(isQual){ if(warpType) newRec.warpType = warpType; if(picks) newRec.picks = picks; }
+        DATA[key].push(newRec);
         await save(); switchTab('settings');
       };
+      if(key === 'qualities'){
+        // Picks + warp type fill the Name (e.g. "44 - 150.144"); it can still be typed over.
+        const fillName = ()=>{ const n = qualityAutoName(v('new_qualities_warp'), v('new_qualities_picks')); if(n) document.getElementById('new_qualities').value = n; };
+        ['new_qualities_warp','new_qualities_picks'].forEach(id=>{ const el = document.getElementById(id); if(el){ el.addEventListener('input', fillName); el.addEventListener('change', fillName); } });
+      }
       const inp = document.getElementById(`new_${key}`);
       if(inp) inp.addEventListener('keydown', e=>{
         if(e.key==='Enter'){ e.preventDefault(); document.querySelector(`[data-add="${key}"]`).click(); }
       });
-      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, {[`new_${key}`]:'name'});
+      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks'} : {[`new_${key}`]:'name'});
     });
     wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('familyMembers'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{

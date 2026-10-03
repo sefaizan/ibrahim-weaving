@@ -1259,3 +1259,18 @@ function entryEmployee2Meters(total, e1m, e3m){
   if(left < -1e-6) return null;
   return Math.max(0, Math.floor(left + 1e-9));
 }
+
+// Weft types: the same yarn name can come in different counts, so a type is shown (and stored on each weft
+// purchase) as "Nishat (count 36)". A type with no count — all the older ones — is just its name.
+function weftTypeLabel(t){
+  const name = String((t && t.name) || '').trim();
+  const n = Number(t && t.count);
+  return n > 0 ? name + ' (count ' + n + ')' : name;
+}
+
+// Quality name from its warp type and picks: picks 44 + warp type 150.144 -> "44 - 150.144".
+// Returns '' until both are given (an older quality keeps whatever name it already has).
+function qualityAutoName(warpType, picks){
+  const p = Number(picks), w = String(warpType || '').trim();
+  return (p > 0 && w) ? p + ' - ' + w : '';
+}

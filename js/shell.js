@@ -190,6 +190,8 @@ function settingsPanel(){
       <p class="note info-note" hidden>Use ↑/↓ to reorder — the order here is the order shown in every dropdown that lists these, so move the ones you use most to the top.${hasActiveToggle?(key==='clients'?' Deactivate a client you no longer deal with so they drop out of new-entry dropdowns and, once nothing is owed, out of the client-wise tables — their history stays intact and they can be reactivated anytime.':key==='familyMembers'?' Deactivate anyone you no longer lend to so they drop out of the Person dropdown on Personal Loans — their history stays intact and they can be reactivated anytime.':' Deactivate anyone no longer working so they drop out of new-entry dropdowns — their history stays intact and they can be reactivated anytime.'):''}</p>
       <div class="grid cols-2">
         <div class="field"><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
+        ${key==='qualities' ? '<div class="field"><label>Warp Type</label><select id="new_qualities_warp"><option value="">—</option>' + opts(DATA.warpTypes) + '</select></div><div class="field"><label>Picks</label><input id="new_qualities_picks" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 44"></div>' : ''}
+        ${key==='weftTypes' ? '<div class="field"><label>Count</label><input id="new_weftTypes_count" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 36"></div>' : ''}
       </div>
       <div class="form-actions">
         <button class="primary" id="add_${key}" data-add="${key}">Add ${/ies$/.test(title) ? title.slice(0,-3)+'y' : title.slice(0,-1)}</button>
@@ -200,7 +202,8 @@ function settingsPanel(){
         <tbody>
           ${DATA[key].length ? DATA[key].map((x,idx)=>{
             const inactive = hasActiveToggle && x.active === false;
-            const nameCell = isName ? `<span class="name">${escHtml(x.name)}</span>` : escHtml(x.name);
+            const shown = key==='weftTypes' ? weftTypeLabel(x) : x.name;
+            const nameCell = isName ? `<span class="name">${escHtml(shown)}</span>` : escHtml(shown);
             return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
           }).join('')
             : `<tr><td colspan="2" class="empty">No entries yet</td></tr>`}
@@ -391,7 +394,7 @@ const MASTER_REF_FIELDS = {
   employees: [['wageBonuses','employee'], ['wagePayments','employee'], ['wageSettlements','employee'], ['loanPayments','employee'],
               ['production','e1'], ['production','e2'], ['production','e3'], ['loomAssignments','e1'], ['loomAssignments','e2']],
   looms:     [['production','loom'], ['warpBeams','loom'], ['loomAssignments','loom']],
-  warpTypes: [['warp','type'], ['warpBeams','warpType']],
+  warpTypes: [['warp','type'], ['warpBeams','warpType'], ['qualities','warpType']],
   weftTypes: [['weft','type']],
   dyeingUnits: [['sale','dyeing']],
   familyMembers: [['personalLoans','person']],
