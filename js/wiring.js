@@ -144,6 +144,7 @@ function wirePanel(id){
       e3wrap.style.display = 'none'; e3btn.textContent = '+ Add a third employee';
       document.getElementById('p_e3').value = '';
       document.getElementById('p_e3m').value = '';
+      document.getElementById('p_e3m').dataset.manual = '';
     };
     // Live "Remaining to assign" readout: total Quantity Produced minus whatever's been split
     // across Employee 1/2/3 so far — lets you catch a mis-typed meter figure (or a loom left
@@ -195,6 +196,31 @@ function wirePanel(id){
       return true;
     };
     p_e1m.addEventListener('input', autoSplitRemaining);
+    // Three-way split. With a third employee in play, whatever Employee 1 didn't weave is shared out
+    // automatically (whole meters only; 1/16ths stay in Diff, same rule as the two-employee split):
+    //   - Employee 2 and 3 both untouched  -> split the rest evenly (Employee 2 gets the odd meter)
+    //   - one of them typed by hand        -> the other one takes whatever is left
+    //   - both typed by hand               -> nothing is changed
+    // Needs both Employee 2 and Employee 3 picked. Removing the third employee gives the rest back to Employee 2.
+    const p_e2m = document.getElementById('p_e2m'), p_e3m = document.getElementById('p_e3m');
+    p_e3m.addEventListener('input', function(){ this.dataset.manual = this.value.trim() ? '1' : ''; });
+    const autoSplitThird = ()=>{
+      if(e3wrap.style.display === 'none') return;
+      const total = combineMtr16(v('p_qty'), v('p_qty_16'));
+      if(!(total > 0) || !v('p_e2') || !v('p_e3')) return;
+      const m2 = !!p_e2m.dataset.manual, m3 = !!p_e3m.dataset.manual;
+      if(m2 && m3) return;
+      const whole = x => x < -1e-6 ? 0 : Math.floor(x + 1e-9);
+      const rest = whole(total - Number(v('p_e1m')||0));
+      const out = n => n > 0 ? fmtQtyPlain(n) : '';
+      if(!m2 && !m3){ const two = Math.ceil(rest / 2); p_e2m.value = out(two); p_e3m.value = out(rest - two); }
+      else if(m2){ p_e3m.value = out(whole(rest - Number(p_e2m.value||0))); }
+      else { p_e2m.value = out(whole(rest - Number(p_e3m.value||0))); }
+      updateRemaining();
+    };
+    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', autoSplitThird); });
+    ['p_e2','p_e3'].forEach(id=>document.getElementById(id).addEventListener('change', autoSplitThird));
+    e3btn.addEventListener('click', ()=>{ e3wrap.style.display === 'none' ? autoSplitRemaining() : autoSplitThird(); });
     // Once Employee 1's figure is typed in (leaving the field, e.g. by Tab), control moves
     // straight to the save button instead of stopping at Employee 2's already-filled fields —
     // the split is on screen to check, and Enter from there saves the entry.
@@ -230,7 +256,7 @@ function wirePanel(id){
     wireEditGeneric('production','addProduction','cancelProduction',
       {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
       (rec)=>{
-        renderBeamToggle(false); if(v('p_e3')) showE3(); nextBtn.style.display = 'none';
+        renderBeamToggle(false); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
         document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
@@ -360,6 +386,13 @@ function wirePanel(id){
         const rem = t - num(q(c,'.mb_m1')); if(rem < -1e-9) return;
         m2.value = Math.floor(rem + 1e-9);
       };
+      const autoSplit3 = c=>{
+        const m3 = q(c,'.mb_m3'), t = total(c);
+        if(!e3On(c) || m3.dataset.man || !q(c,'.mb_n3').value || !(t>0)) return;
+        const rem = t - num(q(c,'.mb_m1')) - num(q(c,'.mb_m2'));
+        const whole = rem < -1e-9 ? 0 : Math.floor(rem + 1e-9);
+        m3.value = whole > 0 ? whole : '';
+      };
       const calc = ()=>{
         let T=0, A=0, bad=0;
         shown().forEach(c=>{
@@ -385,8 +418,14 @@ function wirePanel(id){
       mbRoot.addEventListener('input', e=>{
         const c = e.target.closest('.mb-card'); if(!c) return;
         if(e.target.classList.contains('mb_m2')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
+        if(e.target.classList.contains('mb_m3')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
         if(e.target.matches('.mb_g,.mb_s,.mb_m1')) autoSplit(c);
+        if(e.target.matches('.mb_g,.mb_s,.mb_m1,.mb_m2')) autoSplit3(c);
         calc();
+      });
+      mbRoot.addEventListener('change', e=>{
+        const c = e.target.closest('.mb-card');
+        if(c && e.target.classList.contains('mb_n3')){ autoSplit3(c); calc(); }
       });
       mbRoot.addEventListener('focusin', e=>{ if(e.target.classList.contains('mb_f')) e.target.select(); });
       mbRoot.addEventListener('keydown', e=>{
@@ -400,7 +439,8 @@ function wirePanel(id){
         const c = e.target.closest('.mb-card'), w = q(c,'.mb-e3'), on = w.style.display==='none';
         w.style.display = on ? 'block' : 'none';
         e.target.textContent = on ? '− Remove third employee' : '+ Add a third employee';
-        if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; }
+        if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; q(c,'.mb_m3').dataset.man=''; }
+        else autoSplit3(c);
         calc();
       });
       document.getElementById('saveMultiProduction').onclick = async ()=>{

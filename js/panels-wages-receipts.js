@@ -478,8 +478,10 @@ function ratecalcPanel(){
   const d = DATA.rateCalcDefaults || {};
   return `
     <div class="card"><h2>Grey Cloth Rate Calculator</h2>
-      <div class="grid cols-3">
+      <div class="grid cols-1">
         ${field('Label / Quality (optional)','rc_label','text','placeholder="e.g. 46 Picks 64 inch"')}
+      </div>
+      <div class="grid cols-2 rc-kangi-arz" style="margin-top:12px;align-items:end">
         ${field('Thread Count (ends/inch) <span style="color:var(--rust);font-weight:800;text-transform:none;letter-spacing:0">(Kangi)</span>','rc_thread','number','inputmode="numeric"')}
         ${field('Width (inches) <span style="color:var(--rust);font-weight:800;text-transform:none;letter-spacing:0">(Arz)</span>','rc_width','number')}
       </div>
