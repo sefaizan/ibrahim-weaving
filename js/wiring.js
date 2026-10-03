@@ -404,18 +404,15 @@ function wirePanel(id){
         const rem = t - num(q(c,'.mb_m1')); if(rem < -1e-9) return;
         m2.value = Math.floor(rem + 1e-9);
       };
-      // Three-way share, same rules as the single-entry form: Employee 2 and 3 untouched -> the rest (after Employee 1)
-      // is split evenly (Employee 2 gets the odd meter); one typed by hand -> the other takes what is left.
+      // Three-way share, same rules as the single-entry form: Employee 2 keeps everything Employee 1 didn't weave,
+      // minus whatever is typed for Employee 3 (whose meters start empty). Employee 2 typed by hand -> left alone.
       const autoSplit3 = c=>{
         if(!e3On(c)) return;
-        const m2 = q(c,'.mb_m2'), m3 = q(c,'.mb_m3'), t = total(c);
-        if(!(t>0) || !q(c,'.mb_n2').value || !q(c,'.mb_n3').value) return;
-        const h2 = !!m2.dataset.man, h3 = !!m3.dataset.man; if(h2 && h3) return;
-        const whole = x => x < -1e-9 ? 0 : Math.floor(x + 1e-9), out = n => n > 0 ? n : '';
-        const rest = whole(t - num(q(c,'.mb_m1')));
-        if(!h2 && !h3){ const two = Math.ceil(rest/2); m2.value = out(two); m3.value = out(rest - two); }
-        else if(h2) m3.value = out(whole(rest - num(m2)));
-        else m2.value = out(whole(rest - num(m3)));
+        const m2 = q(c,'.mb_m2'), t = total(c);
+        if(!(t>0) || !q(c,'.mb_n2').value || m2.dataset.man) return;
+        const whole = x => x < -1e-9 ? 0 : Math.floor(x + 1e-9);
+        const left = whole(t - num(q(c,'.mb_m1')) - num(q(c,'.mb_m3')));
+        m2.value = left > 0 ? left : '';
       };
       const calc = ()=>{
         let T=0, A=0, bad=0;
