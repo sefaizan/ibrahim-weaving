@@ -183,6 +183,7 @@ function productionPanel(){
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px;display:none">+ Add a third employee</button>
     <div class="calc-amount" id="p_remainingPreview">Remaining to assign: —</div>
+    <div class="hint" style="font-size:12px;opacity:.75;margin:2px 0 8px">Employee 2 gets whole meters. Any leftover (e.g. 1/16ths) stays in Diff and is shared equally between all employees on the entry.</div>
     <p class="note">Time helps tell entries apart when several looms are logged the same day — it doesn't need to be exact. Employee 2's meters auto-fill from what's left once Employee 1's are entered — still editable if the split isn't even.</p>
     <div class="form-actions">
       <button class="primary" id="addProductionNext">Add &amp; next loom →</button>

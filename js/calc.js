@@ -1249,3 +1249,13 @@ function computeEmployeeWageNetForPeriod(empName, fromDate, toDate){
   const paid = sumWagePaymentsInRange(empName, fromDate, toDate);
   return {earned, paid, net: paisaDiff(earned, paid)};
 }
+
+// Production entry forms: Employee 2's automatic meters. Whole meters only — whatever is left after
+// Employee 1 (and Employee 3, if typed) minus this, including any 1/16ths, stays in the entry's
+// Difference, which wages split equally between all employees named on the entry.
+// Returns 0 when nothing is left; null when Employee 1 + 3 already exceed the total (fix by hand).
+function entryEmployee2Meters(total, e1m, e3m){
+  const left = (Number(total)||0) - (Number(e1m)||0) - (Number(e3m)||0);
+  if(left < -1e-6) return null;
+  return Math.max(0, Math.floor(left + 1e-9));
+}

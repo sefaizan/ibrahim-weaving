@@ -202,9 +202,9 @@ function wirePanel(id){
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
       const e2mInput = document.getElementById('p_e2m');
       if(!(total > 0) || !v('p_e2') || e2mInput.dataset.manual || e3wrap.style.display !== 'none') return false;
-      const remaining = total - Number(v('p_e1m')||0);
-      if(remaining < -1e-6) return false; // Employee 1 alone already exceeds the total — leave it for a manual fix
-      e2mInput.value = fmtQtyPlain(Math.max(0, Math.floor(remaining + 1e-9)));
+      const e2 = entryEmployee2Meters(total, v('p_e1m'), 0);
+      if(e2 === null) return false; // Employee 1 alone already exceeds the total — leave it for a manual fix
+      e2mInput.value = fmtQtyPlain(e2);
       updateRemaining();
       return true;
     };
@@ -226,10 +226,9 @@ function wirePanel(id){
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
       if(!(total > 0) || !v('p_e2')) return;
       if(p_e2m.dataset.manual) return; // Employee 2 typed by hand — leave it alone
-      const whole = x => x < -1e-6 ? 0 : Math.floor(x + 1e-9);
-      const out = n => n > 0 ? fmtQtyPlain(n) : '';
       // Employee 2 keeps everything Employee 1 didn't weave, minus whatever is typed for Employee 3.
-      p_e2m.value = out(whole(total - Number(v('p_e1m')||0) - Number(v('p_e3m')||0)));
+      const e2 = entryEmployee2Meters(total, v('p_e1m'), v('p_e3m')) || 0;
+      p_e2m.value = e2 > 0 ? fmtQtyPlain(e2) : '';
       updateRemaining();
     };
     ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', autoSplitThird); });
@@ -401,8 +400,8 @@ function wirePanel(id){
       const autoSplit = c=>{
         const m2 = q(c,'.mb_m2'), t = total(c);
         if(m2.dataset.man || e3On(c) || !q(c,'.mb_n2').value || !(t>0)) return;
-        const rem = t - num(q(c,'.mb_m1')); if(rem < -1e-9) return;
-        m2.value = Math.floor(rem + 1e-9);
+        const e2 = entryEmployee2Meters(t, num(q(c,'.mb_m1')), 0); if(e2 === null) return;
+        m2.value = e2;
       };
       // Three-way share, same rules as the single-entry form: Employee 2 keeps everything Employee 1 didn't weave,
       // minus whatever is typed for Employee 3 (whose meters start empty). Employee 2 typed by hand -> left alone.
@@ -410,8 +409,7 @@ function wirePanel(id){
         if(!e3On(c)) return;
         const m2 = q(c,'.mb_m2'), t = total(c);
         if(!(t>0) || !q(c,'.mb_n2').value || m2.dataset.man) return;
-        const whole = x => x < -1e-9 ? 0 : Math.floor(x + 1e-9);
-        const left = whole(t - num(q(c,'.mb_m1')) - num(q(c,'.mb_m3')));
+        const left = entryEmployee2Meters(t, num(q(c,'.mb_m1')), num(q(c,'.mb_m3'))) || 0;
         m2.value = left > 0 ? left : '';
       };
       const calc = ()=>{
