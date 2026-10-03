@@ -998,9 +998,13 @@ function updateSyncBadge(){
     else if(!cloudUserNow()){ t = '\u26A0 Sign in'; warn = true; }
     else t = ok ? ('\u2601 ' + cloudAgoShort(ok)) : '\u2601 Not synced';
     el.textContent = t;
+    // Header pill: short states ("☁ now", "☁ 5m") show in full; long ones ("⚠ Verify email") collapse to just their icon so the
+    // header never grows a third row. Tap it to read the full status.
+    el.dataset.icon = t.charAt(0); el.classList.toggle('compact', t.length > 8);
     el.classList.toggle('warn', warn);
     const tip = cloudStatusText();
     el.title = tip; el.setAttribute('aria-label', 'Cloud sync: ' + tip);
+    el.onclick = ()=>{ if(typeof showToast === 'function') showToast(tip); };
     el.hidden = false;
   }catch(e){ el.hidden = true; }
 }
