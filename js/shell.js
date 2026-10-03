@@ -191,6 +191,7 @@ function settingsPanel(){
       <div class="grid cols-2">
         <div class="field"><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
         ${key==='qualities' ? '<div class="field"><label>Warp Type</label><select id="new_qualities_warp"><option value="">—</option>' + opts(DATA.warpTypes) + '</select></div><div class="field"><label>Picks</label><input id="new_qualities_picks" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 44"></div>' : ''}
+        ${key==='clients' ? '<div class="field"><label>Phone</label><input id="new_clients_phone" type="tel" inputmode="tel" placeholder="optional"></div><div class="field"><label>Address</label><input id="new_clients_address" placeholder="optional"></div><div class="field"><label>Credit limit (Rs)</label><input id="new_clients_limit" type="number" inputmode="decimal" min="0" placeholder="optional"></div>' : ''}
         ${key==='weftTypes' ? '<div class="field"><label>Count</label><input id="new_weftTypes_count" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 36"></div>' : ''}
       </div>
       <div class="form-actions">
@@ -203,8 +204,9 @@ function settingsPanel(){
           ${DATA[key].length ? DATA[key].map((x,idx)=>{
             const inactive = hasActiveToggle && x.active === false;
             const shown = key==='weftTypes' ? weftTypeLabel(x) : x.name;
+            const clientSub = key==='clients' ? [x.phone, x.address, x.creditLimit?('Limit Rs '+Number(x.creditLimit).toLocaleString()):''].filter(Boolean).map(escHtml).join(' · ') : '';
             const nameCell = isName ? `<span class="name">${escHtml(shown)}</span>` : escHtml(shown);
-            return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
+            return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${clientSub?`<div class="note" style="margin:2px 0 0">${clientSub}</div>`:''}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
           }).join('')
             : `<tr><td colspan="2" class="empty">No entries yet</td></tr>`}
         </tbody>

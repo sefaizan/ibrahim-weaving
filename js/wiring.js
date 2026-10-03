@@ -544,6 +544,13 @@ function wirePanel(id){
         DATA.sale.push({id:uid(), ...rec}); PAGE.sale = 1;
       }
       await save(); switchTab('sale');
+      try{
+        const cl = DATA.clients.find(c=>c.name===rec.client);
+        if(cl && cl.creditLimit){
+          const owed = clientReceivableNow(rec.client);
+          if(owed > cl.creditLimit) showToast(`⚠ ${rec.client} owes Rs ${Math.round(owed).toLocaleString()} — over the credit limit of Rs ${Number(cl.creditLimit).toLocaleString()}.`, 8000);
+        }
+      }catch(e){}
     };
     wireAmountPreview(['s_qty','s_qty_16'],'s_rate','s_amtPreview','Amount',true);
     wireEnterSubmit(['s_date','s_client','s_quality','s_qty','s_qty_16','s_rate','s_inv'],'addSale');
@@ -1793,6 +1800,13 @@ function wirePanel(id){
         const countRaw = isWeft ? String(v('new_weftTypes_count')||'').trim() : '';
         const count = countRaw === '' ? null : Number(countRaw);
         if(isWeft && countRaw !== '' && !(count > 0)){ showToast('Count must be a number above zero (or leave it empty).', 5000); return; }
+        const isCli = key === 'clients';
+        const cPhone = isCli ? String(v('new_clients_phone')||'').trim() : '';
+        const cAddr = isCli ? String(v('new_clients_address')||'').trim() : '';
+        const cLimRaw = isCli ? String(v('new_clients_limit')||'').trim() : '';
+        const cLim = cLimRaw === '' ? null : Number(cLimRaw);
+        if(isCli && cLimRaw !== '' && !(cLim > 0)){ showToast('Credit limit must be a number above zero (or leave it empty).', 5000); return; }
+        const setCli = rec => { if(!isCli) return; if(cPhone) rec.phone = cPhone; else delete rec.phone; if(cAddr) rec.address = cAddr; else delete rec.address; if(cLim) rec.creditLimit = cLim; else delete rec.creditLimit; };
         const labelOf = r => isWeft ? weftTypeLabel(r) : r.name;
         const label = isWeft ? weftTypeLabel({name, count}) : name;
         const editingRec = (EDITING && EDITING.key===key) ? DATA[key].find(r=>r.id===EDITING.id) : null;
@@ -1809,6 +1823,7 @@ function wirePanel(id){
             if(warpType) editingRec.warpType = warpType; else delete editingRec.warpType;
             if(picks) editingRec.picks = picks; else delete editingRec.picks;
           }
+          setCli(editingRec);
           editingRec.name = name;
           const changed = (oldName !== label) ? cascadeMasterRename(key, oldName, label) : 0;
           EDITING = null;
@@ -1817,6 +1832,7 @@ function wirePanel(id){
           return;
         }
         const newRec = {id:uid(), name};
+        setCli(newRec);
         if(isWeft && count) newRec.count = count;
         if(isQual){ if(warpType) newRec.warpType = warpType; if(picks) newRec.picks = picks; }
         DATA[key].push(newRec);
@@ -1831,7 +1847,7 @@ function wirePanel(id){
       if(inp) inp.addEventListener('keydown', e=>{
         if(e.key==='Enter'){ e.preventDefault(); document.querySelector(`[data-add="${key}"]`).click(); }
       });
-      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks'} : {[`new_${key}`]:'name'});
+      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks'} : key==='clients' ? {new_clients:'name', new_clients_phone:'phone', new_clients_address:'address', new_clients_limit:'creditLimit'} : {[`new_${key}`]:'name'});
     });
     wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('familyMembers'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{

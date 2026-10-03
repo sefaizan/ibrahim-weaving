@@ -1274,3 +1274,11 @@ function qualityAutoName(warpType, picks){
   const p = Number(picks), w = String(warpType || '').trim();
   return (p > 0 && w) ? p + ' - ' + w : '';
 }
+
+// Client details: a client's current receivable (sales - received - bounced), all time, for the credit-limit warning.
+function clientReceivableNow(name){
+  const sales = activeSaleRows().filter(s=>s.client===name).reduce((t,s)=>t+(Number(s.amount)||0),0);
+  const recd = DATA.recovery.filter(r=>r.client===name).reduce((t,r)=>t+(recoveryReceivableAmount(r)||0),0);
+  const bnc = DATA.recovery.filter(r=>r.client===name).reduce((t,r)=>t+(recoveryBouncedAmount(r)||0),0);
+  return sales - recd - bnc;
+}
