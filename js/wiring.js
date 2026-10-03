@@ -208,6 +208,10 @@ function wirePanel(id){
       updateRemaining();
       return true;
     };
+    // Total woven, then the sixteenths: control moves straight to Employee 1's meters.
+    document.getElementById('p_qty_16').addEventListener('change', ()=>{
+      if(combineMtr16(v('p_qty'), v('p_qty_16')) > 0) document.getElementById('p_e1m').focus();
+    });
     p_e1m.addEventListener('input', autoSplitRemaining);
     // Three-way split. With a third employee in play, whatever Employee 1 didn't weave is shared out
     // automatically (whole meters only; 1/16ths stay in Diff, same rule as the two-employee split):
@@ -220,15 +224,12 @@ function wirePanel(id){
     const autoSplitThird = ()=>{
       if(e3wrap.style.display === 'none') return;
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
-      if(!(total > 0) || !v('p_e2') || !v('p_e3')) return;
-      const m2 = !!p_e2m.dataset.manual, m3 = !!p_e3m.dataset.manual;
-      if(m2 && m3) return;
+      if(!(total > 0) || !v('p_e2')) return;
+      if(p_e2m.dataset.manual) return; // Employee 2 typed by hand — leave it alone
       const whole = x => x < -1e-6 ? 0 : Math.floor(x + 1e-9);
-      const rest = whole(total - Number(v('p_e1m')||0));
       const out = n => n > 0 ? fmtQtyPlain(n) : '';
-      if(!m2 && !m3){ const two = Math.ceil(rest / 2); p_e2m.value = out(two); p_e3m.value = out(rest - two); }
-      else if(m2){ p_e3m.value = out(whole(rest - Number(p_e2m.value||0))); }
-      else { p_e2m.value = out(whole(rest - Number(p_e3m.value||0))); }
+      // Employee 2 keeps everything Employee 1 didn't weave, minus whatever is typed for Employee 3.
+      p_e2m.value = out(whole(total - Number(v('p_e1m')||0) - Number(v('p_e3m')||0)));
       updateRemaining();
     };
     ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', autoSplitThird); });
@@ -261,7 +262,9 @@ function wirePanel(id){
       const inp = document.getElementById(id);
       if(!inp) return;
       inp.addEventListener('keydown', e=>{
-        if(e.key === 'Enter'){ e.preventDefault(); document.getElementById(EDITING ? 'addProduction' : 'addProductionNext').click(); }
+        if(e.key === 'Enter'){ e.preventDefault();
+          if(id === 'p_qty_16' && !v('p_e1m') && combineMtr16(v('p_qty'), v('p_qty_16')) > 0){ document.getElementById('p_e1m').focus(); return; }
+          document.getElementById(EDITING ? 'addProduction' : 'addProductionNext').click(); }
       });
     });
     wireDelete('production');
