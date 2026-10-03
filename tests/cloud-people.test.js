@@ -187,7 +187,7 @@ describe('the screen', () => {
     assert.equal(t(0), 'Expired'); assert.equal(t(-DAY), 'Expired');
   });
   test('the block starts with a date 30 days ahead, and the list is drawn when the card is wired', async () => {
-    load({ record: record({ 'a@example.com': { expiresAt: NOW + 3 * DAY, write: false, addedAt: 1 } }) }); signIn(OWNER);
+    load({ record: record({ 'a@example.com': { expiresAt: Date.now() + 3 * DAY, write: false, addedAt: 1 } }) }); signIn(OWNER);
     const h = run('cloudPeopleHtml()');
     assert.match(h, /id="cloudPeopleAmount"[^>]*value="30"/); assert.match(h, /<option value="days" selected>/);
     ['minutes', 'hours', 'days', 'until'].forEach(u => assert.ok(h.includes('<option value="' + u + '"'), u));
