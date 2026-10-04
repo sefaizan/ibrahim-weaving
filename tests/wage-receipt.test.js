@@ -26,7 +26,7 @@ function load(extra) {
   const toasts = [];
   const ctx = vm.createContext({
     DATA: data, BIZ_LOGO_PNG: 'x', receiptWatermarkDiv: '', dateTimeStamp: () => 'T',
-    fmtRs: (n) => 'Rs ' + Math.round(n || 0), fmtRs2: (n) => 'Rs ' + (n || 0).toFixed(2), fmtDate: (d) => d,
+    fmtQtyMtr: (n) => String(Math.round(n * 100) / 100), fmtRs: (n) => 'Rs ' + Math.round(n || 0), fmtRs2: (n) => 'Rs ' + (n || 0).toFixed(2), fmtDate: (d) => d,
     escHtml: (s) => String(s), showToast: (m) => toasts.push(m), document: { getElementById: () => ({}) },
   });
   vm.runInContext(read('js/calc.js'), ctx);
@@ -63,6 +63,39 @@ describe('wage slip numbers', () => {
     const { ctx, toasts } = load();
     assert.equal(vm.runInContext("printWageReceipt('nope')", ctx), undefined);
     assert.equal(toasts.length, 1);
+  });
+});
+
+describe('wage slip breakdown', () => {
+  const two = () => load({
+    qualities: [{ name: 'A' }, { name: 'B' }], employees: [{ id: 'e1', name: 'Ali' }, { id: 'e2', name: 'Bilal' }],
+    wageRateHistory: { A: [{ date: '2026-01-01', rate: 10 }], B: [{ date: '2026-01-01', rate: 5 }] },
+    production: [
+      prod({ date: '2026-10-01', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }),                               // 100 x 10
+      prod({ date: '2026-10-01', quality: 'B', qty: 50, e1: 'Ali', e1m: 40, e2: 'Bilal', e2m: 0 }),            // 40 own + 10 diff (all to Ali: Bilal has 0 own but shares diff 5/5)
+    ],
+  });
+  test('quality rows show own meters, diff meters, rate and wages; they add up to the total', () => {
+    const { facts, html } = two();
+    const f = facts('p1');
+    const a = f.qualityRows.find((x) => x.quality === 'A'), b = f.qualityRows.find((x) => x.quality === 'B');
+    assert.equal(a.own, 100); assert.equal(a.wages, 1000);
+    assert.equal(b.own, 40); assert.equal(b.diff, 5); assert.equal(b.wages, 225); // (40+5) x 5
+    assert.equal(f.qualityRows.reduce((s, x) => s + x.wages, 0), f.earned);
+    const h = html('p1');
+    assert.match(h, /How wages were built/); assert.match(h, /<td>A<\/td>/); assert.match(h, /<td>B<\/td>/);
+    assert.match(h, /Wages from own meters/); assert.match(h, /Wages from diff share/);
+  });
+  test('summary lines add up: wages + bonus + brought forward = total due; then paid and balance', () => {
+    const { html } = two();
+    const h = html('p1');
+    assert.match(h, /Bonus<\/span><span>Rs 500\.00/); assert.match(h, /Total due<\/span><span>Rs 1725\.00/);
+    assert.match(h, /Paid now<\/span><span>Rs 9000\.00/);
+  });
+  test('period starts the day after the last settlement; a qualityless period says so', () => {
+    const { facts, html } = load({ qualities: [{ name: 'A' }], production: [] });
+    assert.equal(facts('p1').qualityRows.length, 0);
+    assert.match(html('p1'), /No production in this period/);
   });
 });
 
