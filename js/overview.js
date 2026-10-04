@@ -613,7 +613,8 @@ function wireFoldCards(root){
    getting better or worse". This page reuses computeStats() per calendar month to build
    real month-over-month trend charts instead — the thing a single-period view can't do. */
 function lastNMonthKeys(n){
-  const out = [], now = new Date();
+  // "today" comes from todayStr() (the phone's local date) so the charts and the "so far" month agree with the rest of the app
+  const out = [], t = todayStr(), now = new Date(Number(t.slice(0,4)), Number(t.slice(5,7))-1, 1);
   for(let i=n-1;i>=0;i--){
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
     out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
@@ -637,9 +638,9 @@ function allMonthKeysFromData(){
   if(!dates.length) return lastNMonthKeys(12);
   const minDate = dates.reduce((a,b)=> a<b?a:b);
   const [y0,m0] = minDate.split('-').map(Number);
-  const now = new Date();
+  const t = todayStr();
   let cur = new Date(Date.UTC(y0, m0-1, 1));
-  const endMarker = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+  const endMarker = new Date(Date.UTC(Number(t.slice(0,4)), Number(t.slice(5,7))-1, 1));
   const out = [];
   while(cur <= endMarker){
     out.push(`${cur.getUTCFullYear()}-${String(cur.getUTCMonth()+1).padStart(2,'0')}`);
@@ -872,12 +873,16 @@ function svgLineChart(monthKeys, values, o){
   return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block" role="img">${out}</svg>`;
 }
 // Tiny trend line inside a summary tile
-function gxSpark(values, color){
+function gxSpark(values, color, live){
   const n = values.length; if(n < 2) return '';
   const w=100, h=28, lo=Math.min(...values), hi=Math.max(...values), span=(hi-lo)||1;
   const pts = values.map((v,i)=> [i*(w-6)/(n-1)+3, h-3-((v-lo)/span)*(h-6)]);
-  const last = pts[n-1];
-  return `<svg class="gx-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline class="gx-line" pathLength="1" points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="${color}"></circle></svg>`;
+  const last = pts[n-1], str = a => a.map(p=>p.join(',')).join(' ');
+  if(live && n >= 3){
+    // the month still in progress is drawn dashed with a hollow dot: it is not a real fall, it is not finished yet
+    return `<svg class="gx-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline class="gx-line" pathLength="1" points="${str(pts.slice(0,n-1))}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline><polyline points="${str(pts.slice(n-2))}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="3 3" stroke-linecap="round" opacity=".7"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--card)" stroke="${color}" stroke-width="1.6"></circle></svg>`;
+  }
+  return `<svg class="gx-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline class="gx-line" pathLength="1" points="${str(pts)}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="${color}"></circle></svg>`;
 }
 // Donut of where the money went; the legend underneath carries the figures
 function gxDonut(split, total){
@@ -909,9 +914,28 @@ function graphsAnimate(root){
 }
 // What a tap on a month column shows; also moves the highlight to the tapped column
 function graphsTapHandler(e){
+  const root = document.getElementById('graphs_root');
+  const jump = e.target.closest ? e.target.closest('[data-jump]') : null;
+  if(jump){
+    const t = document.getElementById(jump.dataset.jump);
+    if(t){ t.scrollIntoView({behavior:'smooth', block:'start'}); t.classList.remove('gx-flash'); void t.offsetWidth; t.classList.add('gx-flash'); }
+    return;
+  }
+  const tile = e.target.closest ? e.target.closest('[data-tile]') : null;
+  if(tile && root){
+    const key = tile.dataset.tile, panel = root.querySelector(`.gx-dpanel[data-for="${key}"]`);
+    const wasOpen = tile.classList.contains('open');
+    root.querySelectorAll('.gx-tile.open').forEach(x=>{ x.classList.remove('open'); x.setAttribute('aria-expanded','false'); });
+    root.querySelectorAll('.gx-dpanel').forEach(x=>{ x.hidden = true; });
+    if(!wasOpen && panel){
+      tile.classList.add('open'); tile.setAttribute('aria-expanded','true'); panel.hidden = false;
+      panel.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    return;
+  }
   const g = e.target.closest ? e.target.closest('.gx-grp') : null;
   if(!g) return;
-  const card = g.closest('.card'); if(!card) return;
+  const card = g.closest('.gx-dpanel, .card'); if(!card) return;
   const tip = card.querySelector('.gx-tip');
   const was = g.classList.contains('sel');
   card.querySelectorAll('.gx-grp.sel').forEach(x=> x.classList.remove('sel'));
@@ -941,25 +965,67 @@ function graphsPanel(){
   const tipBox = `<div class="gx-tip" data-hint="${hint}">${hint}</div>`;
   const legend = (items)=>`<div class="gx-legend">${items.map(([color,label])=>`<span><i style="background:${color}"></i>${GX_ESC(label)}</span>`).join('')}</div>`;
   const info = (text)=>`<button type="button" class="info-btn" data-info-toggle title="Info">i</button></div><p class="note info-note" hidden>${text}</p>`;
-  const card = (title, text, body, i)=>`<div class="card gx-card" style="animation-delay:${Math.min(i*70,560)}ms"><div class="card-head"><h2>${title}</h2>${info(text)}${body}</div>`;
+  const card = (title, text, body, i, id)=>`<div class="card gx-card"${id?` id="${id}"`:''} style="animation-delay:${Math.min(i*70,560)}ms"><div class="card-head"><h2>${title}</h2>${info(text)}${body}</div>`;
   const prevName = n===1 ? 'previous month' : `previous ${n} months`;
   const ghostOn = compareOn && D.prev;
   const sg = (name,color,values,prevValues)=>({name, color, values, ghost: ghostOn ? prevValues : null, labelPrev: i=> monthShortLabel(monthKeys[i-1])});
 
-  // ---- summary tiles ----
-  const tiles = [
+  // ---- summary tiles (tap one to open its details) ----
+  const liveIdx = monthKeys.indexOf(curKey);              // the month still in progress, if it is on screen
+  const lastFull = liveIdx === n-1 ? n-2 : n-1;           // newest finished month
+  const dayNow = Number(todayStr().slice(8)), daysInMonth = new Date(Number(curKey.slice(0,4)), Number(curKey.slice(5,7)), 0).getDate();
+  const mName = i => monthShortLabel(monthKeys[i]);
+  const jumpFor = {produced:'gx_prod', sold:'gx_prod', sales:'gx_salesexp', expenses:'gx_salesexp', profit:'gx_profit', received:'gx_cash'};
+  const defs = [
     ['Produced','produced','m','var(--rust)',false], ['Sold','sold','m','var(--gold)',false],
     ['Sales','sales','rs','var(--green)',false], ['Expenses','expenses','rs','var(--red)',true],
     ['Profit','profit','rs','var(--green)',false], ['Cash Received','received','rs','var(--rust)',false],
-  ].map(([label,key,kind,color,invert])=>{
-    const total = D.totals[key], ch = D.prevTotals ? gxChange(total, D.prevTotals[key]) : null;
+  ];
+  const tiles = defs.map(([label,key,kind,color,invert])=>{
+    const total = D.totals[key];
+    let ch = D.prevTotals ? gxChange(total, D.prevTotals[key]) : null, vs = 'vs prev period';
+    if(ch == null && lastFull >= 1){ ch = gxChange(C[key][lastFull], C[key][lastFull-1]); vs = `${mName(lastFull)} vs ${mName(lastFull-1)}`; }
     const good = ch==null ? '' : ((ch>=0) !== invert ? 'good' : 'bad');
     const arrow = ch==null ? '' : (Math.abs(ch)<0.05 ? '' : (ch>0 ? '▲ ' : '▼ '));
     const txt = kind==='m' ? gxM(total) : gxRs(total);
-    return `<div class="gx-tile" style="--c:${color}"><div class="gx-t-label">${label}</div>
+    return `<button type="button" class="gx-tile" data-tile="${key}" aria-expanded="false" style="--c:${color}"><span class="gx-t-more" aria-hidden="true">⌄</span><div class="gx-t-label">${label}</div>
       <div class="gx-t-val${(key==='profit'&&total<0)?' neg':''}" data-to="${Math.round(total)}" data-kind="${kind}">${txt}</div>
-      <div class="gx-t-delta ${good}">${ch==null ? '<span class="gx-t-none">—</span>' : arrow+gxChangeText(ch)+' <span class="gx-t-vs">vs prev period</span>'}</div>
-      ${gxSpark(C[key], color)}</div>`;
+      <div class="gx-t-delta ${good}">${ch==null ? '<span class="gx-t-none">—</span>' : arrow+gxChangeText(ch)+' <span class="gx-t-vs">'+vs+'</span>'}</div>
+      ${gxSpark(C[key], color, liveIdx === n-1)}</button>`;
+  }).join('');
+  // what opens under a tile: why the line looks the way it does, a bigger chart, and month-by-month figures
+  const panels = defs.map(([label,key,kind,color,invert])=>{
+    const vals = C[key], fmt = kind==='m' ? gxM : gxRs, lines = [];
+    if(liveIdx >= 1 && liveIdx === n-1){
+      const cur = vals[liveIdx], pv = vals[liveIdx-1];
+      if(cur < pv) lines.push(`📅 <b>${mName(liveIdx)} is only ${dayNow} of ${daysInMonth} days in</b>, so its figure is still building. That is why the line dips at the end — it is not a real fall yet.`);
+      else lines.push(`📅 ${mName(liveIdx)} is already ahead of all of ${mName(liveIdx-1)}, with ${daysInMonth-dayNow} days still to go.`);
+      if(key !== 'profit' && dayNow >= 3) lines.push(`⏱ At this pace ${mName(liveIdx)} would finish near ${fmt(cur/dayNow*daysInMonth)} (last full month: ${fmt(pv)}).`);
+    }
+    const full = monthKeys.map((_,i)=>i).filter(i=> i !== liveIdx && C.active[i]);
+    if(full.length >= 2){
+      let hi = full[0], lo = full[0], fall = null, rise = null;
+      full.forEach((i,k)=>{
+        if(vals[i] > vals[hi]) hi = i; if(vals[i] < vals[lo]) lo = i;
+        if(k > 0){ const d = vals[i]-vals[full[k-1]]; if(fall===null || d < fall.d) fall = {d, i, from: full[k-1]}; if(rise===null || d > rise.d) rise = {d, i, from: full[k-1]}; }
+      });
+      lines.push(`🔝 Highest: ${mName(hi)} (${fmt(vals[hi])}) · Lowest: ${mName(lo)} (${fmt(vals[lo])})`);
+      if(fall && fall.d < 0 && vals[fall.from] > 0) lines.push(`🔻 Biggest drop: ${mName(fall.from)} → ${mName(fall.i)} (${fmt(vals[fall.from])} → ${fmt(vals[fall.i])}, ${gxChangeText(gxChange(vals[fall.i], vals[fall.from]))}).`);
+      if(rise && rise.d > 0 && vals[rise.from] > 0) lines.push(`🔺 Biggest rise: ${mName(rise.from)} → ${mName(rise.i)} (${fmt(vals[rise.from])} → ${fmt(vals[rise.i])}, ${gxChangeText(gxChange(vals[rise.i], vals[rise.from]))}).`);
+    }
+    const rows = monthKeys.map((_,i)=>i).reverse().map(i=>{
+      const ch = i > 0 ? gxChange(vals[i], vals[i-1]) : null;
+      const good = ch==null || Math.abs(ch)<0.05 ? '' : ((ch>=0) !== invert ? 'good' : 'bad');
+      return `<div class="gx-mrow"><span>${mName(i)}${i===liveIdx?' <em>so far</em>':''}</span><b class="${key==='profit'&&vals[i]<0?'neg':''}">${fmt(vals[i])}</b><i class="${good}">${ch==null?'':(ch>=0?'▲ ':'▼ ')+gxChangeText(ch)}</i></div>`;
+    }).join('');
+    const chart = key==='profit'
+      ? svgDivergingBarChart(monthKeys, vals, {curKey, trend:true, avg:true})
+      : svgGroupedBarChart(monthKeys, [{name:label, color, values:vals, labelPrev: i=> mName(i-1)}], {curKey, trend:true, avg:true, fmt});
+    return `<div class="gx-dpanel" data-for="${key}" hidden>
+      <div class="gx-d-head"><h3>${label} — ${kind==='m' ? gxM(D.totals[key]) : gxRs(D.totals[key])}</h3><button type="button" class="chip" data-jump="${jumpFor[key]}">See full chart ↓</button></div>
+      <ul class="gx-insights">${lines.map(t=>`<li>${t}</li>`).join('')}</ul>
+      <div class="gx-tip" data-hint="Tap a bar for details">Tap a bar for details</div><div class="gx-scroll">${chart}</div>
+      <div class="gx-d-sub">Month by month</div><div class="gx-mlist">${rows}</div></div>`;
   }).join('');
 
   // ---- highlights ----
@@ -1012,7 +1078,7 @@ function graphsPanel(){
       </div>
       ${canCompare ? `<div class="chip-row" style="margin-top:10px"><button type="button" class="chip${compareOn?' active':''}" id="graphs_compare">◐ Compare with previous period</button></div>` : ''}
     </div>`);
-  cards.push(`<div class="gx-tiles gx-card" style="animation-delay:70ms">${tiles}</div>`);
+  cards.push(`<div class="gx-tiles gx-card" style="animation-delay:70ms">${tiles}</div><div class="card gx-card gx-details">${panels}</div>`);
   if(done.length){
     cards.push(card('Highlights','Best and weakest month are judged by profit, and leave out a month that is still in progress. Averages are per completed month.',
       `<div class="gx-h">${best!==null ? hRow('Best month', `${monthShortLabel(monthKeys[best])} · ${gxRs(C.profit[best])}`, C.profit[best]>=0?'pos':'neg') : ''}
@@ -1024,7 +1090,7 @@ function graphsPanel(){
   cards.push(card('Production vs Sales (Meters)','Meters produced vs meters sold, per month. Dashed lines: average and trend of Produced.',
     `${legend([['var(--rust)','Produced'],['var(--gold)','Sold']])}${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[
       sg('Produced','var(--rust)',C.produced,D.prev&&D.prev.produced), sg('Sold','var(--gold)',C.sold,D.prev&&D.prev.sold)
-    ], {...o, fmt:gxM, ghost:ghostOn})}</div>`, ++i));
+    ], {...o, fmt:gxM, ghost:ghostOn})}</div>`, ++i, 'gx_prod'));
   if(D.qualities.length){
     cards.push(card('Production by Quality','Meters produced each month, split by fabric quality. The largest six qualities are shown; the rest are grouped as Other.',
       `${legend(D.qualities.map((q,k)=>[GX_PALETTE[k%GX_PALETTE.length],q.name]))}${tipBox}<div class="gx-scroll">${svgStackedBarChart(monthKeys, D.qualities.map((q,k)=>({...q, color: GX_PALETTE[k%GX_PALETTE.length]})), {curKey})}</div>`, ++i));
@@ -1032,13 +1098,13 @@ function graphsPanel(){
   cards.push(card('Weekly Production (Last 12 Weeks)','Meters woven per week (Monday to Sunday), up to the end of the selected range. Weekly totals smooth out days when entries are logged in batches.',
     `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(weekKeys,[{name:'Meters', color:'var(--rust)', values: weeks.map(w=>w.meters), labelPrev: k=> weekLabels[k-1]}], wo)}</div>`, ++i));
   cards.push(card('Profit / Loss (Rs)','Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Personal Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.',
-    `${tipBox}<div class="gx-scroll">${svgDivergingBarChart(monthKeys, C.profit, {...o, ghost: ghostOn ? D.prev.profit : null})}</div>`, ++i));
+    `${tipBox}<div class="gx-scroll">${svgDivergingBarChart(monthKeys, C.profit, {...o, ghost: ghostOn ? D.prev.profit : null})}</div>`, ++i, 'gx_profit'));
   cards.push(card('Sales vs Total Expenses (Rs)','Sales amount vs combined Business + Family + Personal + Warp + Weft cost, per month.',
     `${legend([['var(--green)','Sales'],['var(--red)','Expenses']])}${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[
       sg('Sales','var(--green)',C.sales,D.prev&&D.prev.sales), sg('Expenses','var(--red)',C.expenses,D.prev&&D.prev.expenses)
-    ], {...o, ghost:ghostOn})}</div>`, ++i));
+    ], {...o, ghost:ghostOn})}</div>`, ++i, 'gx_salesexp'));
   cards.push(card('Cash Received (Rs)','Cash + Bank Transfer + Cleared cheques counted toward Receivable, per month.',
-    `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[sg('Received','var(--rust)',C.received,D.prev&&D.prev.received)], {...o, ghost:ghostOn})}</div>`, ++i));
+    `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[sg('Received','var(--rust)',C.received,D.prev&&D.prev.received)], {...o, ghost:ghostOn})}</div>`, ++i, 'gx_cash'));
   cards.push(card('Receivable Trend (Rs)','What clients owe you at the end of each month. A rising line means sales are outrunning collections.',
     `${tipBox}<div class="gx-scroll">${svgLineChart(monthKeys, C.receivable, {color:'var(--gold)', area:true, curKey})}</div>`, ++i));
   cards.push(card('Collection Rate (%)','Cash received each month as a percentage of that month’s sales. Above the dashed 100% line means you collected more than you sold; months with no sales are left blank.',

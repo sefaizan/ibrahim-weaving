@@ -24,6 +24,7 @@ const I18N_UR = {
   // Header
   'View only':'صرف دیکھنے کی اجازت', 'Loading…':'لوڈ ہو رہا ہے…',
   // Graphs page (v3.18.0)
+  'See full chart ↓':'مکمل چارٹ دیکھیں ↓', 'Month by month':'مہینہ بہ مہینہ',
   'This Quarter':'اس سہ ماہی', 
   'Live':'لائیو', '◐ Compare with previous period':'◐ پچھلی مدت سے موازنہ', 'Tap a bar for details':'تفصیل کے لیے بار پر ٹیپ کریں',
   'Cash Received':'وصول شدہ رقم',
