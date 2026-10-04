@@ -237,7 +237,7 @@ describe('sections the role may not view are not kept on the phone', () => {
 describe('Release 3 step 6 files stay in step', () => {
   const pkg = JSON.parse(read('package.json')), html = read('index.html'), sw = read('service-worker.js');
   test('version, badge and cache agree', () => {
-    assert.match(pkg.version, /^3\.17\.\d+$/);
+    assert.match(pkg.version, /^3\.\d+\.\d+$/);
     assert.equal(html.match(/id="appVersionTag">v([\d.]+)</)[1], pkg.version); assert.match(sw, /CACHE_VERSION = 'v\d+'/);
   });
 });

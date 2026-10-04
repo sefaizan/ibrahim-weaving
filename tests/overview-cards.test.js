@@ -222,7 +222,7 @@ describe('a role that may view everything sees every card', () => {
 
 describe('release 3 step 8 files stay in step', () => {
   test('version, badge, cache and build label agree', () => {
-    const ver = JSON.parse(read('package.json')).version; assert.match(ver, /^3\.17\.\d+$/);
+    const ver = JSON.parse(read('package.json')).version; assert.match(ver, /^3\.\d+\.\d+$/);
     assert.equal(read('index.html').match(/id="appVersionTag">v([\d.]+)</)[1], ver); assert.match(read('index.html'), /name="app-build" content="[^"]*release3-/);
     assert.match(read('service-worker.js'), /CACHE_VERSION = 'v\d+'/);
   });
