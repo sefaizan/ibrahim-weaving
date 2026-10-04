@@ -85,6 +85,21 @@ describe('graphs page draws', () => {
       assert.equal(html.includes('graphs_compare'), r !== 'all', 'compare toggle hidden for All');
     });
   }
+  test('summary tiles open into details: panel per tile, live-month explanation, jump targets, no NaN', () => {
+    const html = page('12');
+    ['produced', 'sold', 'sales', 'expenses', 'profit', 'received'].forEach(k => {
+      assert.ok(html.includes(`data-tile="${k}"`), `tile ${k}`); assert.ok(html.includes(`data-for="${k}"`), `panel ${k}`);
+    });
+    ['gx_prod', 'gx_salesexp', 'gx_profit', 'gx_cash'].forEach(id => { assert.ok(html.includes(`id="${id}"`), `card ${id}`); assert.ok(html.includes(`data-jump="${id}"`), `jump ${id}`); });
+    assert.ok(html.includes('is only 20 of 30 days in'), 'explains why the last point dips: month still in progress');
+    assert.ok(html.includes('At this pace'), 'projection for the month in progress');
+    assert.ok(html.includes('Month by month') && html.includes('Biggest') , 'month list and drop/rise lines');
+    assert.ok(!/NaN|undefined|Infinity/.test(html));
+  });
+  test('All available (no previous period) still shows a change: last full month vs the one before', () => {
+    const html = page('all');
+    assert.ok(/Aug 26 vs Jul 26/.test(html), 'fallback comparison label');
+  });
   test('empty ledger still draws safely', () => {
     const html = page('12', { production: [], sale: [], recovery: [], expense: [], family: [] });
     assert.ok(html.includes('gx-tiles') && !/NaN|undefined|Infinity/.test(html));
