@@ -630,6 +630,17 @@ function wireScrollAwareFab(fabBackup){
     catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
   });
   document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-wage-receipt]');
+    if(!btn) return;
+    try{ printWageReceipt(btn.dataset.wageReceipt); }
+    catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
+  });
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-share-wage-receipt]');
+    if(!btn) return;
+    shareWageReceipt(btn.dataset.shareWageReceipt);
+  });
+  document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-share-recovery-receipt]');
     if(!btn) return;
     shareRecoveryReceipt(btn.dataset.shareRecoveryReceipt);

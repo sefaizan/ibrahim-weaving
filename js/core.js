@@ -420,9 +420,9 @@ async function receiptHtmlToPngFile(html, filename, opts){
 // since a second tap on Share is a fresh user gesture and usually succeeds (see note below).
 async function shareReceiptAsImage(kind, id){
   try{
-    const html = kind === 'sale' ? printSaleReceipt(id, {htmlOnly:true}) : printRecoveryReceipt(id, {htmlOnly:true});
+    const html = kind === 'sale' ? printSaleReceipt(id, {htmlOnly:true}) : kind === 'wage' ? printWageReceipt(id, {htmlOnly:true}) : printRecoveryReceipt(id, {htmlOnly:true});
     if(!html){ showToast('That receipt could not be found.'); return; }
-    const f = kind === 'sale' ? buildReceiptFields(id) : buildRecoveryReceiptFields(id);
+    const f = kind === 'sale' ? buildReceiptFields(id) : kind === 'wage' ? buildWageReceiptFields(id) : buildRecoveryReceiptFields(id);
     const file = await receiptHtmlToPngFile(html, asciiFileBase(f.fileBase) + '.png');
     await navigator.share({files:[file]});
     showToast('Receipt shared ✓');
