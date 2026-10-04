@@ -1519,12 +1519,19 @@ function wageReceiptFacts(payId){
   const loans = DATA.loanPayments.filter(l=>l.employee===emp && l.date<=p.date);
   const given = loans.filter(l=>l.type!=='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
   const repaid = loans.filter(l=>l.type==='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
+  const qualityRows = DATA.qualities.map(q=>{
+    const m = computeWageMeters(emp, q.name, from, p.date);
+    return {quality:q.name, own:m.own, diff:m.diffShare, total:m.total, wages:m.wages, diffWages:m.diffWages, rate: m.total ? m.wages/m.total : 0};
+  }).filter(x=>x.total || x.wages);
+  const diffWages = qualityRows.reduce((s,x)=>s+x.diffWages,0);
+  const prodDates = DATA.production.filter(r=>r.date && r.date<=p.date && (!from||r.date>=from) && [r.e1,r.e2,r.e3].includes(emp)).map(r=>r.date).sort();
+  const periodFrom = from || prodDates[0] || p.date;
   let run = 0;
   const loanRows = loans.map((l,i)=>({l,i})).sort((a,b)=> String(a.l.date).localeCompare(String(b.l.date)) || a.i-b.i).map(({l})=>{
     const rep = l.type==='Loan Repaid'; const amt = Number(l.amount)||0; run += rep ? -amt : amt;
     return {date:l.date, type: rep ? 'Repaid' : 'Given', amount:amt, balance:run};
   });
-  return {p, emp, carry, earned, bonus, paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows};
+  return {p, emp, carry, earned, bonus, paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows, qualityRows, diffWages, periodFrom};
 }
 function buildWageReceiptFields(payId){
   const facts = wageReceiptFacts(payId);
@@ -1537,30 +1544,47 @@ function buildWageReceiptFields(payId){
 function printWageReceipt(payId, opts){
   const f = buildWageReceiptFields(payId);
   if(!f){ if(!(opts && opts.htmlOnly)) showToast('That wage payment could not be found — try refreshing the page.', 5000); return; }
-  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, fileBase} = f;
+  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, fileBase} = f;
   const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
     biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',
     biz.phone ? `<div class="biz-line">Phone: ${escHtml(biz.phone)}</div>` : ''].join('');
   const row = (a,b,cls) => `<div class="row${cls?' '+cls:''}"><span>${a}</span><span>${b}</span></div>`;
-  const rows = [
-    carry ? row(carry>0?'Brought forward (owed to employee)':'Brought forward (employee owes)', fmtRs2(Math.abs(carry))) : '',
-    row('Wages earned', fmtRs2(earned)),
+  const heading = t => `<div style="font-weight:700;font-size:13px;margin:18px 0 0;text-transform:uppercase;letter-spacing:.04em">${t}</div>`;
+  const n2 = x => fmtRs2(x).replace('Rs ', '');
+  const totOwn = qualityRows.reduce((s,x)=>s+x.own,0), totDiff = qualityRows.reduce((s,x)=>s+x.diff,0);
+  const qBody = qualityRows.length
+    ? qualityRows.map(x=>`<tr><td>${escHtml(x.quality)}</td><td class="num">${fmtQtyMtr(x.own)}</td><td class="num">${x.diff ? fmtQtyMtr(x.diff) : '–'}</td><td class="num">${n2(x.rate)}</td><td class="num">${n2(x.wages)}</td></tr>`).join('')
+    : `<tr><td colspan="5">No production in this period</td></tr>`;
+  const qTable = `<table style="margin-top:6px">
+      <thead><tr><th>Quality</th><th class="num">Own m</th><th class="num">Diff m</th><th class="num">Rate</th><th class="num">Wages Rs</th></tr></thead>
+      <tbody>${qBody}</tbody>
+      <tfoot><tr><td>Total</td><td class="num">${fmtQtyMtr(totOwn)}</td><td class="num">${totDiff ? fmtQtyMtr(totDiff) : '–'}</td><td></td><td class="num">${n2(earned)}</td></tr></tfoot>
+    </table>`;
+  const build = [
+    row('Wages from own meters', fmtRs2(earned - diffWages)),
+    diffWages ? row('Wages from diff share', fmtRs2(diffWages)) : '',
     bonus ? row('Bonus', fmtRs2(bonus)) : '',
-    paidEarlier>0.004 ? row('Paid earlier', fmtRs2(paidEarlier)) : '',
-    row('Paid now', fmtRs2(p.amount), 'total')
+    carry ? row(carry>0 ? 'Brought forward (owed to employee)' : 'Brought forward (employee owes)', (carry<0 ? '\u2212 ' : '') + fmtRs2(Math.abs(carry))) : '',
+    row('Total due', fmtRs2(carry + earned + bonus), 'total')
   ].join('');
   let balLine;
   if(balance < -0.004) balLine = row('Receivable from employee (deduct from next wages)', fmtRs2(Math.abs(balance)), 'total');
   else if(balance > 0.004) balLine = row('Still payable to employee', fmtRs2(balance), 'total');
   else balLine = row('Balance', 'Settled', 'total');
-  const loanHtml = loan > 0.004 ? `<div class="balance-summary" style="margin-top:12px">${row('Loan outstanding', fmtRs2(loan), 'total')}</div>` : '';
+  const payRows = [paidEarlier>0.004 ? row('Paid earlier', fmtRs2(paidEarlier)) : '', row('Paid now', fmtRs2(p.amount)), balLine].join('');
+  const loanHtml = loan > 0.004 ? `<div class="balance-summary" style="margin-top:16px">${row('Loan outstanding', fmtRs2(loan), 'total')}</div>` : '';
   const html = `<div class="receipt">
     ${receiptWatermarkDiv}
     ${bizLines}
     <div class="receipt-title">Wage Slip</div>
-    <div class="meta-row"><span>Date</span><b>${fmtDate(p.date)}</b></div>
     <div class="meta-row"><span>Employee</span><b>${escHtml(emp)}</b></div>
-    <div class="balance-summary" style="margin-top:12px">${rows}${balLine}</div>
+    <div class="meta-row"><span>Period</span><b>${fmtDate(periodFrom)} to ${fmtDate(p.date)}</b></div>
+    <div class="meta-row"><span>Paid on</span><b>${fmtDate(p.date)}</b></div>
+    ${heading('How wages were built')}
+    ${qTable}
+    <div class="balance-summary">${build}</div>
+    ${heading('Payment')}
+    <div class="balance-summary" style="margin-top:6px">${payRows}</div>
     ${loanHtml}
     ${p.remarks ? `<div class="meta-row" style="margin-top:14px"><span>Remarks</span><b>${escHtml(p.remarks)}</b></div>` : ''}
   </div>`;
