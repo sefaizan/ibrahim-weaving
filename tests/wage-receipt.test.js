@@ -14,7 +14,7 @@ const { emptyData, prod } = require('./helpers/load-app');
 const root = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 
-function load(extra) {
+function load(extra, lang) {
   const data = Object.assign(emptyData(), {
     qualities: [{ name: 'A' }], employees: [{ id: 'e1', name: 'Ali' }, { id: 'e2', name: 'Riaz' }],
     wageRateHistory: { A: [{ date: '2026-01-01', rate: 10 }] },
@@ -27,7 +27,7 @@ function load(extra) {
   const ctx = vm.createContext({
     DATA: data, BIZ_LOGO_PNG: 'x', receiptWatermarkDiv: '', dateTimeStamp: () => 'T',
     fmtQtyMtr: (n) => String(Math.round(n * 100) / 100), fmtRs: (n) => 'Rs ' + Math.round(n || 0), fmtRs2: (n) => 'Rs ' + (n || 0).toFixed(2), fmtDate: (d) => d,
-    escHtml: (s) => String(s), showToast: (m) => toasts.push(m), document: { getElementById: () => ({}) },
+    escHtml: (s) => String(s), I18N_LANG: lang || 'en', showToast: (m) => toasts.push(m), document: { getElementById: () => ({}) },
   });
   vm.runInContext(read('js/calc.js'), ctx);
   const src = read('js/panels-wages-receipts.js');
@@ -141,5 +141,27 @@ describe('buttons are wired', () => {
   });
   test('the new buttons are not in the view-only write list (reading a receipt stays allowed)', () => {
     assert.doesNotMatch(read('js/view-only.js').match(/VIEW_ONLY_WRITE_SELECTOR = \[[\s\S]*?\]\.join/)[0], /receipt/);
+  });
+});
+
+describe('Urdu wage slip', () => {
+  test('English stays English with no right-to-left wrapper', () => {
+    const h = load().html('p1');
+    assert.match(h, /Wage Slip/); assert.match(h, /How wages were built/); assert.doesNotMatch(h, /dir="rtl"/);
+  });
+  test('Urdu: labels, table headers and totals are Urdu inside a right-to-left block; the business header stays English', () => {
+    const h = load({ businessInfo: { name: 'Ibrahim Weaving', address: 'Faisalabad', phone: '0300' }, loanPayments: [{ id: 'l1', employee: 'Ali', date: '2026-09-01', type: 'Loan Given', amount: 700 }] }, 'ur').html('p1');
+    assert.match(h, /dir="rtl"/);
+    ['اجرت کی پرچی', 'اجرت کیسے بنی', 'کوالٹی', 'اپنے میٹر', 'فرق میٹر', 'ریٹ', 'اجرت \\(روپے\\)', 'بونس', 'کل واجب الادا', 'اب ادا کیے', 'ملازم سے وصولی', 'باقی قرض'].forEach((u) => assert.match(h, new RegExp(u), u));
+    assert.doesNotMatch(h.slice(h.indexOf('dir="rtl"')), /Wage Slip|Quality|Bonus|Total due|Paid now|Loan outstanding|Receivable from employee/);
+    assert.ok(h.indexOf('Faisalabad') < h.indexOf('dir="rtl"') && h.indexOf('Phone: 0300') < h.indexOf('dir="rtl"')); // header before the Urdu block, in English
+  });
+  test('Urdu keeps names and numbers as entered, numbers isolated left-to-right', () => {
+    const h = load({}, 'ur').html('p1');
+    assert.match(h, /<bdi dir="ltr">Rs 9000\.00<\/bdi>/); assert.match(h, /Ali/);
+  });
+  test('Urdu settled balance line', () => {
+    const h = load({ wagePayments: [{ id: 'p1', date: '2026-10-03', employee: 'Ali', amount: 8990, remarks: '' }] }, 'ur').html('p1');
+    assert.match(h, /حساب برابر/);
   });
 });
