@@ -80,21 +80,28 @@ function groupedClientOpts(){
 function clientSelectField(label, id, extra=''){
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${groupedClientOpts()}</select></div>`;
 }
-// v3.18.3 — ONE place that decides how a Source Purchase (a Warp purchase) is written everywhere it is
-// shown: "Supplier Name - No. Of Cartons - Date - Day Name", e.g. "AbuBakar - 50 Cartons - 03-09-2026 - Thursday".
+// v3.18.4 — ONE place that decides how a Source Purchase (a Warp purchase) is written everywhere it is
+// shown: "Supplier Name - No. Of Cartons - Date - N days ago", e.g. "AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago".
 // Returns plain text (not HTML) — callers escape it. A missing supplier / carton count (older records) shows a dash.
-const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-function dayNameOf(dateStr){
+// "Days ago" counts whole calendar days from today (phone's local date) to the purchase date.
+function daysAgoText(dateStr){
   const m = typeof dateStr === 'string' && dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(!m) return '—';
-  const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));   // local date parts — no timezone shift
-  return isNaN(d.getTime()) ? '—' : DAY_NAMES[d.getDay()];
+  const t = typeof todayStr === 'function' ? String(todayStr()).match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  if(!m || !t) return '—';
+  const then = Date.UTC(Number(m[1]), Number(m[2])-1, Number(m[3]));   // UTC midnights: whole days, no DST drift
+  const now = Date.UTC(Number(t[1]), Number(t[2])-1, Number(t[3]));
+  if(isNaN(then) || isNaN(now)) return '—';
+  const n = Math.round((now - then) / 86400000);
+  if(n === 0) return 'Today';
+  if(n === 1) return '1 day ago';
+  if(n > 1) return `${n} days ago`;
+  return n === -1 ? 'In 1 day' : `In ${-n} days`;   // a purchase dated in the future
 }
 function purchaseText(p){
   if(!p) return '—';
   const sup = (p.supplier && String(p.supplier).trim()) || '—';
   const cartons = Number(p.cartons) > 0 ? fmtNum(Number(p.cartons)) : '—';
-  return `${sup} - ${cartons} Cartons - ${fmtDate(p.date)} - ${dayNameOf(p.date)}`;
+  return `${sup} - ${cartons} Cartons - ${fmtDate(p.date)} - ${daysAgoText(p.date)}`;
 }
 // Warp purchases don't have a plain display name, so this builds its own option labels
 // (date, type, weight, amount) instead of using opts(). Value is the purchase's id, so a
