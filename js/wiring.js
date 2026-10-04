@@ -1794,6 +1794,9 @@ function wirePanel(id){
         const isWeft = key === 'weftTypes';
         const isQual = key === 'qualities';
         const warpType = isQual ? String(v('new_qualities_warp')||'').trim() : '';
+        const kangiRaw = isQual ? String(v('new_qualities_kangi')||'').trim() : '';
+        const kangi = kangiRaw === '' ? null : Number(kangiRaw);
+        if(isQual && kangiRaw !== '' && !(kangi > 0)){ showToast('Kangi must be a number above zero (or leave it empty).', 5000); return; }
         const picksRaw = isQual ? String(v('new_qualities_picks')||'').trim() : '';
         const picks = picksRaw === '' ? null : Number(picksRaw);
         if(isQual && picksRaw !== '' && !(picks > 0)){ showToast('Picks must be a number above zero (or leave it empty).', 5000); return; }
@@ -1822,6 +1825,7 @@ function wirePanel(id){
           if(isQual){
             if(warpType) editingRec.warpType = warpType; else delete editingRec.warpType;
             if(picks) editingRec.picks = picks; else delete editingRec.picks;
+            if(kangi) editingRec.kangi = kangi; else delete editingRec.kangi;
           }
           setCli(editingRec);
           editingRec.name = name;
@@ -1834,20 +1838,20 @@ function wirePanel(id){
         const newRec = {id:uid(), name};
         setCli(newRec);
         if(isWeft && count) newRec.count = count;
-        if(isQual){ if(warpType) newRec.warpType = warpType; if(picks) newRec.picks = picks; }
+        if(isQual){ if(warpType) newRec.warpType = warpType; if(picks) newRec.picks = picks; if(kangi) newRec.kangi = kangi; }
         DATA[key].push(newRec);
         await save(); switchTab('settings');
       };
       if(key === 'qualities'){
-        // Picks + warp type fill the Name (e.g. "44 - 150.144"); it can still be typed over.
-        const fillName = ()=>{ const n = qualityAutoName(v('new_qualities_warp'), v('new_qualities_picks')); if(n) document.getElementById('new_qualities').value = n; };
-        ['new_qualities_warp','new_qualities_picks'].forEach(id=>{ const el = document.getElementById(id); if(el){ el.addEventListener('input', fillName); el.addEventListener('change', fillName); } });
+        // Picks + warp type fill the Name (e.g. "62/44 (Micro 150.144)"); it can still be typed over.
+        const fillName = ()=>{ const n = qualityAutoName(v('new_qualities_warp'), v('new_qualities_picks'), v('new_qualities_kangi')); if(n) document.getElementById('new_qualities').value = n; };
+        ['new_qualities_warp','new_qualities_picks','new_qualities_kangi'].forEach(id=>{ const el = document.getElementById(id); if(el){ el.addEventListener('input', fillName); el.addEventListener('change', fillName); } });
       }
       const inp = document.getElementById(`new_${key}`);
       if(inp) inp.addEventListener('keydown', e=>{
         if(e.key==='Enter'){ e.preventDefault(); document.querySelector(`[data-add="${key}"]`).click(); }
       });
-      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks'} : key==='clients' ? {new_clients:'name', new_clients_phone:'phone', new_clients_address:'address', new_clients_limit:'creditLimit'} : {[`new_${key}`]:'name'});
+      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks', new_qualities_kangi:'kangi'} : key==='clients' ? {new_clients:'name', new_clients_phone:'phone', new_clients_address:'address', new_clients_limit:'creditLimit'} : {[`new_${key}`]:'name'});
     });
     wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('familyMembers'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{

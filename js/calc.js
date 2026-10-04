@@ -1268,11 +1268,12 @@ function weftTypeLabel(t){
   return n > 0 ? name + ' (count ' + n + ')' : name;
 }
 
-// Quality name from its warp type and picks: picks 44 + warp type 150.144 -> "44 - 150.144".
-// Returns '' until both are given (an older quality keeps whatever name it already has).
-function qualityAutoName(warpType, picks){
-  const p = Number(picks), w = String(warpType || '').trim();
-  return (p > 0 && w) ? p + ' - ' + w : '';
+// Quality name: Kangi/Picks (Warp Type) -> "62/44 (Micro 150.144)".
+// Without Kangi it falls back to the old "44 - 150.144"; '' until picks and warp type are given.
+function qualityAutoName(warpType, picks, kangi){
+  const p = Number(picks), k = Number(kangi), w = String(warpType || '').trim();
+  if(!(p > 0 && w)) return '';
+  return k > 0 ? k + '/' + p + ' (' + w + ')' : p + ' - ' + w;
 }
 
 // Client details: a client's current receivable (sales - received - bounced), all time, for the credit-limit warning.
