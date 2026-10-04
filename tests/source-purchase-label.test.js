@@ -1,7 +1,7 @@
 'use strict';
 /*
- * Source Purchase label: "Supplier Name - No. Of Cartons - Date - N days ago"
- * e.g. "AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago". One helper (purchaseText in js/panels-daily.js)
+ * Source Purchase label: "Supplier Name - Warp Type - No. Of Cartons - Date - N days ago"
+ * e.g. "AbuBakar - Micro - 50 Cartons - 03-09-2026 - 3 days ago". One helper (purchaseText in js/panels-daily.js)
  * builds it, and every place that shows a source purchase must go through it.
  */
 const { describe, test } = require('node:test');
@@ -29,8 +29,8 @@ describe('purchaseText', () => {
   const h = loadHelper();
   test('matches the requested example (today is 06-09-2026, purchase 03-09-2026)', () => {
     h.setToday('2026-09-06');
-    assert.equal(h.purchaseText({ supplier: 'AbuBakar', cartons: 50, date: '2026-09-03' }),
-      'AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago');
+    assert.equal(h.purchaseText({ supplier: 'AbuBakar', type: 'Micro', cartons: 50, date: '2026-09-03' }),
+      'AbuBakar - Micro - 50 Cartons - 03-09-2026 - 3 days ago');
   });
   test('today, yesterday, many days, across month and year ends', () => {
     h.setToday('2026-09-06');
@@ -49,10 +49,10 @@ describe('purchaseText', () => {
     assert.equal(h.daysAgoText(''), '—');
     assert.equal(h.daysAgoText('not a date'), '—');
   });
-  test('older purchases without supplier or cartons show dashes instead of breaking', () => {
+  test('older purchases without supplier, type or cartons show dashes instead of breaking', () => {
     h.setToday('2026-09-06');
-    assert.equal(h.purchaseText({ date: '2026-09-03', lbs: 900 }), '— - — Cartons - 03-09-2026 - 3 days ago');
-    assert.equal(h.purchaseText({ supplier: '  ', cartons: 0, date: '2026-09-03' }), '— - — Cartons - 03-09-2026 - 3 days ago');
+    assert.equal(h.purchaseText({ date: '2026-09-03', lbs: 900 }), '— - — - — Cartons - 03-09-2026 - 3 days ago');
+    assert.equal(h.purchaseText({ supplier: '  ', type: ' ', cartons: 0, date: '2026-09-03' }), '— - — - — Cartons - 03-09-2026 - 3 days ago');
     assert.equal(h.purchaseText(null), '—');
   });
 });
