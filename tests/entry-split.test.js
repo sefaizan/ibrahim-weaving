@@ -39,6 +39,7 @@ describe('quality auto name', () => {
   test('picks and warp type make the name; nothing until both are given', () => {
     assert.equal(app.qualityAutoName('150.144', 44), '44 - 150.144');
     assert.equal(app.qualityAutoName('150.144 Micro', '46'), '46 - 150.144 Micro');
+    assert.equal(app.qualityAutoName('Micro 150.144', 44, 62), '62/44 (Micro 150.144)');
     assert.equal(app.qualityAutoName('', 44), '');
     assert.equal(app.qualityAutoName('150.144', 0), '');
   });
