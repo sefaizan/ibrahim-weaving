@@ -99,12 +99,12 @@ describe('buttons are wired', () => {
     assert.match(s, /wageReceiptBtn\(r\.id\)\}\$\{canShareFiles\(\) \? shareWageReceiptBtn\(r\.id\)/);
     assert.match(s, /data-wage-receipt="\$\{id\}"/); assert.match(s, /data-share-wage-receipt="\$\{id\}"/);
   });
-  test('taps call the right functions (lock-init.js) and Share builds an image via kind "wage" (core.js)', () => {
-    const l = read('js/lock-init.js'), c = read('js/core.js');
-    assert.match(l, /closest\('\[data-wage-receipt\]'\)[\s\S]{0,200}printWageReceipt\(btn\.dataset\.wageReceipt\)/);
-    assert.match(l, /closest\('\[data-share-wage-receipt\]'\)[\s\S]{0,200}shareWageReceipt\(btn\.dataset\.shareWageReceipt\)/);
-    assert.match(c, /kind === 'wage' \? printWageReceipt\(id, \{htmlOnly:true\}\)/);
-    assert.match(c, /kind === 'wage' \? buildWageReceiptFields\(id\)/);
+  test('taps and the Share-as-image step live in the same file as the buttons (works even after a partial update)', () => {
+    const p = read('js/panels-wages-receipts.js');
+    assert.match(p, /closest\('\[data-wage-receipt\]'\)[\s\S]{0,200}printWageReceipt\(pr\.dataset\.wageReceipt\)/);
+    assert.match(p, /closest\('\[data-share-wage-receipt\]'\)[\s\S]{0,120}shareWageReceipt\(sh\.dataset\.shareWageReceipt\)/);
+    assert.match(p, /receiptHtmlToPngFile\(html, asciiFileBase\(f\.fileBase\) \+ '\.png'\)/);
+    assert.doesNotMatch(read('js/lock-init.js'), /wage-receipt/);
   });
   test('the new buttons are not in the view-only write list (reading a receipt stays allowed)', () => {
     assert.doesNotMatch(read('js/view-only.js').match(/VIEW_ONLY_WRITE_SELECTOR = \[[\s\S]*?\]\.join/)[0], /receipt/);
