@@ -1574,9 +1574,35 @@ function printWageReceipt(payId, opts){
   window.print();
 }
 async function shareWageReceipt(payId){
-  if(!buildWageReceiptFields(payId)){ showToast('That wage payment could not be found.'); return; }
+  const f = buildWageReceiptFields(payId);
+  if(!f){ showToast('That wage payment could not be found.'); return; }
   if(!canShareFiles()){ showToast('Sharing files isn\'t supported here — use Receipt instead.'); return; }
-  await shareReceiptAsImage('wage', payId);
+  try{
+    const html = printWageReceipt(payId, {htmlOnly:true});
+    const file = await receiptHtmlToPngFile(html, asciiFileBase(f.fileBase) + '.png');
+    await navigator.share({files:[file]});
+    showToast('Receipt shared ✓');
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    if(e && e.name === 'TooLongForImage'){ showToast('This receipt is too long for one picture — use Receipt instead.', 6000); return; }
+    showToast('Could not share — ' + (e && e.message ? e.message : 'tap Share again.'), 6000);
+  }
 }
 function wageReceiptBtn(id){ return `<button class="ghost rowbtn receipt" data-wage-receipt="${id}" aria-label="Print receipt" title="Print receipt"><span class="ic">${ICON_PRINT}</span><span class="lbl">Receipt</span></button>`; }
 function shareWageReceiptBtn(id){ return `<button class="ghost rowbtn share" data-share-wage-receipt="${id}" aria-label="Share receipt" title="Share receipt"><span class="ic">${ICON_SHARE}</span><span class="lbl">Share</span></button>`; }
+
+// The taps live here (not in lock-init.js) so the wage buttons keep working whichever other files are updated.
+if(typeof window !== 'undefined' && !window.__wageReceiptWired){
+  window.__wageReceiptWired = true;
+  document.addEventListener('click', (e)=>{
+    const t = e.target && e.target.closest ? e.target : null; if(!t) return;
+    const pr = t.closest('[data-wage-receipt]');
+    if(pr){
+      try{ printWageReceipt(pr.dataset.wageReceipt); }
+      catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
+      return;
+    }
+    const sh = t.closest('[data-share-wage-receipt]');
+    if(sh) shareWageReceipt(sh.dataset.shareWageReceipt);
+  });
+}
