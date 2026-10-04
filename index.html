@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.1-release3-graphs-under-overview">
+<meta name="app-build" content="v3.18.2-release3-graphs-tile-details">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1339,6 +1339,22 @@
   #graphs_root .gx-dl{ display:grid; grid-template-columns:12px 1fr auto 46px; gap:8px; align-items:center; font-size:13px; }
   #graphs_root .gx-dl i{ width:10px; height:10px; border-radius:2px; } #graphs_root .gx-dl b{ font-weight:700; } #graphs_root .gx-dl em{ font-style:normal; color:var(--ink-soft); text-align:right; font-size:12px; }
   @media (prefers-reduced-motion:reduce){ #graphs_root *{ animation:none !important; } }
+  /* v3.18.2: summary tiles open into details */
+  #graphs_root button.gx-tile{ appearance:none; -webkit-appearance:none; width:100%; min-height:0; margin:0; font:inherit; color:inherit; text-align:left; cursor:pointer; border-top:0; border-right:0; border-bottom:0; transition:box-shadow .2s, transform .15s; }
+  #graphs_root button.gx-tile:active{ transform:scale(.98); }
+  #graphs_root .gx-tile.open{ box-shadow:0 0 0 2px var(--c,var(--rust)), var(--elev-2); }
+  #graphs_root .gx-t-more{ position:absolute; top:6px; right:10px; font-size:16px; color:var(--ink-soft); transition:transform .2s; }
+  #graphs_root .gx-tile.open .gx-t-more{ transform:rotate(180deg); }
+  #graphs_root .gx-details{ padding:0; background:none; box-shadow:none; border:0; } #graphs_root .gx-details:not(:has(.gx-dpanel:not([hidden]))){ display:none; }
+  #graphs_root .gx-dpanel{ background:var(--card); border:1px solid var(--line); border-radius:var(--shape-md); box-shadow:var(--elev-1); padding:14px; animation:gxFade .35s ease-out both; scroll-margin-top:calc(var(--appbar-h) + 12px); }
+  #graphs_root .gx-d-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; } #graphs_root .gx-d-head h3{ margin:0; font-size:16px; }
+  #graphs_root .gx-d-sub{ font-size:12px; font-weight:700; color:var(--ink-soft); margin:14px 0 4px; }
+  #graphs_root .gx-mlist{ max-height:300px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  #graphs_root .gx-mrow{ display:grid; grid-template-columns:1fr auto 76px; gap:8px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  #graphs_root .gx-mrow em{ font-style:normal; font-size:10px; color:var(--gold); font-weight:700; } #graphs_root .gx-mrow b.neg{ color:var(--red); }
+  #graphs_root .gx-mrow i{ font-style:normal; font-size:11.5px; font-weight:700; text-align:right; color:var(--ink-soft); } #graphs_root .gx-mrow i.good{ color:var(--green); } #graphs_root .gx-mrow i.bad{ color:var(--red); }
+  #graphs_root .gx-flash{ animation:gxFlash 1.4s ease-out; }
+  @keyframes gxFlash{ 0%,40%{ box-shadow:0 0 0 3px var(--gold); } 100%{ box-shadow:var(--elev-1); } }
 </style>
 <script src="./jspdf.umd.min.js"></script>
 </head>
@@ -1369,7 +1385,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.1</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.2</span></span>
     </div>
   </header>
 
