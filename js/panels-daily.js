@@ -49,8 +49,8 @@ function setLoomAssignment(loomName, e1, e2){
 // see anyone who's left), inactive ones tucked into their own labeled group below — still
 // selectable (so editing an old entry that references someone inactive still works and
 // shows their name correctly) but visually out of the way.
-function employeeSelectField(label, id, extra=''){
-  const active = DATA.employees.filter(e=>e.active !== false);
+function employeeSelectField(label, id, extra='', noSalaried=false){
+  const active = DATA.employees.filter(e=>e.active !== false && !(noSalaried && e.salaried));
   const inactive = DATA.employees.filter(e=>e.active === false);
   const inactiveHtml = inactive.length ? `<optgroup label="Inactive">${opts(inactive)}</optgroup>` : '';
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${opts(active)}${inactiveHtml}</select></div>`;
@@ -80,6 +80,22 @@ function groupedClientOpts(){
 function clientSelectField(label, id, extra=''){
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${groupedClientOpts()}</select></div>`;
 }
+// v3.18.3 — ONE place that decides how a Source Purchase (a Warp purchase) is written everywhere it is
+// shown: "Supplier Name - No. Of Cartons - Date - Day Name", e.g. "AbuBakar - 50 Cartons - 03-09-2026 - Thursday".
+// Returns plain text (not HTML) — callers escape it. A missing supplier / carton count (older records) shows a dash.
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function dayNameOf(dateStr){
+  const m = typeof dateStr === 'string' && dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return '—';
+  const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));   // local date parts — no timezone shift
+  return isNaN(d.getTime()) ? '—' : DAY_NAMES[d.getDay()];
+}
+function purchaseText(p){
+  if(!p) return '—';
+  const sup = (p.supplier && String(p.supplier).trim()) || '—';
+  const cartons = Number(p.cartons) > 0 ? fmtNum(Number(p.cartons)) : '—';
+  return `${sup} - ${cartons} Cartons - ${fmtDate(p.date)} - ${dayNameOf(p.date)}`;
+}
 // Warp purchases don't have a plain display name, so this builds its own option labels
 // (date, type, weight, amount) instead of using opts(). Value is the purchase's id, so a
 // Warp Beam can link back to the exact purchase batch its yarn came from.
@@ -93,8 +109,7 @@ function warpPurchaseSelectField(label, id, extra=''){
     .filter(p=> new Date(p.date) >= cutoff || linkedIds.has(p.id))
     .sort((a,b)=> dtOf(b)-dtOf(a));
   const options = purchases.map(p=>{
-    const weightBit = p.lbs ? ` — ${fmtNum(p.lbs)} lbs` : '';
-    return `<option value="${p.id}">${fmtDate(p.date)} — ${escHtml(p.type||'Type —')}${weightBit} — ${fmtRs(p.amount)}</option>`;
+    return `<option value="${p.id}">${escHtml(purchaseText(p))}</option>`;
   }).join('');
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">— Select a purchase —</option>${options}</select></div>`;
 }
@@ -118,7 +133,7 @@ function mbGroups(){
 }
 function mbCardHtml(name){
   const a = loomAssignmentFor(name) || {};
-  const eo = sel => '<option value="">—</option>' + DATA.employees.filter(e=>e.active!==false).map(e=>`<option${e.name===sel?' selected':''}>${escHtml(e.name)}</option>`).join('');
+  const eo = sel => '<option value="">—</option>' + DATA.employees.filter(e=>e.active!==false && !e.salaried).map(e=>`<option${e.name===sel?' selected':''}>${escHtml(e.name)}</option>`).join('');
   const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr"></div>`;
   return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
@@ -169,16 +184,16 @@ function productionPanel(){
     <input type="hidden" id="p_beam" value="">
     <div class="group-label">Employees & Their Meters</div>
     <div class="grid cols-2">
-      ${employeeSelectField('Employee 1','p_e1')}
+      ${employeeSelectField('Employee 1','p_e1','',true)}
       ${field('Employee 1 Meters','p_e1m','number')}
     </div>
     <div id="p_e2wrap" class="grid cols-2" style="display:none;margin-top:12px">
-      ${employeeSelectField('Employee 2 (optional)','p_e2')}
+      ${employeeSelectField('Employee 2 (optional)','p_e2','',true)}
       ${field('Employee 2 Meters','p_e2m','number')}
     </div>
     <button type="button" class="ghost" id="p_toggleE2" style="margin-top:10px">+ Add a second employee</button>
     <div id="p_e3wrap" class="grid cols-2" style="display:none;margin-top:12px">
-      ${employeeSelectField('Employee 3','p_e3')}
+      ${employeeSelectField('Employee 3','p_e3','',true)}
       ${field('Employee 3 Meters','p_e3m','number')}
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px;display:none">+ Add a third employee</button>
@@ -937,7 +952,7 @@ function renderYieldPanel(r, beamDetails){
   });
   return `
   <div class="purchase-panel">
-    <div class="ptitle">${fmtDate(r.purchase.date)} — ${escHtml(r.purchase.type||'—')}${r.purchase.supplier?` (${escHtml(r.purchase.supplier)})`:''}</div>
+    <div class="ptitle">${escHtml(purchaseText(r.purchase))}<span style="display:block;font-size:12px;font-weight:400;color:var(--ink-soft)">${escHtml(r.purchase.type||'—')}</span></div>
     <div class="psub">${fmtRs(r.purchase.amount)} · ${r.beams.length} beam${r.beams.length===1?'':'s'} · ${r.complete?'<span class="badge month">Complete</span>':'<span class="badge progress">In Progress</span>'}</div>
     <div class="panel-subhead">Overall Summary</div>
     <div class="grid cols-3">
@@ -964,7 +979,7 @@ function warpBeamsPanel(){
   const purchaseLabel = (id)=>{
     if(!id) return '—';
     const p = DATA.warp.find(x=>x.id===id);
-    return p ? `${fmtDate(p.date)} (${escHtml(p.type||'—')})` : '—';
+    return p ? escHtml(purchaseText(p)) : '—';
   };
   const yieldRows = computePurchaseYield();
   const beamDetails = computeBeamDetails();
@@ -981,7 +996,7 @@ function warpBeamsPanel(){
   const selectedCompletedRow = completedYieldRows.find(r=>r.purchase.id===summaryPurchaseVal) || completedYieldRows[0] || null;
   if(selectedCompletedRow) summaryPurchaseVal = selectedCompletedRow.purchase.id;
   const summaryOptions = completedYieldRows.map(r=>
-    `<option value="${r.purchase.id}"${summaryPurchaseVal===r.purchase.id?' selected':''}>${fmtDate(r.purchase.date)} — ${escHtml(r.purchase.type||'Type —')} — ${fmtRs(r.purchase.amount)}</option>`
+    `<option value="${r.purchase.id}"${summaryPurchaseVal===r.purchase.id?' selected':''}>${escHtml(purchaseText(r.purchase))}</option>`
   ).join('');
   const activeYieldCard = `
     ${sumCardOpen('beams-active','Beam Summary by Purchase — In Progress', '<button type="button" class="info-btn" data-info-toggle data-info-target="info-beams-active" title="Info">i</button>')}
@@ -1048,7 +1063,7 @@ function warpBeamsPanel(){
         .map(id=>DATA.warp.find(p=>p.id===id)).filter(Boolean)
         .sort((a,b)=>dtOf(b)-dtOf(a));
       const activePurchaseFilterOptions = activePurchases.map(p=>
-        `<option value="${p.id}"${activePurchaseFilterVal===p.id?' selected':''}>${fmtDate(p.date)} — ${escHtml(p.type||'Type —')} — ${fmtRs(p.amount)}</option>`
+        `<option value="${p.id}"${activePurchaseFilterVal===p.id?' selected':''}>${escHtml(purchaseText(p))}</option>`
       ).join('');
       const activePurchaseFilterHtml = activePurchases.length ? `<div class="field" style="max-width:360px;margin-bottom:12px">
         <label>Filter by Source Purchase</label>
@@ -1069,7 +1084,7 @@ function warpBeamsPanel(){
         purchaseFilterVal = finishedPurchases[1] ? finishedPurchases[1].id : '';
       }
       const purchaseFilterOptions = finishedPurchases.map(p=>
-        `<option value="${p.id}"${purchaseFilterVal===p.id?' selected':''}>${fmtDate(p.date)} — ${escHtml(p.type||'Type —')} — ${fmtRs(p.amount)}</option>`
+        `<option value="${p.id}"${purchaseFilterVal===p.id?' selected':''}>${escHtml(purchaseText(p))}</option>`
       ).join('');
       const purchaseFilterHtml = finishedPurchases.length ? `<div class="field" style="max-width:360px;margin-bottom:12px">
         <label>Filter by Source Purchase</label>

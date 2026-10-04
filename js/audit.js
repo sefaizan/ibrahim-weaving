@@ -283,6 +283,11 @@ function auditCsvWhen(ms){
 function auditValue(key, v){
   if(v === null || v === undefined || v === '') return '\u2014';
   if(typeof v === 'boolean') return v ? 'Yes' : 'No';
+  // A Warp Beam's Source Purchase is stored as an id — show it the same way the rest of the app does.
+  if(key === 'purchaseId' && typeof v === 'string' && typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.warp) && typeof purchaseText === 'function'){
+    const pu = DATA.warp.find(x=>x.id === v);
+    if(pu) return purchaseText(pu);
+  }
   if(typeof v === 'number'){
     const s = Number.isInteger(v) ? v.toLocaleString('en-US') : String(v);
     return AUDIT_MONEY_FIELDS[key] ? 'Rs ' + s : s;

@@ -496,9 +496,9 @@ function renderStats(monthVal){
           .filter(r=> new Date(r.purchase.date) >= cutoff || !r.complete);
         if(!purchaseYield.length) return `<div class="empty">No warp beams linked to a purchase in the last 2 months.</div>`;
         return `<div class="log-scroll">${table(
-          ['Purchase Date','Warp Type','Length','Woven','Remaining','Yield %','Status'],
+          ['Source Purchase','Warp Type','Length','Woven','Remaining','Yield %','Status'],
           purchaseYield.map(r=>[
-            fmtDate(r.purchase.date), escHtml(r.purchase.type||'—'), fmtQtyMtr(r.totalLength), fmtQtyMtr(r.totalWoven),
+            escHtml(purchaseText(r.purchase)), escHtml(r.purchase.type||'—'), fmtQtyMtr(r.totalLength), fmtQtyMtr(r.totalWoven),
             fmtQtyMtr(r.totalLength-r.totalWoven), r.yieldPct!=null?r.yieldPct.toFixed(1)+'%':'—',
             r.complete ? 'Complete' : '<b>In Progress</b>'
           ])
