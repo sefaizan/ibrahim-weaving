@@ -150,6 +150,54 @@ function computeWageMeters(empName, qualityName, fromDate, toDate){
   return {own, diffShare, total: own+diffShare, wages: ownWages+diffWages, diffWages};
 }
 
+// Salaried staff (paid weekly): DATA.staffSalary[name] = {rates:[{date, weekly}], to}. It lives in the Wages
+// section (like rate history), so phones that cannot view Wages never hold it. Salary accrues per day
+// (weekly / 7) from each rate's effective date up to the period end (or today) or the last working day, so a
+// full week is exactly the weekly amount and any wage period or settlement date still adds up.
+function staffSalaryOf(name){ return (DATA.staffSalary && DATA.staffSalary[name]) || null; }
+function salaryDayBefore(d){ return new Date(Date.parse(d + 'T00:00:00Z') - 86400000).toISOString().slice(0,10); }
+function salaryAccrued(name, fromDate, toDate){
+  const s = staffSalaryOf(name);
+  if(!s || !Array.isArray(s.rates) || !s.rates.length) return 0;
+  const rates = s.rates.filter(r=>r && r.date).slice().sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  let cap = toDate || todayStr();
+  if(s.to && s.to < cap) cap = s.to;
+  let total = 0;
+  rates.forEach((r, i)=>{
+    let a = r.date, b = rates[i+1] ? salaryDayBefore(rates[i+1].date) : cap;
+    if(b > cap) b = cap;
+    if(fromDate && a < fromDate) a = fromDate;
+    if(a > b) return;
+    total += ((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000 + 1) * (Number(r.weekly) || 0) / 7;
+  });
+  return Math.round(total * 100) / 100;
+}
+// Ends a salary (the person goes back to per-meter wages): a zero-rate entry from the day after `lastDay`,
+// so a later salary can start again without the gap being paid.
+function endStaffSalary(name, lastDay){
+  const s = staffSalaryOf(name); if(!s) return;
+  saveStaffSalary(name, 0, nextDayStr(lastDay), '');
+}
+// Adds or corrects one salary rate (one per effective-from date) and sets the last working day.
+function saveStaffSalary(name, weekly, from, to){
+  if(!DATA.staffSalary) DATA.staffSalary = {};
+  const s = DATA.staffSalary[name] = DATA.staffSalary[name] || {rates:[]};
+  const e = s.rates.find(r=>r.date === from);
+  if(e) e.weekly = weekly; else s.rates.push({date:from, weekly});
+  s.rates.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  if(to) s.to = to; else delete s.to;
+}
+
+// Adds a new bonus; with paidNow it also logs the matching wage payment (cash given, or a bill paid for the
+// person), so the bonus is earned and paid in one step and leaves no balance. Returns the new bonus.
+function addWageBonusEntry(rec, paidNow, newId){
+  const bonus = {id:newId(), ...rec};
+  DATA.wageBonuses.push(bonus);
+  if(paidNow) DATA.wagePayments.push({id:newId(), date:rec.date, employee:rec.employee, amount:rec.amount,
+    remarks:'Paid with bonus' + (rec.remarks ? ': ' + rec.remarks : '')});
+  return bonus;
+}
+
 function computeWages(fromDate, toDate){
   // Inactive employees drop off this table once they have nothing left to show for the
   // selected period — but stay visible if they still have real meters/wages/bonus in it,
@@ -158,7 +206,7 @@ function computeWages(fromDate, toDate){
     if(emp.active !== false) return true;
     const hasMeters = DATA.qualities.some(q => computeWageMeters(emp.name, q.name, fromDate, toDate).total !== 0);
     const hasBonus = DATA.wageBonuses.some(b=>b.employee===emp.name && (!fromDate||b.date>=fromDate) && (!toDate||b.date<=toDate));
-    return hasMeters || hasBonus;
+    return hasMeters || hasBonus || salaryAccrued(emp.name, fromDate, toDate) > 0;
   });
   return relevantEmployees.map(emp=>{
     const byQuality = DATA.qualities.map(q=>{
@@ -172,8 +220,9 @@ function computeWages(fromDate, toDate){
     const bonus = DATA.wageBonuses
       .filter(b=>b.employee===emp.name && (!fromDate||b.date>=fromDate) && (!toDate||b.date<=toDate))
       .reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const totalWages = totalWagesNoBonus + bonus;
-    return {employee:emp.name, byQuality, totalMeters, totalDiffMeters, totalDiffWages, bonus, totalWagesNoBonus, totalWages};
+    const salary = salaryAccrued(emp.name, fromDate, toDate);
+    const totalWages = totalWagesNoBonus + bonus + salary;
+    return {employee:emp.name, byQuality, totalMeters, totalDiffMeters, totalDiffWages, bonus, salary, totalWagesNoBonus, totalWages};
   });
 }
 
@@ -208,8 +257,9 @@ function computeEmployeeWageBalance(empName){
     .reduce((s,b)=>s+(Number(b.amount)||0),0);
   const paymentsSince = DATA.wagePayments.filter(p=>p.employee===empName && (!sinceDate || p.date > sinceDate));
   const paid = paymentsSince.reduce((s,p)=>s+(Number(p.amount)||0),0);
-  const owed = earned + bonus;
-  return {owed, paid, carryForward, balance: paisaDiff(carryForward + owed, paid), lastSettled: lastSettlement ? lastSettlement.date : null};
+  const salary = salaryAccrued(empName, wageFromDate, null);
+  const owed = earned + bonus + salary;
+  return {owed, paid, salary, carryForward, balance: paisaDiff(carryForward + owed, paid), lastSettled: lastSettlement ? lastSettlement.date : null};
 }
 
 // Running loan balance for one employee — completely separate from wages/bonuses. Loan
@@ -233,7 +283,7 @@ function computeEmployeeWagesForPeriod(empName, fromDate, toDate){
   const bonus = DATA.wageBonuses
     .filter(b=>b.employee===empName && (!fromDate||b.date>=fromDate) && (!toDate||b.date<=toDate))
     .reduce((s,b)=>s+(Number(b.amount)||0),0);
-  return earned + bonus;
+  return earned + bonus + salaryAccrued(empName, fromDate, toDate);
 }
 
 // Inactive employees drop off Wages-page tables once fully settled (balance and carry

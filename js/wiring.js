@@ -1239,7 +1239,9 @@ function wirePanel(id){
         if(idx>-1) DATA.wageBonuses[idx] = {...DATA.wageBonuses[idx], ...rec};
         EDITING = null;
       } else {
-        DATA.wageBonuses.push({id:uid(), ...rec}); PAGE.wageBonuses = 1;
+        const paidBox = document.getElementById('wb_paid');
+        const paidNow = !!(paidBox && paidBox.checked);
+        addWageBonusEntry(rec, paidNow, uid); PAGE.wageBonuses = 1; if(paidNow) PAGE.wagePayments = 1;
       }
       await save(); switchTab('wages');
     };
@@ -1815,6 +1817,25 @@ function wirePanel(id){
         const editingRec = (EDITING && EDITING.key===key) ? DATA[key].find(r=>r.id===EDITING.id) : null;
         const clash = DATA[key].find(r=> r !== editingRec && masterNameKey(labelOf(r)) === masterNameKey(label));
         if(clash){ showToast(`"${label}" is already in this list.`, 5000); return; }
+        const isEmp = key === 'employees';
+        const empTitle = isEmp ? String(v('new_employees_title')||'').trim() : '';
+        const canSal = isEmp && !!document.getElementById('new_employees_salary');
+        const salRaw = canSal ? String(v('new_employees_salary')||'').trim() : '';
+        const sal = salRaw === '' ? null : Number(salRaw);
+        const salFrom = canSal ? (v('new_employees_from') || todayStr()) : '';
+        const salTo = canSal ? (v('new_employees_to') || '') : '';
+        const basis = canSal ? v('new_employees_basis') : '';
+        if(canSal && basis === 'salary'){
+          if(!(sal > 0)){ showToast('Enter the weekly salary, or choose Per meter as the pay basis.', 5000); return; }
+          if(salTo && salTo < salFrom){ showToast('Last working day is before the salary start date.', 5000); return; }
+        }
+        const setEmp = (rec, salKey)=>{
+          if(!isEmp) return;
+          if(empTitle) rec.title = empTitle; else delete rec.title;
+          if(!canSal) return;
+          if(basis === 'salary'){ saveStaffSalary(salKey, sal, salFrom, salTo); rec.salaried = true; }
+          else if(rec.salaried){ endStaffSalary(salKey, salTo || salaryDayBefore(todayStr())); rec.salaried = false; showToast('Now paid per meter. Salary stops after ' + fmtDate(salTo || salaryDayBefore(todayStr())) + '.', 6000); }
+        };
         if(editingRec){
           const oldName = labelOf(editingRec);
           if(oldName !== label && typeof permsRenameBlocked === 'function'){
@@ -1828,6 +1849,7 @@ function wirePanel(id){
             if(kangi) editingRec.kangi = kangi; else delete editingRec.kangi;
           }
           setCli(editingRec);
+          setEmp(editingRec, oldName);
           editingRec.name = name;
           const changed = (oldName !== label) ? cascadeMasterRename(key, oldName, label) : 0;
           EDITING = null;
@@ -1837,6 +1859,7 @@ function wirePanel(id){
         }
         const newRec = {id:uid(), name};
         setCli(newRec);
+        setEmp(newRec, name);
         if(isWeft && count) newRec.count = count;
         if(isQual){ if(warpType) newRec.warpType = warpType; if(picks) newRec.picks = picks; if(kangi) newRec.kangi = kangi; }
         DATA[key].push(newRec);
@@ -1847,11 +1870,21 @@ function wirePanel(id){
         const fillName = ()=>{ const n = qualityAutoName(v('new_qualities_warp'), v('new_qualities_picks'), v('new_qualities_kangi')); if(n) document.getElementById('new_qualities').value = n; };
         ['new_qualities_warp','new_qualities_picks','new_qualities_kangi'].forEach(id=>{ const el = document.getElementById(id); if(el){ el.addEventListener('input', fillName); el.addEventListener('change', fillName); } });
       }
+      if(key === 'employees'){
+        const basisEl = document.getElementById('new_employees_basis');
+        if(basisEl) basisEl.addEventListener('change', ()=> empBasisToggle());
+      }
       const inp = document.getElementById(`new_${key}`);
       if(inp) inp.addEventListener('keydown', e=>{
         if(e.key==='Enter'){ e.preventDefault(); document.querySelector(`[data-add="${key}"]`).click(); }
       });
-      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks', new_qualities_kangi:'kangi'} : key==='clients' ? {new_clients:'name', new_clients_phone:'phone', new_clients_address:'address', new_clients_limit:'creditLimit'} : {[`new_${key}`]:'name'});
+      wireEditGeneric(key, `add_${key}`, `cancel_${key}`, key==='weftTypes' ? {new_weftTypes:'name', new_weftTypes_count:'count'} : key==='qualities' ? {new_qualities:'name', new_qualities_warp:'warpType', new_qualities_picks:'picks', new_qualities_kangi:'kangi'} : key==='clients' ? {new_clients:'name', new_clients_phone:'phone', new_clients_address:'address', new_clients_limit:'creditLimit'} : key==='employees' ? {new_employees:'name', new_employees_title:'title'} : {[`new_${key}`]:'name'}, key==='employees' ? (rec=>{
+        const s = staffSalaryOf(rec.name), live = s && s.rates ? s.rates.filter(r=>Number(r.weekly) > 0) : [], last = live.length ? live[live.length-1] : null;
+        const set = (id, val)=>{ const el = document.getElementById(id); if(el) el.value = val; };
+        set('new_employees_basis', rec.salaried ? 'salary' : 'meter');
+        set('new_employees_salary', rec.salaried && last ? last.weekly : ''); set('new_employees_from', rec.salaried && last ? last.date : ''); set('new_employees_to', rec.salaried && s && s.to || '');
+        empBasisToggle();
+      }) : undefined);
     });
     wireDelete('qualities'); wireDelete('clients'); wireDelete('employees'); wireDelete('familyMembers'); wireDelete('looms'); wireDelete('warpTypes'); wireDelete('weftTypes'); wireDelete('dyeingUnits'); wireDelete('banks');
     document.querySelectorAll('[data-move]').forEach(btn=>{
@@ -2290,6 +2323,10 @@ function wireLConfirm(){
       await save(); switchTab('overview');
     };
   });
+}
+function empBasisToggle(){
+  const b = document.getElementById('new_employees_basis'); if(!b) return;
+  document.querySelectorAll('.emp-sal-f').forEach(el=>{ el.style.display = b.value === 'salary' ? '' : 'none'; });
 }
 function wireEditGeneric(key, addBtnId, cancelBtnId, fieldMap, afterFill){
   document.querySelectorAll(`[data-edit^="${key}:"]`).forEach(btn=>{

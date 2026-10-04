@@ -183,6 +183,16 @@ function switchTab(id){
 function opts(arr, valueKey='name'){ return arr.map(x=>`<option value="${escHtml(x[valueKey])}">${escHtml(x[valueKey])}</option>`).join(''); }
 
 /* ---------------- Generic simple-list panel (Qualities/Clients/Employees) ---------------- */
+// Employee extras: a job title for everyone; the weekly salary fields only for accounts that can edit Wages
+// (salary amounts are kept in the Wages section, so a Production operator never sees them).
+function employeeSettingsFields(){
+  const canSal = typeof permsCan !== 'function' || permsCan('wages', 'e');
+  return '<div class="field"><label>Title (optional)</label><input id="new_employees_title" placeholder="e.g. Production manager"></div>'
+    + (canSal ? '<div class="field"><label>Pay basis</label><select id="new_employees_basis"><option value="meter">Per meter (production wages)</option><option value="salary">Weekly salary</option></select></div>'
+    + '<div class="field emp-sal-f" style="display:none"><label>Weekly salary (Rs)</label><input id="new_employees_salary" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 25000"></div>'
+    + '<div class="field emp-sal-f" style="display:none"><label>Salary effective from</label><input id="new_employees_from" type="date"></div>'
+    + '<div class="field emp-sal-f" style="display:none"><label>Last working day (optional)</label><input id="new_employees_to" type="date"></div>' : '');
+}
 function settingsPanel(){
   const section = (title, key, placeholder, isName, hasActiveToggle) => `
     <div class="card">
@@ -191,6 +201,7 @@ function settingsPanel(){
       <div class="grid cols-2">
         <div class="field"${key==='qualities'?' style="grid-column:1/-1"':''}><label>Name</label><input id="new_${key}" placeholder="${placeholder}"></div>
         ${key==='qualities' ? '<div class="field"><label>Kangi (Warp)</label><input id="new_qualities_kangi" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 62"></div><div class="field"><label>Picks</label><input id="new_qualities_picks" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 44"></div><div class="field" style="grid-column:1/-1"><label>Warp Type</label><select id="new_qualities_warp"><option value="">—</option>' + opts(DATA.warpTypes) + '</select></div>' : ''}
+        ${key==='employees' ? employeeSettingsFields() : ''}
         ${key==='clients' ? '<div class="field"><label>Phone</label><input id="new_clients_phone" type="tel" inputmode="tel" placeholder="optional"></div><div class="field"><label>Address</label><input id="new_clients_address" placeholder="optional"></div><div class="field"><label>Credit limit (Rs)</label><input id="new_clients_limit" type="number" inputmode="decimal" min="0" placeholder="optional"></div>' : ''}
         ${key==='weftTypes' ? '<div class="field"><label>Count</label><input id="new_weftTypes_count" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 36"></div>' : ''}
       </div>
@@ -204,7 +215,7 @@ function settingsPanel(){
           ${DATA[key].length ? DATA[key].map((x,idx)=>{
             const inactive = hasActiveToggle && x.active === false;
             const shown = key==='weftTypes' ? weftTypeLabel(x) : x.name;
-            const clientSub = key==='clients' ? [x.phone, x.address, x.creditLimit?('Limit Rs '+Number(x.creditLimit).toLocaleString()):''].filter(Boolean).map(escHtml).join(' · ') : '';
+            const clientSub = key==='clients' ? [x.phone, x.address, x.creditLimit?('Limit Rs '+Number(x.creditLimit).toLocaleString()):''].filter(Boolean).map(escHtml).join(' · ') : key==='employees' ? [x.title, x.salaried ? 'Weekly salary' : 'Per meter'].filter(Boolean).map(escHtml).join(' · ') : '';
             const nameCell = isName ? `<span class="name">${escHtml(shown)}</span>` : escHtml(shown);
             return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${clientSub?`<div class="note" style="margin:2px 0 0">${clientSub}</div>`:''}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
           }).join('')
@@ -361,8 +372,8 @@ function loomAssignmentsSection(){
       <div class="group-label vo-hide" style="margin-top:0">Quick Assign</div>
       <div class="vo-hide loom-pick-grid" style="margin-bottom:10px">${loomChecks}</div>
       <div class="grid cols-2 vo-hide">
-        ${employeeSelectField('Employee 1','la_qa_e1')}
-        ${employeeSelectField('Employee 2','la_qa_e2')}
+        ${employeeSelectField('Employee 1','la_qa_e1','',true)}
+        ${employeeSelectField('Employee 2','la_qa_e2','',true)}
       </div>
       <button class="primary" id="la_apply" type="button" style="margin-top:10px">Assign to Selected Looms</button>
       <div class="group-label">Per-Loom</div>
@@ -410,6 +421,11 @@ function cascadeMasterRename(key, oldName, newName){
   });
   if(key === 'banks'){
     (DATA.recovery || []).forEach(r=>{ (r.cheques || []).forEach(c=>{ if(c && c.bank === oldName){ c.bank = newName; n++; } }); });
+  }
+  if(key === 'employees' && DATA.staffSalary && DATA.staffSalary[oldName]){
+    if(!DATA.staffSalary[newName]) DATA.staffSalary[newName] = DATA.staffSalary[oldName];
+    delete DATA.staffSalary[oldName];
+    n++;
   }
   if(key === 'qualities' && DATA.wageRateHistory && DATA.wageRateHistory[oldName]){
     const h = DATA.wageRateHistory, moved = h[oldName];
@@ -743,7 +759,7 @@ let _undoSeq = 0;
 const UNDO_KEY_LABEL = {sale:'Sale', recovery:'Recovery', production:'Production', expense:'Expense', family:'Family expense', personal:'Personal expense', warp:'Warp purchase',
   weft:'Weft purchase', clients:'Client', qualities:'Quality', employees:'Employee', familyMembers:'Family member', looms:'Loom', warpTypes:'Warp type', weftTypes:'Weft type', dyeingUnits:'Dyeing unit', banks:'Bank',
   wagePayments:'Wage payment', wageBonuses:'Bonus', wageSettlements:'Settlement', loanPayments:'Loan entry', personalLoans:'Personal loan entry', ownerLoans:'Owner loan entry', warpBeams:'Warp beam',
-  checkpoints:'Checkpoint', rateCalcs:'Rate calculation', loomAssignments:'Loom assignment', wageRateHistory:'Wage rates', businessInfo:'Business info'};
+  checkpoints:'Checkpoint', rateCalcs:'Rate calculation', loomAssignments:'Loom assignment', wageRateHistory:'Wage rates', staffSalary:'Staff salary', businessInfo:'Business info'};
 const undoKeyLabel = k => UNDO_KEY_LABEL[k] || k;
 
 function undoParts(){
