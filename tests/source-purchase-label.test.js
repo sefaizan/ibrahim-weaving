@@ -1,7 +1,7 @@
 'use strict';
 /*
- * Source Purchase label: "Supplier Name - No. Of Cartons - Date - Day Name"
- * e.g. "AbuBakar - 50 Cartons - 03-09-2026 - Thursday". One helper (purchaseText in js/panels-daily.js)
+ * Source Purchase label: "Supplier Name - No. Of Cartons - Date - N days ago"
+ * e.g. "AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago". One helper (purchaseText in js/panels-daily.js)
  * builds it, and every place that shows a source purchase must go through it.
  */
 const { describe, test } = require('node:test');
@@ -14,34 +14,45 @@ const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 const panels = read('js/panels-daily.js');
 
 function loadHelper(){
-  const start = panels.indexOf('const DAY_NAMES');
+  const start = panels.indexOf('function daysAgoText');
   const end = panels.indexOf("// Warp purchases don't have a plain display name");
   assert.ok(start > 0 && end > start, 'helper block found');
   const core = read('js/core.js');
   const fmtDateSrc = core.slice(core.indexOf('const fmtDate = d =>'), core.indexOf('// Today\'s date as YYYY-MM-DD'));
   const ctx = vm.createContext({});
-  vm.runInContext(fmtDateSrc + '\nconst fmtNum = n => Number(n).toLocaleString("en-US");\n' + panels.slice(start, end)
-    + '\nthis.purchaseText = purchaseText; this.dayNameOf = dayNameOf;', ctx);
+  vm.runInContext(fmtDateSrc + '\nvar __today = "2026-09-06"; var todayStr = () => __today;\nconst fmtNum = n => Number(n).toLocaleString("en-US");\n' + panels.slice(start, end)
+    + '\nthis.purchaseText = purchaseText; this.daysAgoText = daysAgoText; this.setToday = d => { __today = d; };', ctx);
   return ctx;
 }
 
 describe('purchaseText', () => {
   const h = loadHelper();
-  test('matches the requested example exactly', () => {
+  test('matches the requested example (today is 06-09-2026, purchase 03-09-2026)', () => {
+    h.setToday('2026-09-06');
     assert.equal(h.purchaseText({ supplier: 'AbuBakar', cartons: 50, date: '2026-09-03' }),
-      'AbuBakar - 50 Cartons - 03-09-2026 - Thursday');
+      'AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago');
   });
-  test('day names follow the calendar (no timezone shift)', () => {
-    assert.equal(h.dayNameOf('2026-10-05'), 'Monday');
-    assert.equal(h.dayNameOf('2026-01-01'), 'Thursday');
-    assert.equal(h.dayNameOf('2026-12-31'), 'Thursday');
-    assert.equal(h.dayNameOf('2028-02-29'), 'Tuesday');
-    assert.equal(h.dayNameOf(''), '—');
-    assert.equal(h.dayNameOf('not a date'), '—');
+  test('today, yesterday, many days, across month and year ends', () => {
+    h.setToday('2026-09-06');
+    assert.equal(h.daysAgoText('2026-09-06'), 'Today');
+    assert.equal(h.daysAgoText('2026-09-05'), '1 day ago');
+    assert.equal(h.daysAgoText('2026-08-07'), '30 days ago');
+    h.setToday('2027-01-02');
+    assert.equal(h.daysAgoText('2026-12-30'), '3 days ago');
+    h.setToday('2028-03-01');
+    assert.equal(h.daysAgoText('2028-02-28'), '2 days ago');   // leap year: 29 Feb in between
+  });
+  test('a future date and bad dates do not break the label', () => {
+    h.setToday('2026-09-06');
+    assert.equal(h.daysAgoText('2026-09-07'), 'In 1 day');
+    assert.equal(h.daysAgoText('2026-09-10'), 'In 4 days');
+    assert.equal(h.daysAgoText(''), '—');
+    assert.equal(h.daysAgoText('not a date'), '—');
   });
   test('older purchases without supplier or cartons show dashes instead of breaking', () => {
-    assert.equal(h.purchaseText({ date: '2026-09-03', lbs: 900 }), '— - — Cartons - 03-09-2026 - Thursday');
-    assert.equal(h.purchaseText({ supplier: '  ', cartons: 0, date: '2026-09-03' }), '— - — Cartons - 03-09-2026 - Thursday');
+    h.setToday('2026-09-06');
+    assert.equal(h.purchaseText({ date: '2026-09-03', lbs: 900 }), '— - — Cartons - 03-09-2026 - 3 days ago');
+    assert.equal(h.purchaseText({ supplier: '  ', cartons: 0, date: '2026-09-03' }), '— - — Cartons - 03-09-2026 - 3 days ago');
     assert.equal(h.purchaseText(null), '—');
   });
 });
