@@ -23,6 +23,16 @@ const I18N_UR = {
   'Approvals':'منظوریاں', 'Audit':'آڈٹ', 'Settings':'سیٹنگز', 'Backup & Restore':'بیک اپ اور بحالی',
   // Header
   'View only':'صرف دیکھنے کی اجازت', 'Loading…':'لوڈ ہو رہا ہے…',
+  // Graphs page (v3.18.0)
+  'This Quarter':'اس سہ ماہی', 
+  'Live':'لائیو', '◐ Compare with previous period':'◐ پچھلی مدت سے موازنہ', 'Tap a bar for details':'تفصیل کے لیے بار پر ٹیپ کریں',
+  'Cash Received':'وصول شدہ رقم',
+  'vs prev period':'پچھلی مدت کے مقابلے', 'Highlights':'نمایاں باتیں', 'Best month':'بہترین مہینہ', 'Weakest month':'کمزور ترین مہینہ',
+  'Average monthly sales':'ماہانہ اوسط فروخت', 'Average monthly profit':'ماہانہ اوسط منافع', 'Months in profit':'منافع والے مہینے',
+  'Production by Quality':'کوالٹی کے مطابق پیداوار', 'Weekly Production (Last 12 Weeks)':'ہفتہ وار پیداوار (پچھلے 12 ہفتے)',
+  'Receivable Trend (Rs)':'وصولی طلب رجحان (روپے)', 'Collection Rate (%)':'وصولی کی شرح (%)', 'Average Selling Rate (Rs / m)':'اوسط فروخت ریٹ (روپے / میٹر)',
+  'Top Clients':'سرفہرست گاہک', 'Where the Money Went':'پیسہ کہاں گیا', 'so far':'اب تک',
+  'Business':'کاروبار', 'Personal':'ذاتی', 
   // Production: entry form
   'Log Production':'پیداوار درج کریں', 'Date':'تاریخ', 'Time':'وقت', 'Quality':'کوالٹی', 'Loom':'لوم',
   'Quantity Produced (mtr)':'تیار شدہ مقدار (میٹر)', 'Employees & Their Meters':'ملازمین اور ان کے میٹر',

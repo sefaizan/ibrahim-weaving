@@ -676,121 +676,386 @@ function fmtCompactNum(n){
   if(a>=1000) return sign+(a/1000).toFixed(1).replace(/\.0$/,'')+'k';
   return sign+String(Math.round(a));
 }
-// Minimum horizontal space a "Mon YY" month label needs at font-size 10 so consecutive
-// labels never touch or overlap, no matter how many bars sit in a group — the charts below
-// widen their gap to guarantee at least this much room per month, and the chart's own width
-// grows to fit (the card scrolls sideways if that's wider than the screen).
 const MONTH_LABEL_MIN_PITCH = 42;
-// Grouped vertical bar chart — one or more series (e.g. Produced vs Sold) side by side
-// per month. Self-contained inline SVG, no charting library, themed with the app's own
-// CSS variables so it matches light/whatever palette is active.
-function svgGroupedBarChart(monthKeys, series){
-  const barW=14, barGap=3, chartH=170, topPad=22, bottomPad=26;
+const GX_PALETTE = ['var(--rust)','var(--gold)','var(--green)','#5B7DB1','#8E6BB0','#B8962E','#9AA3AA'];
+const GX_ESC = s => (typeof escHtml === 'function' ? escHtml(String(s)) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+const gxM = v => Math.round(Number(v)||0).toLocaleString('en-IN') + ' m';
+const gxRs = v => (Number(v)<0?'-':'') + 'Rs ' + Math.abs(Math.round(Number(v)||0)).toLocaleString('en-IN');
+const gxPct = v => (Math.round(v*10)/10) + '%';
+// "+12%" / "-8%" change of cur against prev; null when there is nothing to compare with
+function gxChange(cur, prev){
+  if(prev == null || !(Math.abs(prev) > 0)) return null;
+  return (cur-prev)/Math.abs(prev)*100;
+}
+function gxChangeText(pct){ return pct==null ? '' : (pct>=0?'+':'') + (Math.abs(pct)<10 ? pct.toFixed(1) : Math.round(pct)) + '%'; }
+// Straight-line fit through the values (least squares); null with fewer than 3 points
+function gxTrend(values){
+  const n = values.length; if(n < 3) return null;
+  let sx=0, sy=0, sxy=0, sxx=0;
+  values.forEach((v,i)=>{ const y=Number(v)||0; sx+=i; sy+=y; sxy+=i*y; sxx+=i*i; });
+  const den = n*sxx - sx*sx; if(!den) return null;
+  const b = (n*sxy - sx*sy)/den, a = (sy - b*sx)/n;
+  return values.map((_,i)=> a + b*i);
+}
+// Shared chart furniture: dashed average line (with label) and dashed trend line, clipped to the plot
+function gxGuides(values, o){
+  let out = '';
+  const active = values.map(v=>Number(v)||0);
+  if(o.avg && active.length > 1){
+    const avg = active.reduce((s,v)=>s+v,0)/active.length, y = o.yOf(avg);
+    out += `<line class="gx-avg" x1="0" y1="${y}" x2="${o.width}" y2="${y}"></line><text class="gx-avg-t" x="${o.width-2}" y="${y-3}" text-anchor="end">avg ${fmtCompactNum(avg)}</text>`;
+  }
+  const t = o.trend ? gxTrend(active) : null;
+  if(t){
+    const pts = t.map((v,i)=> `${o.xOf(i)},${Math.min(o.yMax, Math.max(o.yMin, o.yOf(v)))}`).join(' ');
+    out += `<polyline class="gx-trend" points="${pts}"></polyline>`;
+  }
+  return out;
+}
+const gxSoFar = (mk, o) => !!(o && o.curKey && mk === o.curKey);
+const gxLabel = (mk, i, o) => (o && o.labels) ? o.labels[i] : monthShortLabel(mk);
+// Tooltip text for one month: values of every series, plus the change of the first one against the month before
+function gxTipText(label, series, i, fmt, live){
+  const parts = series.map(s=> (series.length>1 && s.name ? s.name+': ' : '') + fmt(Number(s.values[i])||0));
+  let t = label + (live ? ' (so far)' : '') + ' — ' + parts.join(' · ');
+  if(i > 0 && series[0]){
+    const ch = gxChange(Number(series[0].values[i])||0, Number(series[0].values[i-1])||0);
+    if(ch != null) t += ' · ' + gxChangeText(ch) + ' vs ' + (series[0].labelPrev ? series[0].labelPrev(i) : 'previous');
+  }
+  return t;
+}
+// Grouped vertical bar chart — one or more series (e.g. Produced vs Sold) side by side per month. Self-contained
+// inline SVG, themed with the app's own CSS variables. Options: curKey (month still in progress), trend, avg,
+// fmt (tooltip number format), labels (replaces month names), ghost on a series (previous-period values).
+function svgGroupedBarChart(monthKeys, series, o){
+  o = o || {};
+  const barW=14, barGap=3, chartH=170, topPad=22, bottomPad = (o.curKey && monthKeys.includes(o.curKey)) ? 38 : 26;
   const groupW = series.length*barW + (series.length-1)*barGap;
   const groupGap = Math.max(16, MONTH_LABEL_MIN_PITCH - groupW);
-  const width = Math.max(240, monthKeys.length*(groupW+groupGap));
+  const pitch = groupW+groupGap;
+  const width = Math.max(240, monthKeys.length*pitch);
   const height = chartH+topPad+bottomPad;
-  const maxVal = Math.max(1, ...series.flatMap(s=>s.values.map(v=>Number(v)||0)));
-  let out = '';
+  const maxVal = Math.max(1, ...series.flatMap(s=>[...s.values, ...(o.ghost && s.ghost ? s.ghost : [])].map(v=>Number(v)||0)));
+  const yOf = v => topPad + chartH - (v/maxVal)*chartH;
+  const fmt = o.fmt || gxRs;
+  let out = '', delay = 0;
   monthKeys.forEach((mk,gi)=>{
-    const gx = gi*(groupW+groupGap);
+    const gx = gi*pitch, live = gxSoFar(mk,o), lbl = gxLabel(mk,gi,o);
+    out += `<g class="gx-grp" data-tip="${GX_ESC(gxTipText(lbl, series, gi, fmt, live))}"><rect class="gx-selbg" x="${gx-groupGap/2}" y="0" width="${pitch}" height="${height}"></rect>`;
     series.forEach((s,si)=>{
       const v = Number(s.values[gi])||0;
       const h = Math.max(0,(v/maxVal)*chartH);
       const x = gx+si*(barW+barGap), y = topPad+(chartH-h);
-      out += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${s.color}"></rect>`;
+      if(o.ghost && s.ghost){
+        const gv = Number(s.ghost[gi])||0, gh = Math.max(0,(gv/maxVal)*chartH);
+        if(gv > 0) out += `<rect class="gx-ghost" x="${x-1}" y="${topPad+chartH-gh}" width="${barW+2}" height="${gh}" rx="2"></rect>`;
+      }
+      out += `<rect class="gx-bar${live?' gx-live':''}" style="animation-delay:${delay}ms" x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${s.color}"></rect>`;
       if(v>0) out += `<text x="${x+barW/2}" y="${y-3}" font-size="8.5" text-anchor="middle" fill="var(--ink-soft)">${fmtCompactNum(v)}</text>`;
     });
-    out += `<text x="${gx+groupW/2}" y="${topPad+chartH+16}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${monthShortLabel(mk)}</text>`;
+    delay += 25;
+    out += `<text x="${gx+groupW/2}" y="${topPad+chartH+16}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${GX_ESC(lbl)}</text>`;
+    if(live) out += `<text x="${gx+groupW/2}" y="${topPad+chartH+28}" font-size="8" text-anchor="middle" class="gx-sofar">so far</text>`;
+    out += `</g>`;
   });
   out += `<line x1="0" y1="${topPad+chartH}" x2="${width}" y2="${topPad+chartH}" stroke="var(--line)" stroke-width="1"></line>`;
-  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block">${out}</svg>`;
+  out += gxGuides(series[0].values, {...o, width, yOf, xOf: i=> i*pitch+groupW/2, yMin: topPad, yMax: topPad+chartH});
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block" role="img">${out}</svg>`;
+}
+// Stacked bars: one column per month, split by quality (or anything with name/color/values)
+function svgStackedBarChart(monthKeys, stacks, o){
+  o = o || {};
+  const barW=26, chartH=170, topPad=22, bottomPad = (o.curKey && monthKeys.includes(o.curKey)) ? 38 : 26;
+  const pitch = Math.max(MONTH_LABEL_MIN_PITCH, barW+12);
+  const width = Math.max(240, monthKeys.length*pitch), height = chartH+topPad+bottomPad;
+  const totals = monthKeys.map((_,i)=> stacks.reduce((s,k)=> s+(Number(k.values[i])||0), 0));
+  const maxVal = Math.max(1, ...totals);
+  let out = '', delay = 0;
+  monthKeys.forEach((mk,i)=>{
+    const x = i*pitch + (pitch-barW)/2, live = gxSoFar(mk,o), lbl = monthShortLabel(mk);
+    const parts = stacks.filter(k=> (Number(k.values[i])||0) > 0).map(k=> `${k.name} ${gxM(k.values[i])}`);
+    const tip = `${lbl}${live?' (so far)':''} — total ${gxM(totals[i])}` + (parts.length ? ' · ' + parts.join(' · ') : '');
+    out += `<g class="gx-grp" data-tip="${GX_ESC(tip)}"><rect class="gx-selbg" x="${i*pitch}" y="0" width="${pitch}" height="${height}"></rect>`;
+    let yy = topPad+chartH;
+    stacks.forEach(k=>{
+      const v = Number(k.values[i])||0; if(v <= 0) return;
+      const h = (v/maxVal)*chartH; yy -= h;
+      out += `<rect class="gx-bar${live?' gx-live':''}" style="animation-delay:${delay}ms" x="${x}" y="${yy}" width="${barW}" height="${h}" fill="${k.color}"></rect>`;
+    });
+    delay += 25;
+    if(totals[i] > 0) out += `<text x="${x+barW/2}" y="${yy-3}" font-size="8.5" text-anchor="middle" fill="var(--ink-soft)">${fmtCompactNum(totals[i])}</text>`;
+    out += `<text x="${x+barW/2}" y="${topPad+chartH+16}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${lbl}</text>`;
+    if(live) out += `<text x="${x+barW/2}" y="${topPad+chartH+28}" font-size="8" text-anchor="middle" class="gx-sofar">so far</text>`;
+    out += `</g>`;
+  });
+  out += `<line x1="0" y1="${topPad+chartH}" x2="${width}" y2="${topPad+chartH}" stroke="var(--line)" stroke-width="1"></line>`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block" role="img">${out}</svg>`;
 }
 // Diverging bar chart for a single series that can go negative (Profit/Loss) — bars grow
 // up from a zero line when positive (green) and down when negative (red).
-function svgDivergingBarChart(monthKeys, values){
-  const barW=22, halfH=95, topPad=18, bottomPad=22;
-  const gap = Math.max(10, MONTH_LABEL_MIN_PITCH - barW);
-  const width = Math.max(240, monthKeys.length*(barW+gap));
+function svgDivergingBarChart(monthKeys, values, o){
+  o = o || {};
+  const barW=22, halfH=95, topPad=18, bottomPad = (o.curKey && monthKeys.includes(o.curKey)) ? 34 : 22;
+  const gap = Math.max(10, MONTH_LABEL_MIN_PITCH - barW), pitch = barW+gap;
+  const width = Math.max(240, monthKeys.length*pitch);
   const height = halfH*2+topPad+bottomPad;
   const midY = topPad+halfH;
-  const maxAbs = Math.max(1, ...values.map(v=>Math.abs(Number(v)||0)));
-  let out = '';
+  const maxAbs = Math.max(1, ...values.map(v=>Math.abs(Number(v)||0)), ...(o.ghost||[]).map(v=>Math.abs(Number(v)||0)));
+  const yOf = v => midY - (v/maxAbs)*halfH;
+  let out = '', delay = 0;
   monthKeys.forEach((mk,i)=>{
-    const v = Number(values[i])||0;
+    const v = Number(values[i])||0, live = gxSoFar(mk,o), lbl = monthShortLabel(mk);
     const h = (Math.abs(v)/maxAbs)*halfH;
-    const x = i*(barW+gap);
+    const x = i*pitch;
     const color = v>=0 ? 'var(--green)' : 'var(--red)';
     const y = v>=0 ? midY-h : midY;
-    out += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${color}"></rect>`;
+    const tip = gxTipText(lbl, [{values, name:''}], i, gxRs, live) + (v<0 ? ' (loss)' : '');
+    out += `<g class="gx-grp" data-tip="${GX_ESC(tip)}"><rect class="gx-selbg" x="${x-gap/2}" y="0" width="${pitch}" height="${height}"></rect>`;
+    if(o.ghost){
+      const gv = Number(o.ghost[i])||0, gh = (Math.abs(gv)/maxAbs)*halfH;
+      if(gv) out += `<rect class="gx-ghost" x="${x-1}" y="${gv>=0?midY-gh:midY}" width="${barW+2}" height="${gh}" rx="2"></rect>`;
+    }
+    out += `<rect class="gx-bar ${v>=0?'':'gx-neg'}${live?' gx-live':''}" style="animation-delay:${delay}ms" x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${color}"></rect>`;
+    delay += 25;
     const labelY = v>=0 ? y-4 : midY+h+12;
     out += `<text x="${x+barW/2}" y="${labelY}" font-size="8.5" text-anchor="middle" fill="var(--ink-soft)">${fmtCompactNum(v)}</text>`;
-    out += `<text x="${x+barW/2}" y="${height-4}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${monthShortLabel(mk)}</text>`;
+    out += `<text x="${x+barW/2}" y="${height-(live?16:4)}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${lbl}</text>`;
+    if(live) out += `<text x="${x+barW/2}" y="${height-5}" font-size="8" text-anchor="middle" class="gx-sofar">so far</text>`;
+    out += `</g>`;
   });
   out += `<line x1="0" y1="${midY}" x2="${width}" y2="${midY}" stroke="var(--line)" stroke-width="1"></line>`;
-  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block">${out}</svg>`;
+  out += gxGuides(values, {...o, width, yOf, xOf: i=> i*pitch+barW/2, yMin: topPad, yMax: topPad+halfH*2});
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block" role="img">${out}</svg>`;
+}
+// Line chart for a figure that moves month to month (receivable, collection %, Rs per meter). A null value leaves a
+// gap. o: color, fmt (tooltip), label (compact point label), ref/refLabel (dashed reference line), area, curKey.
+function svgLineChart(monthKeys, values, o){
+  o = o || {};
+  const chartH=140, topPad=24, bottomPad = (o.curKey && monthKeys.includes(o.curKey)) ? 38 : 26;
+  const pitch = MONTH_LABEL_MIN_PITCH, width = Math.max(240, monthKeys.length*pitch), height = chartH+topPad+bottomPad;
+  const real = values.filter(v=> v != null).map(Number);
+  const lo = Math.min(0, ...real, o.ref!=null?o.ref:0), hi = Math.max(1, ...real, o.ref!=null?o.ref:0);
+  const span = (hi-lo) || 1;
+  const yOf = v => topPad + chartH - ((v-lo)/span)*chartH;
+  const xOf = i => i*pitch + pitch/2;
+  const fmt = o.fmt || gxRs, lab = o.label || fmtCompactNum, color = o.color || 'var(--rust)';
+  let out = '';
+  if(o.ref != null) out += `<line class="gx-avg" x1="0" y1="${yOf(o.ref)}" x2="${width}" y2="${yOf(o.ref)}"></line><text class="gx-avg-t" x="${width-2}" y="${yOf(o.ref)-3}" text-anchor="end">${GX_ESC(o.refLabel||'')}</text>`;
+  if(lo < 0) out += `<line x1="0" y1="${yOf(0)}" x2="${width}" y2="${yOf(0)}" stroke="var(--line)" stroke-width="1"></line>`;
+  // split into runs of consecutive real values
+  const runs = []; let run = [];
+  values.forEach((v,i)=>{ if(v == null){ if(run.length) runs.push(run); run = []; } else run.push(i); });
+  if(run.length) runs.push(run);
+  const base = yOf(Math.max(lo, Math.min(0, hi)));
+  runs.forEach(r=>{
+    const pts = r.map(i=> `${xOf(i)},${yOf(Number(values[i]))}`).join(' ');
+    if(o.area && r.length > 1) out += `<polygon class="gx-area" points="${xOf(r[0])},${base} ${pts} ${xOf(r[r.length-1])},${base}" fill="${color}"></polygon>`;
+    if(r.length > 1) out += `<polyline class="gx-line" pathLength="1" points="${pts}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"></polyline>`;
+  });
+  monthKeys.forEach((mk,i)=>{
+    const live = gxSoFar(mk,o), lbl = monthShortLabel(mk), v = values[i];
+    let tip = v == null ? `${lbl} — no data` : `${lbl}${live?' (so far)':''} — ${fmt(Number(v))}`;
+    if(v != null && i > 0 && values[i-1] != null){
+      const ch = gxChange(Number(v), Number(values[i-1]));
+      if(ch != null) tip += ' · ' + gxChangeText(ch) + ' vs previous';
+    }
+    out += `<g class="gx-grp" data-tip="${GX_ESC(tip)}"><rect class="gx-selbg" x="${i*pitch}" y="0" width="${pitch}" height="${height}"></rect>`;
+    if(v != null){
+      out += `<circle class="gx-dot${live?' gx-live':''}" style="animation-delay:${i*25}ms" cx="${xOf(i)}" cy="${yOf(Number(v))}" r="3.6" fill="${color}"></circle>`;
+      out += `<text x="${xOf(i)}" y="${yOf(Number(v))-8}" font-size="8.5" text-anchor="middle" fill="var(--ink-soft)">${GX_ESC(lab(Number(v)))}</text>`;
+    }
+    out += `<text x="${xOf(i)}" y="${topPad+chartH+16}" font-size="10" text-anchor="middle" fill="var(--ink-soft)">${lbl}</text>`;
+    if(live) out += `<text x="${xOf(i)}" y="${topPad+chartH+28}" font-size="8" text-anchor="middle" class="gx-sofar">so far</text>`;
+    out += `</g>`;
+  });
+  out += `<line x1="0" y1="${topPad+chartH}" x2="${width}" y2="${topPad+chartH}" stroke="var(--line)" stroke-width="1"></line>`;
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" style="display:block" role="img">${out}</svg>`;
+}
+// Tiny trend line inside a summary tile
+function gxSpark(values, color){
+  const n = values.length; if(n < 2) return '';
+  const w=100, h=28, lo=Math.min(...values), hi=Math.max(...values), span=(hi-lo)||1;
+  const pts = values.map((v,i)=> [i*(w-6)/(n-1)+3, h-3-((v-lo)/span)*(h-6)]);
+  const last = pts[n-1];
+  return `<svg class="gx-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline class="gx-line" pathLength="1" points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="${color}"></circle></svg>`;
+}
+// Donut of where the money went; the legend underneath carries the figures
+function gxDonut(split, total){
+  const r=48, c=2*Math.PI*r; let off = 0;
+  const segs = split.map((s,i)=>{
+    const len = total>0 ? s.value/total*c : 0;
+    const el = `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${GX_PALETTE[i%GX_PALETTE.length]}" stroke-width="22" stroke-dasharray="${len} ${c-len}" stroke-dashoffset="${-off}"></circle>`;
+    off += len; return el;
+  }).join('');
+  return `<svg class="gx-donut" viewBox="0 0 140 140" width="140" height="140" role="img"><g transform="rotate(-90 70 70)">${segs}</g><text x="70" y="66" text-anchor="middle" font-size="9" fill="var(--ink-soft)">Total</text><text x="70" y="82" text-anchor="middle" font-size="14" font-weight="800" fill="var(--ink)">${fmtCompactNum(total)}</text></svg>`;
+}
+// Counts the summary figures up from 0 and wires the Live dot; called after the Graphs page is drawn
+function graphsAnimate(root){
+  if(!root) return;
+  let reduce = false;
+  try{ reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
+  if(reduce) return;
+  root.querySelectorAll('[data-to]').forEach(el=>{
+    const to = Number(el.dataset.to), kind = el.dataset.kind, finalText = el.textContent;
+    if(!isFinite(to)) return;
+    const t0 = performance.now(), dur = 750;
+    const show = v => { el.textContent = (kind==='m') ? gxM(v) : gxRs(v); };
+    const step = now => {
+      const k = Math.min(1, (now-t0)/dur), e = 1-Math.pow(1-k, 3);
+      if(k < 1){ show(to*e); requestAnimationFrame(step); } else el.textContent = finalText;
+    };
+    requestAnimationFrame(step);
+  });
+}
+// What a tap on a month column shows; also moves the highlight to the tapped column
+function graphsTapHandler(e){
+  const g = e.target.closest ? e.target.closest('.gx-grp') : null;
+  if(!g) return;
+  const card = g.closest('.card'); if(!card) return;
+  const tip = card.querySelector('.gx-tip');
+  const was = g.classList.contains('sel');
+  card.querySelectorAll('.gx-grp.sel').forEach(x=> x.classList.remove('sel'));
+  if(!was) g.classList.add('sel');
+  if(tip) tip.textContent = was ? (tip.dataset.hint || '') : g.dataset.tip;
+  if(tip) tip.classList.toggle('on', !was);
 }
 function graphsPanel(){
   const fromVal = FILTER.graphsFrom || '';
   const toVal = FILTER.graphsTo || '';
   const rangeVal = FILTER.graphsRange || '12';
+  const custom = !!(fromVal || toVal);
   // A custom range takes over from the Range preset whenever either date is set. If only one
   // side is given, the other defaults wide open — earliest ledger date, or today — rather than
   // collapsing to that single month, so picking just a "From" naturally means "from there on".
-  const monthKeys = (fromVal || toVal)
+  const monthKeys = custom
     ? monthKeysBetween(fromVal || earliestLedgerDate(), toVal || todayStr())
-    : (rangeVal==='all' ? allMonthKeysFromData() : lastNMonthKeys(Number(rangeVal)));
-  const perMonth = monthKeys.map(mk=>computeStats(mk));
-  const produced = perMonth.map(s=>s.producedMonth);
-  const sold = perMonth.map(s=>s.soldMonth);
-  const salesAmt = perMonth.map(s=>s.salesAmtMonth);
-  const totalExp = perMonth.map(s=>s.bizExpMonth+s.famExpMonth+s.personalExpMonth+s.warpCostMonth+s.weftCostMonth);
-  const profit = perMonth.map(s=>s.profitMonth);
-  const received = perMonth.map(s=>s.receivedMonth);
-  const legend = (items)=>`<div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px;color:var(--ink-soft)">${
-    items.map(([color,label])=>`<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};margin-right:5px;vertical-align:-1px"></span>${label}</span>`).join('')
-  }</div>`;
-  const rangeChips = [['6','Last 6 months'],['12','Last 12 months'],['24','Last 24 months'],['all','All available']];
-  return `
-    <div class="card">
+    : (rangeVal==='all' ? allMonthKeysFromData() : (rangeVal==='q' || rangeVal==='ytd') ? graphsRangeKeys(rangeVal) : lastNMonthKeys(Number(rangeVal)));
+  const canCompare = !(rangeVal==='all' && !custom);
+  const compareOn = canCompare && !!FILTER.graphsCompare;
+  const D = computeGraphsData(monthKeys, canCompare);
+  const C = D.cur, n = monthKeys.length;
+  const curKey = todayStr().slice(0,7);
+  const hasLive = monthKeys.includes(curKey);
+  const o = {curKey, trend:true, avg:true};
+  const hint = 'Tap a bar for details';
+  const tipBox = `<div class="gx-tip" data-hint="${hint}">${hint}</div>`;
+  const legend = (items)=>`<div class="gx-legend">${items.map(([color,label])=>`<span><i style="background:${color}"></i>${GX_ESC(label)}</span>`).join('')}</div>`;
+  const info = (text)=>`<button type="button" class="info-btn" data-info-toggle title="Info">i</button></div><p class="note info-note" hidden>${text}</p>`;
+  const card = (title, text, body, i)=>`<div class="card gx-card" style="animation-delay:${Math.min(i*70,560)}ms"><div class="card-head"><h2>${title}</h2>${info(text)}${body}</div>`;
+  const prevName = n===1 ? 'previous month' : `previous ${n} months`;
+  const ghostOn = compareOn && D.prev;
+  const sg = (name,color,values,prevValues)=>({name, color, values, ghost: ghostOn ? prevValues : null, labelPrev: i=> monthShortLabel(monthKeys[i-1])});
+
+  // ---- summary tiles ----
+  const tiles = [
+    ['Produced','produced','m','var(--rust)',false], ['Sold','sold','m','var(--gold)',false],
+    ['Sales','sales','rs','var(--green)',false], ['Expenses','expenses','rs','var(--red)',true],
+    ['Profit','profit','rs','var(--green)',false], ['Cash Received','received','rs','var(--rust)',false],
+  ].map(([label,key,kind,color,invert])=>{
+    const total = D.totals[key], ch = D.prevTotals ? gxChange(total, D.prevTotals[key]) : null;
+    const good = ch==null ? '' : ((ch>=0) !== invert ? 'good' : 'bad');
+    const arrow = ch==null ? '' : (Math.abs(ch)<0.05 ? '' : (ch>0 ? '▲ ' : '▼ '));
+    const txt = kind==='m' ? gxM(total) : gxRs(total);
+    return `<div class="gx-tile" style="--c:${color}"><div class="gx-t-label">${label}</div>
+      <div class="gx-t-val${(key==='profit'&&total<0)?' neg':''}" data-to="${Math.round(total)}" data-kind="${kind}">${txt}</div>
+      <div class="gx-t-delta ${good}">${ch==null ? '<span class="gx-t-none">—</span>' : arrow+gxChangeText(ch)+' <span class="gx-t-vs">vs prev period</span>'}</div>
+      ${gxSpark(C[key], color)}</div>`;
+  }).join('');
+
+  // ---- highlights ----
+  const done = monthKeys.map((_,i)=> i).filter(i=> C.active[i] && !(hasLive && monthKeys[i]===curKey && monthKeys.length>1 && C.active.filter(Boolean).length>1));
+  let best = null, worst = null;
+  done.forEach(i=>{ if(best===null || C.profit[i]>C.profit[best]) best = i; if(worst===null || C.profit[i]<C.profit[worst]) worst = i; });
+  const avgOf = a => done.length ? done.reduce((s,i)=>s+(Number(a[i])||0),0)/done.length : 0;
+  const profitMonths = done.filter(i=> C.profit[i] > 0).length;
+  const hRow = (label,val,cls)=>`<div class="gx-h-row"><span>${label}</span><b class="${cls||''}">${val}</b></div>`;
+  const insights = [];
+  if(n >= 2){
+    const a = n-1, b = n-2, sc = gxChange(C.sales[a], C.sales[b]), ec = gxChange(C.expenses[a], C.expenses[b]);
+    const nm = monthShortLabel(monthKeys[a]) + (monthKeys[a]===curKey ? ' so far' : ''), pm = monthShortLabel(monthKeys[b]);
+    if(sc != null) insights.push(`${sc>=0?'📈':'📉'} Sales ${nm}: ${gxRs(C.sales[a])} — ${sc>=0?'up':'down'} ${Math.abs(Math.round(sc))}% from ${pm}.`);
+    if(ec != null) insights.push(`${ec>0?'⚠️':'✅'} Expenses ${nm}: ${gxRs(C.expenses[a])} — ${ec>=0?'up':'down'} ${Math.abs(Math.round(ec))}% from ${pm}${(sc!=null && ec>0 && ec>sc)?', growing faster than sales':''}.`);
+  }
+  if(D.totals.sales > 0) insights.push(`💵 Cash received covered ${gxPct(D.totals.received/D.totals.sales*100)} of sales in this range.`);
+  if(n >= 1){
+    const diff = C.receivable[n-1] - D.startReceivable;
+    insights.push(`🧾 Receivable ${diff>=0?'rose':'fell'} by ${gxRs(Math.abs(diff))} over this range (now ${gxRs(C.receivable[n-1])}).`);
+  }
+  const topC = D.clients.top[0];
+  if(topC && D.clients.total > 0) insights.push(`🏆 Top client: ${GX_ESC(topC.name)} — ${gxPct(topC.amount/D.clients.total*100)} of sales.`);
+
+  // ---- weekly production ----
+  const lastDay = (()=>{ const t = todayStr(), e = D.bounds.end ? D.bounds.end.toISOString().slice(0,10) : t; return e < t ? e : t; })();
+  const weeks = graphsWeeklyProduction(lastDay, 12);
+  const weekLabels = weeks.map(w=>{ const [,m,d] = w.from.split('-').map(Number); return `${d} ${MONTH_NAMES[m-1].slice(0,3)}`; });
+  const weekKeys = weeks.map(w=> w.from);
+  const wo = {labels: weekLabels, trend:true, avg:true, fmt: v=> gxM(v)};
+
+  // ---- cards ----
+  const rangeChips = [['q','This Quarter'],['ytd','This Year'],['6','Last 6 months'],['12','Last 12 months'],['24','Last 24 months'],['all','All available']];
+  const latest = graphsLatestEntryDate();
+  let i = 0;
+  const cards = [];
+  cards.push(`<div class="card gx-card">
       <div class="card-head"><h2>Trends Over Time</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Each chart groups your entries by calendar month, so you can see whether things are trending up or down over time — something the single month/year filter on Overview can't show, since it only ever looks at one period at once. Pick a custom From/To date range instead of a preset — it takes over from Range whenever either date is set. Swipe a chart sideways if it doesn't fit the screen.</p>
+      <p class="note info-note" hidden>Each chart groups your entries by calendar month, so you can see whether things are trending up or down over time — something the single month/year filter on Overview can't show. Tap any bar or point to see its exact figures. Dashed lines show the average and the trend. A faded month is still in progress.</p>
+      <div class="gx-live-row"><span class="gx-live-dot"></span><span>Live</span>${latest ? `<span class="gx-live-date">· latest entry ${GX_ESC(latest)}</span>` : ''}</div>
       <div class="chip-row" id="graphs_chips">
-        ${rangeChips.map(([v,l])=>`<button type="button" class="chip${(!(fromVal||toVal) && rangeVal===v)?' active':''}" data-range="${v}">${l}</button>`).join('')}
-        <button type="button" class="chip${(fromVal||toVal)?' active':''}" data-range="custom">Custom…</button>
+        ${rangeChips.map(([v,l])=>`<button type="button" class="chip${(!custom && rangeVal===v)?' active':''}" data-range="${v}">${l}</button>`).join('')}
+        <button type="button" class="chip${custom?' active':''}" data-range="custom">Custom…</button>
       </div>
-      <div id="graphs_custom" ${(fromVal||toVal)?'':'hidden'} style="margin-top:12px">
+      <div id="graphs_custom" ${custom?'':'hidden'} style="margin-top:12px">
         <div class="grid cols-2">
           <div class="field"><label>From Date</label><input type="date" id="graphsFrom" value="${fromVal}"></div>
           <div class="field"><label>To Date</label><input type="date" id="graphsTo" value="${toVal}"></div>
         </div>
       </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Production vs Sales (Meters)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Meters produced vs meters sold, per month.</p>
-      ${legend([['var(--rust)','Produced'],['var(--gold)','Sold']])}
-      <div style="overflow-x:auto">${svgGroupedBarChart(monthKeys,[
-        {color:'var(--rust)', values:produced}, {color:'var(--gold)', values:sold}
-      ])}</div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Profit / Loss (Rs)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Personal Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.</p>
-      <div style="overflow-x:auto">${svgDivergingBarChart(monthKeys, profit)}</div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Sales vs Total Expenses (Rs)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Sales amount vs combined Business + Family + Personal + Warp + Weft cost, per month.</p>
-      ${legend([['var(--green)','Sales'],['var(--red)','Expenses']])}
-      <div style="overflow-x:auto">${svgGroupedBarChart(monthKeys,[
-        {color:'var(--green)', values:salesAmt}, {color:'var(--red)', values:totalExp}
-      ])}</div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Cash Received (Rs)</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Cash + Bank Transfer + Cleared cheques counted toward Receivable, per month.</p>
-      <div style="overflow-x:auto">${svgGroupedBarChart(monthKeys,[{color:'var(--rust)', values:received}])}</div>
-    </div>
-  `;
+      ${canCompare ? `<div class="chip-row" style="margin-top:10px"><button type="button" class="chip${compareOn?' active':''}" id="graphs_compare">◐ Compare with previous period</button></div>` : ''}
+    </div>`);
+  cards.push(`<div class="gx-tiles gx-card" style="animation-delay:70ms">${tiles}</div>`);
+  if(done.length){
+    cards.push(card('Highlights','Best and weakest month are judged by profit, and leave out a month that is still in progress. Averages are per completed month.',
+      `<div class="gx-h">${best!==null ? hRow('Best month', `${monthShortLabel(monthKeys[best])} · ${gxRs(C.profit[best])}`, C.profit[best]>=0?'pos':'neg') : ''}
+      ${worst!==null && worst!==best ? hRow('Weakest month', `${monthShortLabel(monthKeys[worst])} · ${gxRs(C.profit[worst])}`, C.profit[worst]>=0?'pos':'neg') : ''}
+      ${hRow('Average monthly sales', gxRs(avgOf(C.sales)))}${hRow('Average monthly profit', gxRs(avgOf(C.profit)), avgOf(C.profit)>=0?'pos':'neg')}
+      ${hRow('Months in profit', `${profitMonths} of ${done.length}`)}</div>
+      ${insights.length ? `<ul class="gx-insights">${insights.map(t=>`<li>${t}</li>`).join('')}</ul>` : ''}`, ++i));
+  }
+  cards.push(card('Production vs Sales (Meters)','Meters produced vs meters sold, per month. Dashed lines: average and trend of Produced.',
+    `${legend([['var(--rust)','Produced'],['var(--gold)','Sold']])}${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[
+      sg('Produced','var(--rust)',C.produced,D.prev&&D.prev.produced), sg('Sold','var(--gold)',C.sold,D.prev&&D.prev.sold)
+    ], {...o, fmt:gxM, ghost:ghostOn})}</div>`, ++i));
+  if(D.qualities.length){
+    cards.push(card('Production by Quality','Meters produced each month, split by fabric quality. The largest six qualities are shown; the rest are grouped as Other.',
+      `${legend(D.qualities.map((q,k)=>[GX_PALETTE[k%GX_PALETTE.length],q.name]))}${tipBox}<div class="gx-scroll">${svgStackedBarChart(monthKeys, D.qualities.map((q,k)=>({...q, color: GX_PALETTE[k%GX_PALETTE.length]})), {curKey})}</div>`, ++i));
+  }
+  cards.push(card('Weekly Production (Last 12 Weeks)','Meters woven per week (Monday to Sunday), up to the end of the selected range. Weekly totals smooth out days when entries are logged in batches.',
+    `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(weekKeys,[{name:'Meters', color:'var(--rust)', values: weeks.map(w=>w.meters), labelPrev: k=> weekLabels[k-1]}], wo)}</div>`, ++i));
+  cards.push(card('Profit / Loss (Rs)','Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Personal Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.',
+    `${tipBox}<div class="gx-scroll">${svgDivergingBarChart(monthKeys, C.profit, {...o, ghost: ghostOn ? D.prev.profit : null})}</div>`, ++i));
+  cards.push(card('Sales vs Total Expenses (Rs)','Sales amount vs combined Business + Family + Personal + Warp + Weft cost, per month.',
+    `${legend([['var(--green)','Sales'],['var(--red)','Expenses']])}${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[
+      sg('Sales','var(--green)',C.sales,D.prev&&D.prev.sales), sg('Expenses','var(--red)',C.expenses,D.prev&&D.prev.expenses)
+    ], {...o, ghost:ghostOn})}</div>`, ++i));
+  cards.push(card('Cash Received (Rs)','Cash + Bank Transfer + Cleared cheques counted toward Receivable, per month.',
+    `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(monthKeys,[sg('Received','var(--rust)',C.received,D.prev&&D.prev.received)], {...o, ghost:ghostOn})}</div>`, ++i));
+  cards.push(card('Receivable Trend (Rs)','What clients owe you at the end of each month. A rising line means sales are outrunning collections.',
+    `${tipBox}<div class="gx-scroll">${svgLineChart(monthKeys, C.receivable, {color:'var(--gold)', area:true, curKey})}</div>`, ++i));
+  cards.push(card('Collection Rate (%)','Cash received each month as a percentage of that month’s sales. Above the dashed 100% line means you collected more than you sold; months with no sales are left blank.',
+    `${tipBox}<div class="gx-scroll">${svgLineChart(monthKeys, C.collection, {color:'var(--green)', ref:100, refLabel:'100%', fmt: v=> gxPct(v), label: v=> Math.round(v)+'%', curKey})}</div>`, ++i));
+  cards.push(card('Average Selling Rate (Rs / m)','Sales amount divided by meters sold, per month.',
+    `${tipBox}<div class="gx-scroll">${svgLineChart(monthKeys, C.avgRate, {color:'var(--rust)', fmt: v=> 'Rs '+(Math.round(v*100)/100).toLocaleString('en-IN')+' / m', label: v=> (Math.round(v*10)/10)+'', curKey})}</div>`, ++i));
+  if(D.clients.top.length){
+    const max = D.clients.top[0].amount || 1;
+    const rows = D.clients.top.map((c,k)=>`<div class="gx-rank"><span class="gx-rank-n">${k+1}</span><div class="gx-rank-main"><div class="gx-rank-top"><b>${GX_ESC(c.name)}</b><span>${gxRs(c.amount)} · ${gxPct(c.amount/D.clients.total*100)}</span></div>
+      <div class="gx-rank-track"><div class="gx-rank-bar" style="width:${Math.max(2,c.amount/max*100)}%;animation-delay:${k*70}ms;background:${GX_PALETTE[k%GX_PALETTE.length]}"></div></div><div class="gx-rank-sub">${gxM(c.qty)} sold</div></div></div>`).join('');
+    cards.push(card('Top Clients','Clients ranked by sales amount over the selected range, with each one’s share of total sales.',
+      `${rows}${D.clients.othersCount ? `<div class="gx-rank-others">+ ${D.clients.othersCount} other client${D.clients.othersCount>1?'s':''} · ${gxRs(D.clients.othersAmount)}</div>` : ''}`, ++i));
+  }
+  const expTotal = D.expenseSplit.reduce((s,x)=>s+x.value,0);
+  if(expTotal > 0){
+    cards.push(card('Where the Money Went','Total expenses over the selected range, split by type. Business excludes wages, which are shown separately.',
+      `<div class="gx-donut-wrap">${gxDonut(D.expenseSplit, expTotal)}<div class="gx-donut-legend">${D.expenseSplit.map((s,k)=>`<div class="gx-dl"><i style="background:${GX_PALETTE[k%GX_PALETTE.length]}"></i><span>${s.key}</span><b>${gxRs(s.value)}</b><em>${gxPct(s.value/expTotal*100)}</em></div>`).join('')}</div></div>`, ++i));
+  }
+  return `<div id="graphs_root">${cards.join('')}</div>`;
 }

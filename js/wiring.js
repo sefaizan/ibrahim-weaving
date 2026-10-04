@@ -1451,6 +1451,13 @@ function wirePanel(id){
         switchTab('graphs');
       };
     });
+    const graphsRoot = document.getElementById('graphs_root');
+    if(graphsRoot){
+      graphsRoot.addEventListener('click', graphsTapHandler);
+      const cmp = document.getElementById('graphs_compare');
+      if(cmp) cmp.onclick = ()=>{ FILTER.graphsCompare = !FILTER.graphsCompare; switchTab('graphs'); };
+      graphsAnimate(graphsRoot);
+    }
   }
   if(id==='backup'){
     autoBackupWire();

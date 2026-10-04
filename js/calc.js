@@ -1346,3 +1346,99 @@ function clientReceivableNow(name){
   const bnc = DATA.recovery.filter(r=>r.client===name).reduce((t,r)=>t+(recoveryBouncedAmount(r)||0),0);
   return sales - recd - bnc;
 }
+
+/* ---------------- Graphs page figures ----------------
+   Everything the Graphs page shows is worked out here (no page code), so it can be tested. Each month
+   comes from computeStats(), so Graphs always agrees with Overview. */
+function graphsShiftMonthKey(mk, delta){
+  const [y,m] = mk.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m-1+delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+}
+// Same number of months, immediately before the shown ones (index-aligned, for ghost bars and % change).
+function graphsPrevMonthKeys(monthKeys){ return monthKeys.map(k=> graphsShiftMonthKey(k, -monthKeys.length)); }
+// 'q' = this calendar quarter so far, 'ytd' = January up to this month.
+function graphsRangeKeys(kind){
+  const t = todayStr(), y = Number(t.slice(0,4)), m = Number(t.slice(5,7));
+  const first = kind==='q' ? Math.floor((m-1)/3)*3+1 : 1;
+  const out = [];
+  for(let i=first;i<=m;i++) out.push(`${y}-${String(i).padStart(2,'0')}`);
+  return out;
+}
+function graphsWeekStart(dateStr){
+  const d = new Date(dateStr+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay()+6)%7)); // Monday
+  return d.toISOString().slice(0,10);
+}
+// Meters woven per Monday-to-Sunday week, for the n weeks up to the week containing endDate.
+function graphsWeeklyProduction(endDate, n){
+  const last = new Date(graphsWeekStart(endDate)+'T00:00:00Z');
+  const weeks = [];
+  for(let i=n-1;i>=0;i--){
+    const d = new Date(last.getTime() - i*7*86400000);
+    weeks.push({from: d.toISOString().slice(0,10), meters: 0});
+  }
+  const idx = {}; weeks.forEach((w,i)=>{ idx[w.from] = i; });
+  DATA.production.forEach(r=>{
+    if(!r.date) return;
+    const i = idx[graphsWeekStart(r.date)];
+    if(i !== undefined) weeks[i].meters += Number(r.qty)||0;
+  });
+  return weeks;
+}
+function graphsLatestEntryDate(){
+  let best = '';
+  [DATA.production, DATA.sale, DATA.recovery, DATA.expense].forEach(arr=>{ (arr||[]).forEach(r=>{ if(r.date && r.date > best) best = r.date; }); });
+  return best;
+}
+const GRAPHS_TOP_QUALITIES = 6, GRAPHS_TOP_CLIENTS = 6;
+function computeGraphsData(monthKeys, withPrev){
+  const expOf = s => s.bizExpMonth+s.famExpMonth+s.personalExpMonth+s.warpCostMonth+s.weftCostMonth;
+  const series = arr => ({
+    produced: arr.map(s=>s.producedMonth), sold: arr.map(s=>s.soldMonth), sales: arr.map(s=>s.salesAmtMonth),
+    expenses: arr.map(expOf), profit: arr.map(s=>s.profitMonth), received: arr.map(s=>s.receivedMonth),
+    receivable: arr.map(s=>s.receivable),
+  });
+  const per = monthKeys.map(k=> computeStats(k));
+  const cur = series(per);
+  const prev = withPrev ? series(monthKeys.length ? graphsPrevMonthKeys(monthKeys).map(k=> computeStats(k)) : []) : null;
+  const sum = a => a.reduce((s,v)=>s+(Number(v)||0),0);
+  const totals = {}, prevTotals = prev ? {} : null;
+  ['produced','sold','sales','expenses','profit','received'].forEach(k=>{ totals[k] = sum(cur[k]); if(prev) prevTotals[k] = sum(prev[k]); });
+  // Rs per meter sold, and share of the month's sales that came in as cash (null when nothing was sold)
+  cur.avgRate = cur.sales.map((v,i)=> cur.sold[i] > 0 ? v/cur.sold[i] : null);
+  cur.collection = cur.sales.map((v,i)=> v > 0 ? cur.received[i]/v*100 : null);
+  // which months have any activity at all (the in-progress month is judged separately by the page)
+  cur.active = monthKeys.map((k,i)=> !!(cur.produced[i] || cur.sold[i] || cur.sales[i] || cur.expenses[i] || cur.received[i]));
+
+  const bounds = monthKeys.length ? {start: periodBounds(monthKeys[0]).start, end: periodBounds(monthKeys[monthKeys.length-1]).end} : {start:null, end:null};
+  // Production by quality, per month (top qualities, the rest folded into "Other")
+  const qByMonth = monthKeys.map(k=>{ const b = periodBounds(k); return sumWhereBy(DATA.production,'quality','qty',b.start,b.end); });
+  const qTot = {};
+  qByMonth.forEach(m=> Object.keys(m).forEach(q=>{ qTot[q] = (qTot[q]||0) + m[q]; }));
+  const qNames = Object.keys(qTot).filter(q=> qTot[q] > 0).sort((a,b)=> qTot[b]-qTot[a]);
+  const qualities = qNames.slice(0, GRAPHS_TOP_QUALITIES).map(q=>({name:q, values: qByMonth.map(m=> m[q]||0)}));
+  const rest = qNames.slice(GRAPHS_TOP_QUALITIES);
+  if(rest.length) qualities.push({name:'Other', values: qByMonth.map(m=> rest.reduce((s,q)=>s+(m[q]||0),0))});
+  // Top clients by sales amount over the whole shown range
+  const cAmt = sumWhereBy(activeSaleRows(),'client','amount',bounds.start,bounds.end);
+  const cQty = sumWhereBy(activeSaleRows(),'client','qty',bounds.start,bounds.end);
+  const cAll = Object.keys(cAmt).filter(c=> cAmt[c] > 0).sort((a,b)=> cAmt[b]-cAmt[a]).map(c=>({name:c, amount:cAmt[c], qty:cQty[c]||0}));
+  const clientsTotal = sum(cAll.map(c=>c.amount));
+  const topClients = cAll.slice(0, GRAPHS_TOP_CLIENTS);
+  const others = cAll.slice(GRAPHS_TOP_CLIENTS);
+  const clients = {top: topClients, total: clientsTotal, othersAmount: sum(others.map(c=>c.amount)), othersCount: others.length};
+  // Where the money went over the shown range
+  const wages = sum(per.map(s=>s.wagesPaidMonth));
+  const expenseSplit = [
+    {key:'Wages', value: wages},
+    {key:'Business', value: sum(per.map(s=>s.bizExpMonth)) - wages},
+    {key:'Family', value: sum(per.map(s=>s.famExpMonth))},
+    {key:'Personal', value: sum(per.map(s=>s.personalExpMonth))},
+    {key:'Warp (Tana)', value: sum(per.map(s=>s.warpCostMonth))},
+    {key:'Weft (Bana)', value: sum(per.map(s=>s.weftCostMonth))},
+  ].filter(x=> x.value > 0);
+  // what clients owed just before the first shown month, so the page can say how receivable moved over the range
+  const startReceivable = monthKeys.length ? computeStats(graphsShiftMonthKey(monthKeys[0], -1)).receivable : 0;
+  return {monthKeys, cur, prev, totals, prevTotals, qualities, clients, expenseSplit, bounds, startReceivable};
+}

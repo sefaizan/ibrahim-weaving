@@ -30,6 +30,7 @@ const ICONS = {
 // display grouping in renderNav; tabForKey/switchTab/every other lookup still works by id alone.
 const TABS = [
   {id:'overview', label:'Overview', icon:'dashboard', group:'Daily'},
+  {id:'graphs', label:'Graphs', icon:'monitoring', group:'Daily'}, // right under Overview (moved from Tools in v3.18.1)
   {id:'production', label:'Production', icon:'precision_manufacturing', group:'Daily'},
   {id:'sale', label:'Sale', icon:'point_of_sale', group:'Money'},
   {id:'recovery', label:'Recovery', icon:'payments', group:'Money'},
@@ -46,7 +47,6 @@ const TABS = [
   {id:'warpbeams', label:'Warp (Tana) Beam', icon:'inventory_2', group:'Materials'},
   {id:'checkpoints', label:'Cash Checkpoints', icon:'savings', group:'Tools'},
   {id:'fiscal', label:'Year Report', icon:'assessment', group:'Tools'},
-  {id:'graphs', label:'Graphs', icon:'monitoring', group:'Tools'},
   {id:'inbox', label:'Approvals', icon:'inbox', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
   {id:'audit', label:'Audit', icon:'monitoring', group:'Tools'}, // owner only - see permsTabAllowed (view-only.js)
   {id:'settings', label:'Settings', icon:'settings', group:'Tools'},
@@ -83,6 +83,7 @@ let DATA = {
   "checkpoints": [],
   "openingBalance": 0,
   "wageRateHistory": {},
+  "staffSalary": {},
   "businessInfo": {"name": "Ibrahim Weaving"},
   "wageFrom": "",
   "wageTo": "",
@@ -420,9 +421,9 @@ async function receiptHtmlToPngFile(html, filename, opts){
 // since a second tap on Share is a fresh user gesture and usually succeeds (see note below).
 async function shareReceiptAsImage(kind, id){
   try{
-    const html = kind === 'sale' ? printSaleReceipt(id, {htmlOnly:true}) : kind === 'wage' ? printWageReceipt(id, {htmlOnly:true}) : printRecoveryReceipt(id, {htmlOnly:true});
+    const html = kind === 'sale' ? printSaleReceipt(id, {htmlOnly:true}) : printRecoveryReceipt(id, {htmlOnly:true});
     if(!html){ showToast('That receipt could not be found.'); return; }
-    const f = kind === 'sale' ? buildReceiptFields(id) : kind === 'wage' ? buildWageReceiptFields(id) : buildRecoveryReceiptFields(id);
+    const f = kind === 'sale' ? buildReceiptFields(id) : buildRecoveryReceiptFields(id);
     const file = await receiptHtmlToPngFile(html, asciiFileBase(f.fileBase) + '.png');
     await navigator.share({files:[file]});
     showToast('Receipt shared ✓');
@@ -758,6 +759,7 @@ async function ensureDataDefaults(){
   if(!DATA.ownerLoans) DATA.ownerLoans = []; // Owner Loans (to Company) - older ledgers / backups start with none
   if(!DATA.loomAssignments) DATA.loomAssignments = [];
   if(!DATA.wageRateHistory) DATA.wageRateHistory = {};
+  if(!DATA.staffSalary) DATA.staffSalary = {};
   if(!DATA.businessInfo) DATA.businessInfo = {};
   if(!Array.isArray(DATA.stockValuations)) DATA.stockValuations = [];          // Year Report (js/fiscal.js)
   if(!DATA.fiscalOpenings || typeof DATA.fiscalOpenings !== 'object' || Array.isArray(DATA.fiscalOpenings)) DATA.fiscalOpenings = {};
