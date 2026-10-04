@@ -155,7 +155,7 @@ function wagesPanel(){
       ${logTable('wagePayments',
         ['Date','Employee','Amount','Remarks',''],
         DATA.wagePayments.slice().reverse(),
-        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), actionBtns('wagePayments',r.id)]
+        r=>[fmtDate(r.date), `<span class="name">${escHtml(r.employee)}</span>`, fmtRs2(r.amount), escHtml(r.remarks||'—'), `<span class="row-actions">${wageReceiptBtn(r.id)}${canShareFiles() ? shareWageReceiptBtn(r.id) : ''}${actionBtns('wagePayments',r.id)}</span>`]
       )}</div>
     </div>
     <div class="${wagesSubCls('bonus')}" data-wsub="bonus">
@@ -1495,3 +1495,88 @@ function moveBtns(key,idx,isFirst,isLast){
        + `<button class="ghost rowbtn move" data-move="${key}:${idx}:down" ${isLast?'disabled':''} title="Move down" aria-label="Move down">↓</button>`
        + `</span>`;
 }
+
+/* ---------------- Wage payment receipt (Receipt = print/PDF, Share = image) ---------------- */
+// Balance picture as of one wage payment: what was brought forward, earned, bonus, paid so far
+// (this payment included) and what is left. A negative balance = employee was paid ahead (e.g.
+// rounded up) and owes it back; the slip says so, so it is never deducted from next wages silently.
+function wageReceiptFacts(payId){
+  const p = DATA.wagePayments.find(x=>x.id===payId);
+  if(!p) return null;
+  const emp = p.employee;
+  const sett = DATA.wageSettlements.filter(s=>s.employee===emp && s.date<=p.date).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
+  const since = sett ? sett.date : null;
+  const carry = sett ? Number(sett.carryForward||0) : 0;
+  const from = since ? nextDayStr(since) : null;
+  let earned = 0;
+  DATA.qualities.forEach(q=>{ earned += computeWageMeters(emp, q.name, from, p.date).wages; });
+  const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=p.date).reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const list = DATA.wagePayments.filter(x=>x.employee===emp && (!since||x.date>since) && x.date<=p.date);
+  const upto = list.slice(0, list.findIndex(x=>x.id===payId)+1);
+  const paidTotal = upto.reduce((s,x)=>s+(Number(x.amount)||0),0);
+  const paidEarlier = paidTotal - (Number(p.amount)||0);
+  const balance = paisaDiff(carry + earned + bonus, paidTotal);
+  const loans = DATA.loanPayments.filter(l=>l.employee===emp && l.date<=p.date);
+  const given = loans.filter(l=>l.type!=='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
+  const repaid = loans.filter(l=>l.type==='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
+  let run = 0;
+  const loanRows = loans.map((l,i)=>({l,i})).sort((a,b)=> String(a.l.date).localeCompare(String(b.l.date)) || a.i-b.i).map(({l})=>{
+    const rep = l.type==='Loan Repaid'; const amt = Number(l.amount)||0; run += rep ? -amt : amt;
+    return {date:l.date, type: rep ? 'Repaid' : 'Given', amount:amt, balance:run};
+  });
+  return {p, emp, carry, earned, bonus, paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows};
+}
+function buildWageReceiptFields(payId){
+  const facts = wageReceiptFacts(payId);
+  if(!facts) return null;
+  const biz = DATA.businessInfo || {};
+  const bizName = biz.name || 'Ibrahim Weaving';
+  const safe = s => String(s||'').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_');
+  return {...facts, biz, bizName, fileBase: `${safe(facts.emp)||'Wage'}_Wages_${dateTimeStamp()}`};
+}
+function printWageReceipt(payId, opts){
+  const f = buildWageReceiptFields(payId);
+  if(!f){ if(!(opts && opts.htmlOnly)) showToast('That wage payment could not be found — try refreshing the page.', 5000); return; }
+  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, fileBase} = f;
+  const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
+    biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',
+    biz.phone ? `<div class="biz-line">Phone: ${escHtml(biz.phone)}</div>` : ''].join('');
+  const row = (a,b,cls) => `<div class="row${cls?' '+cls:''}"><span>${a}</span><span>${b}</span></div>`;
+  const rows = [
+    carry ? row(carry>0?'Brought forward (owed to employee)':'Brought forward (employee owes)', fmtRs2(Math.abs(carry))) : '',
+    row('Wages earned', fmtRs2(earned)),
+    bonus ? row('Bonus', fmtRs2(bonus)) : '',
+    paidEarlier>0.004 ? row('Paid earlier', fmtRs2(paidEarlier)) : '',
+    row('Paid now', fmtRs2(p.amount), 'total')
+  ].join('');
+  let balLine;
+  if(balance < -0.004) balLine = row('Receivable from employee (deduct from next wages)', fmtRs2(Math.abs(balance)), 'total');
+  else if(balance > 0.004) balLine = row('Still payable to employee', fmtRs2(balance), 'total');
+  else balLine = row('Balance', 'Settled', 'total');
+  const loanHtml = loan > 0.004 ? `<div class="balance-summary" style="margin-top:12px">${row('Loan outstanding', fmtRs2(loan), 'total')}</div>` : '';
+  const html = `<div class="receipt">
+    ${receiptWatermarkDiv}
+    ${bizLines}
+    <div class="receipt-title">Wage Slip</div>
+    <div class="meta-row"><span>Date</span><b>${fmtDate(p.date)}</b></div>
+    <div class="meta-row"><span>Employee</span><b>${escHtml(emp)}</b></div>
+    <div class="balance-summary" style="margin-top:12px">${rows}${balLine}</div>
+    ${loanHtml}
+    ${p.remarks ? `<div class="meta-row" style="margin-top:14px"><span>Remarks</span><b>${escHtml(p.remarks)}</b></div>` : ''}
+  </div>`;
+  if(opts && opts.htmlOnly) return html;
+  const area = document.getElementById('receiptPrintArea');
+  area.innerHTML = html;
+  const originalTitle = document.title;
+  document.title = fileBase;
+  const restoreTitle = () => { document.title = originalTitle; window.removeEventListener('afterprint', restoreTitle); };
+  window.addEventListener('afterprint', restoreTitle);
+  window.print();
+}
+async function shareWageReceipt(payId){
+  if(!buildWageReceiptFields(payId)){ showToast('That wage payment could not be found.'); return; }
+  if(!canShareFiles()){ showToast('Sharing files isn\'t supported here — use Receipt instead.'); return; }
+  await shareReceiptAsImage('wage', payId);
+}
+function wageReceiptBtn(id){ return `<button class="ghost rowbtn receipt" data-wage-receipt="${id}" aria-label="Print receipt" title="Print receipt"><span class="ic">${ICON_PRINT}</span><span class="lbl">Receipt</span></button>`; }
+function shareWageReceiptBtn(id){ return `<button class="ghost rowbtn share" data-share-wage-receipt="${id}" aria-label="Share receipt" title="Share receipt"><span class="ic">${ICON_SHARE}</span><span class="lbl">Share</span></button>`; }
