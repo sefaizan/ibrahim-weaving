@@ -203,7 +203,23 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
     <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}">Pay</button></div>
     <div class="wg-mini"><span>Meters <b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></span><span>Earned <b>${fmtRs2(net.earned)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '—'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
     <div class="wg-det">${detail}
-      <div class="wg-lines"><span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
+      <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
+  </div>`;
+}
+// Salaried staff get their own card: weekly salary, salary earned in the period, bonus, paid, net. No meters or quality table.
+function wagesSalCardHtml(d, from, to, asOf){
+  const {name, row, bal, net} = d, open = WAGES_UI.openEmps.has(name);
+  const emp = DATA.employees.find(e => e.name === name) || {};
+  const tag = bal.balance > 0.004 ? `<span class="wg-tag due">${fmtRs(bal.balance)} owed</span>`
+    : bal.balance < -0.004 ? `<span class="wg-tag cr">${fmtRs(Math.abs(bal.balance))} credit</span>` : `<span class="wg-tag zero">Settled</span>`;
+  const netCls = net.net > 0.004 ? 'due' : net.net < -0.004 ? 'cr' : '';
+  const weekly = salaryWeeklyOn(name, asOf);
+  const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
+  return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}">Pay</button></div>
+    ${emp.title ? `<div class="wg-fine" style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
+    <div class="wg-mini"><span>Weekly <b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></span><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : ''}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : ''}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
+    <div class="wg-det"><div class="wg-lines"><span>Salary earned <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
 }
 function renderWages(){
@@ -218,6 +234,7 @@ function renderWages(){
   const rows = computeWages(from, to), rowOf = {}; rows.forEach(r => { rowOf[r.employee] = r; });
   // Everyone relevant for balances, plus anyone with earnings in the period (never hide earned money).
   const names = wageRelevantEmployees().map(e => e.name); rows.forEach(r => { if(!names.includes(r.employee)) names.push(r.employee); });
+  const meterRows = rows.filter(r => !isSalariedEmp(r.employee));
   const data = names.map(name => ({ name, row: rowOf[name], bal: computeEmployeeWageBalance(name), net: computeEmployeeWageNetForPeriod(name, from, to) }));
   const owed = data.reduce((s, d) => s + (d.bal.balance > 0.004 ? d.bal.balance : 0), 0);
   const credit = data.reduce((s, d) => s + (d.bal.balance < -0.004 ? -d.bal.balance : 0), 0);
@@ -242,8 +259,8 @@ function renderWages(){
   const showNum = n => n ? fmtQtyMtr(n) : '', showRs2 = n => n ? fmtRs2(n) : '';
   const mHead = act.map(i => `<th>${escHtml(qualities[i].name)}</th>`).join(''), mdHead = act.map(i => `<th>${escHtml(qualities[i].name)} Diff</th>`).join('');
   const wHead = act.map(i => `<th>${escHtml(qualities[i].name)} (Rs)</th>`).join(''), wdHead = act.map(i => `<th>${escHtml(qualities[i].name)} Diff (Rs)</th>`).join('');
-  const mRows = rows.map(r => `<tr><td><span class="name">${escHtml(r.employee)}</span></td>${act.map(i => `<td>${showNum(r.byQuality[i].meters)}</td>`).join('')}${act.map(i => `<td class="mono">${showNum(r.byQuality[i].diffMeters)}</td>`).join('')}<td class="mono">${showNum(r.totalMeters - r.totalDiffMeters)}</td><td class="mono"><b>${showNum(r.totalMeters)}</b></td></tr>`).join('');
-  const wRows = rows.map(r => `<tr><td><span class="name">${escHtml(r.employee)}</span></td>${act.map(i => `<td>${showRs2(r.byQuality[i].wages)}</td>`).join('')}${act.map(i => `<td class="mono">${showRs2(r.byQuality[i].diffWages)}</td>`).join('')}<td class="mono">${showRs2(r.totalWagesNoBonus - r.totalDiffWages)}</td><td class="mono"><b>${showRs2(r.totalWagesNoBonus)}</b></td><td>${showRs2(r.bonus)}</td><td class="mono"><b>${showRs2(r.totalWages)}</b></td></tr>`).join('');
+  const mRows = meterRows.map(r => `<tr><td><span class="name">${escHtml(r.employee)}</span></td>${act.map(i => `<td>${showNum(r.byQuality[i].meters)}</td>`).join('')}${act.map(i => `<td class="mono">${showNum(r.byQuality[i].diffMeters)}</td>`).join('')}<td class="mono">${showNum(r.totalMeters - r.totalDiffMeters)}</td><td class="mono"><b>${showNum(r.totalMeters)}</b></td></tr>`).join('');
+  const wRows = meterRows.map(r => `<tr><td><span class="name">${escHtml(r.employee)}</span></td>${act.map(i => `<td>${showRs2(r.byQuality[i].wages)}</td>`).join('')}${act.map(i => `<td class="mono">${showRs2(r.byQuality[i].diffWages)}</td>`).join('')}<td class="mono">${showRs2(r.totalWagesNoBonus - r.totalDiffWages)}</td><td class="mono"><b>${showRs2(r.totalWagesNoBonus)}</b></td><td>${showRs2(r.bonus)}</td><td class="mono"><b>${showRs2(r.totalWages)}</b></td></tr>`).join('');
   const gDiffW = rows.reduce((s, r) => s + r.totalDiffWages, 0);
 
   // Production by quality for the period, laid out like "In Stock by Quality" in Overview's At a Glance card
@@ -262,7 +279,8 @@ function renderWages(){
       <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
       <p class="note info-note" id="info-wgemps" hidden>Tap a name for the breakdown by quality: own meters, the share of unassigned Difference, the rate and the wages. "Earned" and "Paid" are for the selected period only (earned includes bonus), and "Net" reaches 0 once you have paid what was earned there. "Owed" is the running balance since the employee's last settlement, whatever period is selected. "Credit" means paid ahead of wages earned. Advances to employees are in the Employee Loans page.</p>
-      ${data.map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No employees yet</div>'}</div>
+      ${data.filter(d => !isSalariedEmp(d.name)).map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No per-meter employees</div>'}</div>
+    ${data.some(d => isSalariedEmp(d.name)) ? `<div class="card"><div class="card-head"><h2>Salaried staff</h2></div><p class="note" style="margin:0 0 6px">Weekly salary accrues daily. Salary, bonus and paid are for the selected period; "Owed" is the running balance since the last settlement.</p>${data.filter(d => isSalariedEmp(d.name)).map(d => wagesSalCardHtml(d, from, to, asOf)).join('')}</div>` : ''}
     <div class="card"><h2>This period by quality</h2>
       ${act.length ? `<div class="wg-scroll"><table class="wg-q"><thead><tr><th>Quality</th><th>Own m</th><th>Diff m</th><th>Rate</th><th>Wages Rs</th></tr></thead><tbody>${qBody}</tbody><tfoot><tr><td>Total</td><td>${fmtQtyMtr(gM - gD)}</td><td>${gD ? fmtQtyMtr(gD) : '–'}</td><td></td><td>${fmtRs2(gW).replace('Rs ', '')}</td></tr></tfoot></table></div>${qChanged ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}<div class="wg-fine">Diff = each employee's share of unassigned loom output, already included in the totals and paid at that quality's own rate.</div>` : '<div class="empty">No production in this period.</div>'}</div>
     <details class="card wg-full"><summary>Full tables (all columns)</summary>

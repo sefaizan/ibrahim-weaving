@@ -172,6 +172,19 @@ function salaryAccrued(name, fromDate, toDate){
   });
   return Math.round(total * 100) / 100;
 }
+function isSalariedEmp(name){ const e = (DATA.employees || []).find(x=>x.name === name); return !!(e && e.salaried); }
+// The weekly salary in force on a date (0 before it starts or after the last working day).
+function salaryWeeklyOn(name, date){
+  const s = staffSalaryOf(name); if(!s || !Array.isArray(s.rates)) return 0;
+  const d = date || todayStr(); if(s.to && d > s.to) return 0;
+  let w = 0;
+  s.rates.slice().sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0).forEach(r=>{ if(r.date <= d) w = Number(r.weekly) || 0; });
+  return w;
+}
+function salaryFirstDate(name){
+  const s = staffSalaryOf(name); const d = s && Array.isArray(s.rates) ? s.rates.filter(r=>Number(r.weekly) > 0).map(r=>r.date).sort() : [];
+  return d[0] || null;
+}
 // Ends a salary (the person goes back to per-meter wages): a zero-rate entry from the day after `lastDay`,
 // so a later salary can start again without the gap being paid.
 function endStaffSalary(name, lastDay){
