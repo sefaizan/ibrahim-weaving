@@ -80,8 +80,8 @@ function groupedClientOpts(){
 function clientSelectField(label, id, extra=''){
   return `<div class="field"><label>${label}</label><select id="${id}" ${extra}><option value="">—</option>${groupedClientOpts()}</select></div>`;
 }
-// v3.18.4 — ONE place that decides how a Source Purchase (a Warp purchase) is written everywhere it is
-// shown: "Supplier Name - No. Of Cartons - Date - N days ago", e.g. "AbuBakar - 50 Cartons - 03-09-2026 - 3 days ago".
+// v3.18.5 — ONE place that decides how a Source Purchase (a Warp purchase) is written everywhere it is
+// shown: "Supplier Name - Warp Type - No. Of Cartons - Date - N days ago", e.g. "AbuBakar - Micro - 50 Cartons - 03-09-2026 - 3 days ago".
 // Returns plain text (not HTML) — callers escape it. A missing supplier / carton count (older records) shows a dash.
 // "Days ago" counts whole calendar days from today (phone's local date) to the purchase date.
 function daysAgoText(dateStr){
@@ -100,8 +100,9 @@ function daysAgoText(dateStr){
 function purchaseText(p){
   if(!p) return '—';
   const sup = (p.supplier && String(p.supplier).trim()) || '—';
+  const type = (p.type && String(p.type).trim()) || '—';
   const cartons = Number(p.cartons) > 0 ? fmtNum(Number(p.cartons)) : '—';
-  return `${sup} - ${cartons} Cartons - ${fmtDate(p.date)} - ${daysAgoText(p.date)}`;
+  return `${sup} - ${type} - ${cartons} Cartons - ${fmtDate(p.date)} - ${daysAgoText(p.date)}`;
 }
 // Warp purchases don't have a plain display name, so this builds its own option labels
 // (date, type, weight, amount) instead of using opts(). Value is the purchase's id, so a
@@ -959,7 +960,7 @@ function renderYieldPanel(r, beamDetails){
   });
   return `
   <div class="purchase-panel">
-    <div class="ptitle">${escHtml(purchaseText(r.purchase))}<span style="display:block;font-size:12px;font-weight:400;color:var(--ink-soft)">${escHtml(r.purchase.type||'—')}</span></div>
+    <div class="ptitle">${escHtml(purchaseText(r.purchase))}</div>
     <div class="psub">${fmtRs(r.purchase.amount)} · ${r.beams.length} beam${r.beams.length===1?'':'s'} · ${r.complete?'<span class="badge month">Complete</span>':'<span class="badge progress">In Progress</span>'}</div>
     <div class="panel-subhead">Overall Summary</div>
     <div class="grid cols-3">
