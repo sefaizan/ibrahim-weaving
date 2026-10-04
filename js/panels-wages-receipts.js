@@ -1541,24 +1541,42 @@ function buildWageReceiptFields(payId){
   const safe = s => String(s||'').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_');
   return {...facts, biz, bizName, fileBase: `${safe(facts.emp)||'Wage'}_Wages_${dateTimeStamp()}`};
 }
+// Urdu wording for the wage slip (used when the app's language button is on Urdu). Names, qualities,
+// amounts and dates are data and stay as entered; only the labels change. The business header stays English.
+const WAGE_SLIP_UR = {
+  'Wage Slip':'اجرت کی پرچی', 'Employee':'ملازم', 'Period':'مدت', 'Paid on':'ادائیگی کی تاریخ',
+  'How wages were built':'اجرت کیسے بنی', 'Quality':'کوالٹی', 'Own m':'اپنے میٹر', 'Diff m':'فرق میٹر', 'Rate':'ریٹ',
+  'Wages Rs':'اجرت (روپے)', 'Total':'کل', 'No production in this period':'اس مدت میں کوئی پیداوار نہیں',
+  'Wages from own meters':'اپنے میٹر کی اجرت', 'Wages from diff share':'فرق کے حصے کی اجرت', 'Bonus':'بونس',
+  'Brought forward (owed to employee)':'پچھلا بقایا (ملازم کا حق)', 'Brought forward (employee owes)':'پچھلا بقایا (ملازم کے ذمے)',
+  'Total due':'کل واجب الادا', 'Payment':'ادائیگی', 'Paid earlier':'پہلے ادا کیے', 'Paid now':'اب ادا کیے',
+  'Receivable from employee (deduct from next wages)':'ملازم سے وصولی (اگلی اجرت سے کاٹیں)',
+  'Still payable to employee':'ملازم کو ابھی دینے ہیں', 'Balance':'بقایا', 'Settled':'حساب برابر',
+  'Loan outstanding':'باقی قرض', 'Remarks':'ریمارکس', 'to':'سے'
+};
+function wageSlipIsUrdu(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_LANG === 'ur'; }catch(e){ return false; } }
 function printWageReceipt(payId, opts){
   const f = buildWageReceiptFields(payId);
   if(!f){ if(!(opts && opts.htmlOnly)) showToast('That wage payment could not be found — try refreshing the page.', 5000); return; }
   const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, fileBase} = f;
+  const ur = wageSlipIsUrdu();
+  const T = s => (ur && WAGE_SLIP_UR[s]) || s;
+  const V = s => ur ? `<bdi dir="ltr">${s}</bdi>` : s; // numbers and dates keep their left-to-right order inside Urdu text
   const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
     biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '',
     biz.phone ? `<div class="biz-line">Phone: ${escHtml(biz.phone)}</div>` : ''].join('');
-  const row = (a,b,cls) => `<div class="row${cls?' '+cls:''}"><span>${a}</span><span>${b}</span></div>`;
-  const heading = t => `<div style="font-weight:700;font-size:13px;margin:18px 0 0;text-transform:uppercase;letter-spacing:.04em">${t}</div>`;
+  const row = (a,b,cls) => `<div class="row${cls?' '+cls:''}"><span>${T(a)}</span><span>${V(b)}</span></div>`;
+  const meta = (a,b) => `<div class="meta-row"><span${ur ? ' style="flex:0 0 120px"' : ''}>${T(a)}</span><b>${b}</b></div>`;
+  const heading = t => `<div style="font-weight:700;font-size:13px;margin:18px 0 0;${ur ? '' : 'text-transform:uppercase;letter-spacing:.04em'}">${T(t)}</div>`;
   const n2 = x => fmtRs2(x).replace('Rs ', '');
   const totOwn = qualityRows.reduce((s,x)=>s+x.own,0), totDiff = qualityRows.reduce((s,x)=>s+x.diff,0);
   const qBody = qualityRows.length
-    ? qualityRows.map(x=>`<tr><td>${escHtml(x.quality)}</td><td class="num">${fmtQtyMtr(x.own)}</td><td class="num">${x.diff ? fmtQtyMtr(x.diff) : '–'}</td><td class="num">${n2(x.rate)}</td><td class="num">${n2(x.wages)}</td></tr>`).join('')
-    : `<tr><td colspan="5">No production in this period</td></tr>`;
+    ? qualityRows.map(x=>`<tr><td>${escHtml(x.quality)}</td><td class="num">${V(fmtQtyMtr(x.own))}</td><td class="num">${x.diff ? V(fmtQtyMtr(x.diff)) : '–'}</td><td class="num">${V(n2(x.rate))}</td><td class="num">${V(n2(x.wages))}</td></tr>`).join('')
+    : `<tr><td colspan="5">${T('No production in this period')}</td></tr>`;
   const qTable = `<table style="margin-top:6px">
-      <thead><tr><th>Quality</th><th class="num">Own m</th><th class="num">Diff m</th><th class="num">Rate</th><th class="num">Wages Rs</th></tr></thead>
+      <thead><tr><th>${T('Quality')}</th><th class="num">${T('Own m')}</th><th class="num">${T('Diff m')}</th><th class="num">${T('Rate')}</th><th class="num">${T('Wages Rs')}</th></tr></thead>
       <tbody>${qBody}</tbody>
-      <tfoot><tr><td>Total</td><td class="num">${fmtQtyMtr(totOwn)}</td><td class="num">${totDiff ? fmtQtyMtr(totDiff) : '–'}</td><td></td><td class="num">${n2(earned)}</td></tr></tfoot>
+      <tfoot><tr><td>${T('Total')}</td><td class="num">${V(fmtQtyMtr(totOwn))}</td><td class="num">${totDiff ? V(fmtQtyMtr(totDiff)) : '–'}</td><td></td><td class="num">${V(n2(earned))}</td></tr></tfoot>
     </table>`;
   const build = [
     row('Wages from own meters', fmtRs2(earned - diffWages)),
@@ -1570,23 +1588,27 @@ function printWageReceipt(payId, opts){
   let balLine;
   if(balance < -0.004) balLine = row('Receivable from employee (deduct from next wages)', fmtRs2(Math.abs(balance)), 'total');
   else if(balance > 0.004) balLine = row('Still payable to employee', fmtRs2(balance), 'total');
-  else balLine = row('Balance', 'Settled', 'total');
+  else balLine = `<div class="row total"><span>${T('Balance')}</span><span>${T('Settled')}</span></div>`;
   const payRows = [paidEarlier>0.004 ? row('Paid earlier', fmtRs2(paidEarlier)) : '', row('Paid now', fmtRs2(p.amount)), balLine].join('');
   const loanHtml = loan > 0.004 ? `<div class="balance-summary" style="margin-top:16px">${row('Loan outstanding', fmtRs2(loan), 'total')}</div>` : '';
-  const html = `<div class="receipt">
-    ${receiptWatermarkDiv}
-    ${bizLines}
-    <div class="receipt-title">Wage Slip</div>
-    <div class="meta-row"><span>Employee</span><b>${escHtml(emp)}</b></div>
-    <div class="meta-row"><span>Period</span><b>${fmtDate(periodFrom)} to ${fmtDate(p.date)}</b></div>
-    <div class="meta-row"><span>Paid on</span><b>${fmtDate(p.date)}</b></div>
+  const periodTxt = ur ? V(`${fmtDate(periodFrom)} – ${fmtDate(p.date)}`) : `${fmtDate(periodFrom)} to ${fmtDate(p.date)}`;
+  const body = `${ur ? '<div dir="rtl" lang="ur" data-no-i18n style="font-family:\'Noto Naskh Arabic\',\'Geeza Pro\',\'Segoe UI\',Tahoma,sans-serif;line-height:1.7">' : '<div>'}
+    <div class="receipt-title">${T('Wage Slip')}</div>
+    ${meta('Employee', escHtml(emp))}
+    ${meta('Period', periodTxt)}
+    ${meta('Paid on', V(fmtDate(p.date)))}
     ${heading('How wages were built')}
     ${qTable}
     <div class="balance-summary">${build}</div>
     ${heading('Payment')}
     <div class="balance-summary" style="margin-top:6px">${payRows}</div>
     ${loanHtml}
-    ${p.remarks ? `<div class="meta-row" style="margin-top:14px"><span>Remarks</span><b>${escHtml(p.remarks)}</b></div>` : ''}
+    ${p.remarks ? `<div class="meta-row" style="margin-top:14px"><span${ur ? ' style="flex:0 0 120px"' : ''}>${T('Remarks')}</span><b>${escHtml(p.remarks)}</b></div>` : ''}
+  </div>`;
+  const html = `<div class="receipt">
+    ${receiptWatermarkDiv}
+    ${bizLines}
+    ${body}
   </div>`;
   if(opts && opts.htmlOnly) return html;
   const area = document.getElementById('receiptPrintArea');
