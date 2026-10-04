@@ -85,3 +85,17 @@ describe('switching pay basis', () => {
     closeTo(app.salaryAccrued('M', '2026-09-01', '2026-09-28'), 14000 + 9000, 'gap 15-21 Sep not paid');
   });
 });
+
+describe('wage slip for salaried staff', () => {
+  test('slip facts include salary, so the balance matches the Wages page', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'panels-wages-receipts.js'), 'utf8');
+    assert.match(src, /salaryAccrued\(emp, from, p\.date\)/);
+    assert.match(src, /carry \+ earned \+ salary \+ bonus/);
+  });
+  test('helpers: salaried flag, weekly rate on a date, first date', () => {
+    app.setData({ employees: [emp('M'), { id: 'x', name: 'W' }], staffSalary: { M: { rates: [{ date: '2026-09-01', weekly: 7000 }, { date: '2026-09-08', weekly: 9000 }], to: '2026-09-30' } } });
+    assert.equal(app.isSalariedEmp('M'), true); assert.equal(app.isSalariedEmp('W'), false);
+    assert.equal(app.salaryWeeklyOn('M', '2026-09-05'), 7000); assert.equal(app.salaryWeeklyOn('M', '2026-09-20'), 9000);
+    assert.equal(app.salaryWeeklyOn('M', '2026-10-05'), 0); assert.equal(app.salaryFirstDate('M'), '2026-09-01');
+  });
+});
