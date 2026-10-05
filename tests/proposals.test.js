@@ -280,7 +280,7 @@ describe('through the real save() of core.js', () => {
     stored = []; status = { textContent: '' };
     ctx.window = { storage: { set: async (k, v) => { stored.push([k, v]); } } };
     ctx.document.getElementById = id => id === 'statusLine' ? status : null;
-    vm.runInContext(`var STORAGE_KEY = 'k', UNDO_PREV_PARTS = null, NEXT_UNDO_LABEL = null; var haptic = () => {}, clearSaveFailure = () => {}, noteLedgerSize = () => {}, showSaveFailure = () => {}, undoParts = () => ({}), recordUndoEntry = () => null, ledgerToLocalStorage = async () => {};`, ctx);
+    vm.runInContext(`var STORAGE_KEY = 'k', UNDO_PREV_PARTS = null, NEXT_UNDO_LABEL = null; var haptic = () => {}, clearSaveFailure = () => {}, noteLedgerSize = () => {}, showSaveFailure = () => {}, undoParts = () => ({}), recordUndoEntry = () => null, ledgerToStorage = async () => {};`, ctx);
     vm.runInContext(src.replace('async function save(){', 'var realSave = async function(){'), ctx);
   }
   test('a held change: save() stops before it says Saving, stores nothing, and the ledger is as it was', async () => {

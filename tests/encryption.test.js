@@ -28,6 +28,7 @@ function load(){
     b64FromBytes: (bytes) => Buffer.from(bytes).toString('base64'),
     bytesFromB64: (b64) => new Uint8Array(Buffer.from(b64, 'base64')),
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'ledger-store.js'), 'utf8'), ctx, { filename: 'js/ledger-store.js' });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'encryption.js'), 'utf8'), ctx, { filename: 'js/encryption.js' });
   // vm keeps top-level let/const private to the context, so expose what the tests need
   // results are copied into this realm's plain objects so assert.deepEqual can compare them
@@ -104,13 +105,13 @@ describe('ledger round trip', () => {
 describe('storage rules', () => {
   test('encryption off: the ledger is written plain under the normal key', async () => {
     const { run, store } = load();
-    await run(`ledgerToLocalStorage('{"x":1}')`);
+    await run(`ledgerToStorage('{"x":1}')`);
     assert.equal(store.get('khata-data-v3'), '{"x":1}');
   });
   test('encryption on but locked: saving refuses and writes nothing', async () => {
     const { run, store } = load();
     store.set('khata-enc-meta', '{"v":1}');
-    const msg = await run(`ledgerToLocalStorage('{"x":1}').then(()=>'wrote', e=>e.message)`);
+    const msg = await run(`ledgerToStorage('{"x":1}').then(()=>'wrote', e=>e.message)`);
     assert.equal(msg, 'locked');
     assert.equal(store.has('khata-data-v3'), false);
     assert.equal(store.has('khata-data-v3-enc'), false);
@@ -120,7 +121,7 @@ describe('storage rules', () => {
     store.set('khata-enc-meta', '{"v":1}');
     const back = await run(`(async()=>{
       ENC_DEK = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
-      await ledgerToLocalStorage(JSON.stringify({client: 'Secret Client'}));
+      await ledgerToStorage(JSON.stringify({client: 'Secret Client'}));
       return encOpen(localStorage.getItem(ENC_DATA_KEY));
     })()`);
     assert.equal(back, '{"client":"Secret Client"}');
@@ -133,7 +134,7 @@ describe('storage rules', () => {
     const msg = await run(`(async()=>{
       ENC_DEK = await crypto.subtle.generateKey({name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
       ENC_LOAD_FAILED = true;
-      return ledgerToLocalStorage('{}').then(()=>'wrote', e=>e.message);
+      return ledgerToStorage('{}').then(()=>'wrote', e=>e.message);
     })()`);
     assert.equal(msg, 'locked');
   });

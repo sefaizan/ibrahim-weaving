@@ -48,7 +48,7 @@ async function phone(email, o){
     snapList: async () => [], snapAdd: async () => {}, snapTx: async () => {}, save: async () => {}, __db: db,
   });
   vm.runInContext('var DATA = {}; var CURRENT_TAB = "overview";', ctx);
-  ['js/encryption.js', 'js/cloud-sync.js', 'js/section-keys.js'].forEach(f => vm.runInContext(read(f), ctx, { filename: f }));
+  ['js/ledger-store.js', 'js/encryption.js', 'js/cloud-sync.js', 'js/section-keys.js'].forEach(f => vm.runInContext(read(f), ctx, { filename: f }));
   vm.runInContext('cloudSdkReady = async () => __db; SK_ITER = 1000;', ctx);
   if(email) store.set('khata-cloud-user', JSON.stringify({ email, verified: true }));
   store.set('khata-cloud-sync-on', '1');

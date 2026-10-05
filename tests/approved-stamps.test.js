@@ -172,7 +172,7 @@ describe('Undo, through the real save() of core.js and the real Undo code of she
     stored = []; const status = { textContent: '' };
     ctx.window = { storage: { set: async (k, v) => { stored.push([k, v]); } } };
     ctx.document.getElementById = id => id === 'statusLine' ? status : null;
-    Object.assign(ctx, { fmtRs: x => String(x), fmtDate: x => String(x), fmtQtyMtr: x => String(x), showUndoToast() {}, renderUndoSheet() {}, haptic() {}, clearSaveFailure() {}, noteLedgerSize() {}, showSaveFailure() {}, ledgerToLocalStorage: async () => {} });
+    Object.assign(ctx, { fmtRs: x => String(x), fmtDate: x => String(x), fmtQtyMtr: x => String(x), showUndoToast() {}, renderUndoSheet() {}, haptic() {}, clearSaveFailure() {}, noteLedgerSize() {}, showSaveFailure() {}, ledgerToStorage: async () => {} });
     vm.runInContext(`var STORAGE_KEY = 'k', EDITING = null;`, ctx);
     vm.runInContext(shell.slice(shell.indexOf('const UNDO_STACK'), shell.indexOf('function undoAgo')), ctx);
     vm.runInContext(core.slice(core.indexOf('let UNDO_PREV_PARTS'), core.indexOf('async function load(){')).replace('let UNDO_SUPPRESS', 'UNDO_SUPPRESS').replace('let NEXT_UNDO_LABEL', 'NEXT_UNDO_LABEL'), ctx); // the two flags are already declared by load()
