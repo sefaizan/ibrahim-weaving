@@ -313,3 +313,10 @@ YEAR REPORT AUTO-FILL (v3.17.63)
     are filled in from the app's own figures at the end of the day before the opening date. Everything stays editable; changing the date refreshes
     only the figures you have not typed over. Grey cloth lists only qualities that have stock on that day. Once an opening is saved, its saved
     figures are shown as they are. TO GO BACK: put the 3.17.62 copies of index.html, service-worker.js, package.json, js/fiscal.js back.
+
+WHERE THE LEDGER IS STORED (v3.18.7)
+  The ledger is kept in the phone's own database (IndexedDB) instead of localStorage, so it is no longer
+  limited to about 5 MB. Small settings (PIN, sync flags) stay where they were. The first time an updated
+  phone starts, the existing ledger is copied across, read back and only then removed from the old place;
+  if anything fails the old copy stays and is used. See js/ledger-store.js for the safety rules. No server,
+  Firebase or Netlify change is needed.
