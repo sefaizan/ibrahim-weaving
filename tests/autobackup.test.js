@@ -63,7 +63,7 @@ function load(){
     { on: true, url: 'https://backup.example.netlify.app/api/backup', key: 'k3y', pw: '' }, over))})`);
   const addEntries = (n) => run(`DATA.sale.push(...Array.from({length:${n}}, (_, i) => ({id:'s'+(DATA.sale.length+i)})))`);
   // Pretend the last daily check / send happened at a given moment (local time), and its ledger fingerprint.
-  const setLastOk = (when, hash) => run(`autoBackupSetState({lastOkAt: ${JSON.stringify(when.toISOString())}, lastCheckDay: autoBackupDayKey(new Date(${when.getTime()}))${hash ? `, lastHash: ${JSON.stringify(hash)}` : ''}})`);
+  const setLastOk = (when, hash) => run(`autoBackupSetState({lastOkAt: ${JSON.stringify(when.toISOString())}, lastSlotDay: autoBackupDayKey(autoBackupLastSlot(autoBackupConfig().at, new Date(${when.getTime()})))${hash ? `, lastHash: ${JSON.stringify(hash)}` : ''}})`);
   const liveTimers = () => timers.filter(x => x.live && x.ms > 1000 && x.ms !== 45000); // ignore the 45 s network time-out
   return { ctx, store, calls, world, run, configure, addEntries, setLastOk, timers, liveTimers };
 }
@@ -98,16 +98,16 @@ describe('when a backup is sent', () => {
     assert.equal(again.skipped, true); assert.equal(t.calls.length, 1);
     assert.match(again.message, /No changes/);
   });
-  test('at most one automatic backup per day: a change made today waits until after midnight', async () => {
+  test('at most one automatic backup per backup time: a change made later waits for the next one', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);
     await t.run('autoBackupSend(false)');            // today's backup
     await t.addEntries(1);                           // a later entry today
     const same = await t.run('autoBackupSend(false)');
     assert.equal(same.tooSoon, true);
     assert.equal(t.calls.length, 1, 'nothing more is sent the same day');
-    assert.ok(same.waitMs > 0 && same.waitMs <= 25 * HOUR, 'tells the caller how long until midnight');
-    const untilMidnight = new Date(Date.now() + same.waitMs);
-    assert.equal(untilMidnight.getHours(), 0); assert.equal(untilMidnight.getMinutes(), 0);
+    assert.ok(same.waitMs > 0 && same.waitMs <= 25 * HOUR, 'tells the caller how long until the next backup time');
+    const nextAt = new Date(Date.now() + same.waitMs);
+    assert.equal(nextAt.getHours(), 22); assert.equal(nextAt.getMinutes(), 30);   // default backup time
     // the next day the change goes out
     await t.setLastOk(yesterdayNoon(), (await t.run('autoBackupState()')).lastHash);
     assert.equal((await t.run('autoBackupSend(false)')).ok, true);
@@ -130,7 +130,7 @@ describe('when a backup is sent', () => {
     assert.equal((await t.run('autoBackupSend(false)')).ok, true);
     assert.equal(t.calls.length, 2);
   });
-  test('saving an entry sends nothing by itself; a single check is set for just after midnight', async () => {
+  test('saving an entry sends nothing by itself; a single check is set for just after the backup time', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);
     await t.run('autoBackupSchedule()');
     await t.run('autoBackupSchedule()');             // every save calls this: still only one timer
@@ -138,10 +138,10 @@ describe('when a backup is sent', () => {
     const live = t.liveTimers();
     assert.equal(live.length, 1);
     const at = new Date(Date.now() + live[0].ms);
-    assert.equal(at.getHours(), 0); assert.equal(at.getMinutes(), 0);
+    assert.equal(at.getHours(), 22); assert.equal(at.getMinutes(), 30);
     assert.ok(live[0].ms > 1000 && live[0].ms <= 25 * HOUR);
   });
-  test('when the midnight check runs it sends, and sets up the next midnight', async () => {
+  test('when the daily check runs it sends, and sets up the next backup time', async () => {
     const t = load(); await t.configure(); await t.addEntries(3);
     await t.setLastOk(yesterdayNoon(), 'old-fingerprint');
     const r = await t.run('autoBackupRun()');
@@ -247,6 +247,69 @@ describe('results and failures', () => {
     // and a failure never leaves it stuck "busy"
     t.world.fetchImpl = async () => ({ ok: true, status: 200 });
     assert.equal((await t.run('autoBackupSend(true)')).ok, true);
+  });
+});
+
+describe('the daily backup time', () => {
+  test('defaults to 10:30 PM; a chosen time is kept; nonsense falls back to the default', async () => {
+    const t = load();
+    assert.equal((await t.run('autoBackupConfig()')).at, '22:30');
+    await t.configure({ at: '21:15' });
+    assert.equal((await t.run('autoBackupConfig()')).at, '21:15');
+    await t.configure({ at: '25:99' });
+    assert.equal((await t.run('autoBackupConfig()')).at, '22:30');
+    await t.configure({ at: '9:05' });
+    assert.equal((await t.run('autoBackupConfig()')).at, '09:05');
+  });
+  test('a custom backup time moves the timer to that time', async () => {
+    const t = load(); await t.configure({ at: '17:45' }); await t.addEntries(3);
+    await t.run('autoBackupSchedule()');
+    const live = t.liveTimers();
+    assert.equal(live.length, 1);
+    const at = new Date(Date.now() + live[0].ms - 2000);
+    assert.equal(at.getHours(), 17); assert.equal(at.getMinutes(), 45);
+  });
+  test('the backup time that counts is today\'s once it has passed, otherwise yesterday\'s', async () => {
+    const t = load();
+    const day = (h, m) => new Date(2026, 8, 21, h, m).getTime();
+    const slot = async (h, m) => (await t.run(`autoBackupLastSlot('22:30', new Date(${day(h, m)}))`));
+    const key = async (h, m) => (await t.run(`autoBackupDayKey(autoBackupLastSlot('22:30', new Date(${day(h, m)})))`));
+    assert.equal(await key(15, 0), '2026-09-20', 'at 3 PM the last backup time was last night');
+    assert.equal(await key(22, 29), '2026-09-20');
+    assert.equal(await key(22, 30), '2026-09-21', 'from 10:30 PM it is tonight\'s');
+    assert.equal(await key(23, 59), '2026-09-21');
+    assert.equal(await key(0, 5), '2026-09-20', 'just after midnight it is still last evening\'s');
+    assert.ok(await slot(15, 0));
+  });
+  test('time until the next backup time, from the afternoon and from late evening', async () => {
+    const t = load();
+    const ms = async (h, m) => run3(t, h, m);
+    async function run3(t, h, m){ return t.run(`autoBackupMsToNextSlot('22:30', new Date(${new Date(2026, 8, 21, h, m).getTime()}))`); }
+    assert.equal(await ms(15, 0), 7.5 * HOUR);
+    assert.equal(await ms(22, 0), 0.5 * HOUR);
+    assert.equal(await ms(22, 30), 24 * HOUR, 'exactly at the time, the next one is tomorrow');
+    assert.equal(await ms(23, 0), 23.5 * HOUR);
+  });
+  test('opening the app in the afternoon sends nothing new when last night\'s backup was already handled', async () => {
+    const t = load(); await t.configure({ at: '23:59' }); await t.addEntries(3);
+    await t.run('autoBackupSend(false)');            // sets up the "already handled" mark for the current backup time
+    await t.addEntries(1);
+    const r = await t.run('autoBackupSend(false)');
+    assert.equal(r.tooSoon, true); assert.equal(t.calls.length, 1);
+    assert.match(r.message, /next automatic backup is at/);
+  });
+  test('a missed backup time is caught up the next time the app wakes', async () => {
+    const t = load(); await t.configure(); await t.addEntries(3);
+    await t.setLastOk(yesterdayNoon(), 'old-fingerprint');   // handled two backup times ago
+    assert.equal((await t.run('autoBackupSend(false)')).ok, true);
+    assert.equal(t.calls.length, 1);
+  });
+  test('the card has a Backup time field and the status line states the time', async () => {
+    const t = load(); await t.configure({ at: '21:00' });
+    const html = await t.run('autoBackupCardHtml()');
+    assert.ok(html.includes('id="ab_at"') && html.includes('type="time"') && html.includes('value="21:00"'));
+    assert.match(await t.run('autoBackupStatusText()'), /Automatic backup time: .*9:00.* daily\./);
+    assert.ok(!/midnight/i.test(html), 'the card no longer talks about midnight');
   });
 });
 
