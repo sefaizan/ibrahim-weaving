@@ -595,14 +595,19 @@ function showSaveFailure(){
 }
 function clearSaveFailure(){ const el = document.getElementById('saveFailBanner'); if(el) el.remove(); }
 function noteLedgerSize(chars){
-  if(chars > STORAGE_SOFT_LIMIT_CHARS * 0.7 && !_sizeWarned){
+  // The 5 MB limit only applies when the ledger is held in localStorage (IndexedDB is not unavailable/failing).
+  if(LEDGER_BACKEND !== 'idb' && chars > STORAGE_SOFT_LIMIT_CHARS * 0.7 && !_sizeWarned){
     _sizeWarned = true;
     showToast('The ledger is getting large for this phone\'s storage — take a backup and plan a storage upgrade.', 8000);
   }
 }
 function ledgerSizeLineHtml(){
-  let chars = 0;
-  try{ chars = (localStorage.getItem(encEnabled() ? ENC_DATA_KEY : STORAGE_KEY) || '').length || JSON.stringify(DATA).length; }catch(e){ /* size is informational only */ }
+  let chars = LEDGER_CHARS;
+  try{ if(!chars) chars = JSON.stringify(DATA).length; }catch(e){ /* size is informational only */ }
+  if(LEDGER_BACKEND === 'idb'){
+    const kbDb = Math.max(1, Math.round(chars / 1024)).toLocaleString();
+    return `<p class="note" id="ledgerSizeLine" style="margin:6px 0 0">Ledger size: ${kbDb} KB — kept in this phone's database, which has plenty of room.</p>`;
+  }
   const pct = Math.min(999, Math.round(chars / STORAGE_SOFT_LIMIT_CHARS * 100));
   const kb = Math.max(1, Math.round(chars / 1024)).toLocaleString();
   const color = pct >= 85 ? 'var(--red)' : pct >= 60 ? 'var(--rust)' : 'inherit';
@@ -739,7 +744,7 @@ function showJustUpdatedBar(){
   el.id = 'justUpdatedBar';
   el.setAttribute('role', 'status');
   el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:100000;background:#163B3D;color:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px';
-  el.innerHTML = '<span style="flex:1">App updated to the latest version.</span><button type="button" id="justUpdatedX" aria-label="Dismiss" title="Dismiss" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">✕</button>';
+  el.innerHTML = '<span style="flex:1">App updated to ' + ((document.getElementById('appVersionTag') || {}).textContent || 'the latest version') + '.</span><button type="button" id="justUpdatedX" aria-label="Dismiss" title="Dismiss" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">✕</button>';
   document.body.appendChild(el);
   el.querySelector('#justUpdatedX').onclick = ()=> el.remove();
   setTimeout(()=>{ if(document.body.contains(el)) el.remove(); }, 8000); // clears itself so it never lingers as a stuck banner

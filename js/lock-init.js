@@ -630,17 +630,6 @@ function wireScrollAwareFab(fabBackup){
     catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
   });
   document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-wage-receipt]');
-    if(!btn) return;
-    try{ printWageReceipt(btn.dataset.wageReceipt); }
-    catch(err){ showToast('Could not open this receipt — ' + (err && err.message ? err.message : 'unknown error'), 6000); }
-  });
-  document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('[data-share-wage-receipt]');
-    if(!btn) return;
-    shareWageReceipt(btn.dataset.shareWageReceipt);
-  });
-  document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-share-recovery-receipt]');
     if(!btn) return;
     shareRecoveryReceipt(btn.dataset.shareRecoveryReceipt);
@@ -743,7 +732,7 @@ function wireScrollAwareFab(fabBackup){
     const act = new URLSearchParams(location.search).get('action');
     if(act === 'addsale' || act === 'addrecovery'){ PENDING_QUICK = act === 'addrecovery' ? 'recovery' : 'sale'; history.replaceState(null, '', location.pathname); }
   }catch(e){ /* shortcuts are optional */ }
-  if(encEnabled()) purgePlaintextLedgerAndHashes(); // safety net: nothing plain may linger next to an encrypted ledger
+  if(encEnabled()) await purgePlaintextLedgerAndHashes(); // safety net: nothing plain may linger next to an encrypted ledger
   // A freshly opened app with an encrypted ledger always asks for the PIN (the key only ever lives in memory).
   if(isPinEnabled() && (pinIdleTooLong() || (encEnabled() && !ENC_DEK))) mountLockScreen();
   else { markPinActive(); runPendingQuickAdd(); } // within the grace period (or PIN off) — resume unlocked and reset the clock

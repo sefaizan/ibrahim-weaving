@@ -17,7 +17,7 @@
  * Model: shared Firestore documents for the whole business (not one per device) - since Release 3
  * one document per SECTION in the "ledger" collection, see "Sections" below - together holding
  * exactly what the local ledger holds — the same encrypted blob as local storage if Settings >
- * Encrypt Data is on, plain JSON otherwise (see ledgerToLocalStorage in encryption.js for the
+ * Encrypt Data is on, plain JSON otherwise (see ledgerToStorage in encryption.js for the
  * matching local-storage logic). Every save() schedules a debounced push (cloudSyncSchedule);
  * app start/unlock calls cloudSyncCheckOnStart, which ASKS (blue bar with Update / ✕, like the
  * "new version" prompt) before pulling or merging another device's changes — nothing is applied
@@ -1066,7 +1066,7 @@ const CLOUD_SECTIONS = [
   { id:'sales',      keys:['sale','clients','dyeingUnits'] },
   { id:'recovery',   keys:['recovery','banks'] },
   { id:'expenses',   keys:['expense'] },
-  { id:'wages',      keys:['wageBonuses','wagePayments','wageSettlements','wageRateHistory','wageFrom','wageTo'] },
+  { id:'wages',      keys:['wageBonuses','wagePayments','wageSettlements','wageRateHistory','staffSalary','wageFrom','wageTo'] },
   { id:'loans',      keys:['loanPayments'] },
   { id:'family',     keys:['family','personal','personalLoans','familyMembers'] },
   { id:'materials',  keys:['warp','weft','warpTypes','weftTypes'] },

@@ -71,13 +71,13 @@ async function encOpenWith(key, blob){
 const encSeal = text => { if(!ENC_DEK) throw new Error('locked'); return encSealWith(ENC_DEK, text); };
 const encOpen = blob => { if(!ENC_DEK) throw new Error('locked'); return encOpenWith(ENC_DEK, blob); };
 
-// Where save() puts the ledger when it falls back to localStorage (the normal case).
-async function ledgerToLocalStorage(json){
+// Where save() puts the ledger (the normal case): this phone's IndexedDB, via js/ledger-store.js.
+async function ledgerToStorage(json){
   if(encEnabled()){
     if(!ENC_DEK || ENC_LOAD_FAILED) throw new Error('locked');
-    localStorage.setItem(ENC_DATA_KEY, await encSeal(json));
+    await ledgerWrite(ENC_DATA_KEY, await encSeal(json));
   }else{
-    localStorage.setItem(STORAGE_KEY, json);
+    await ledgerWrite(STORAGE_KEY, json);
   }
 }
 function showEncProblem(msg){
@@ -102,11 +102,12 @@ async function afterUnlockLoad(){
   switchTab(CURRENT_TAB || 'overview');
   setTimeout(()=>{ maybeAutoSnapshot(); }, 1500);
 }
-function purgePlaintextLedgerAndHashes(){
+async function purgePlaintextLedgerAndHashes(){
   try{
     Object.keys(localStorage).filter(k => k.startsWith('khata-data') && k !== ENC_DATA_KEY).forEach(k => localStorage.removeItem(k));
     [PIN_HASH_KEY, PIN_SALT_KEY, PIN_ANS_HASH_KEY, PIN_ANS_SALT_KEY].forEach(k => localStorage.removeItem(k));
   }catch(e){ /* best effort */ }
+  try{ await ledgerRemove(STORAGE_KEY); }catch(e){ /* best effort: the plain ledger copy in IndexedDB goes too */ }
 }
 function setPinLength(n){
   try{ localStorage.setItem(PIN_LENGTH_KEY, String(n)); }catch(e){ /* best effort */ }
@@ -168,14 +169,15 @@ async function enableEncryption(pin, answer, recoveryKey){
   const back = await encOpenWith(await encUnwrap(meta.pin, pin, ENC_ITER), blob);
   if(back !== json) return 'Could not verify the encrypted copy — nothing was changed.';
   try{
-    localStorage.setItem(ENC_DATA_KEY, blob);
+    await ledgerWrite(ENC_DATA_KEY, blob);
+    if(await ledgerRead(ENC_DATA_KEY) !== blob) throw new Error('verify failed'); // read back what was really stored
     localStorage.setItem(ENC_META_KEY, JSON.stringify(meta));
   }catch(e){
-    try{ localStorage.removeItem(ENC_DATA_KEY); localStorage.removeItem(ENC_META_KEY); }catch(_){ /* nothing more to do */ }
+    try{ await ledgerRemove(ENC_DATA_KEY); localStorage.removeItem(ENC_META_KEY); }catch(_){ /* nothing more to do */ }
     return 'Not enough storage space to write the encrypted copy — nothing was changed.';
   }
   ENC_DEK = dek; ENC_PENDING_LOAD = false; ENC_LOAD_FAILED = false;
-  purgePlaintextLedgerAndHashes();
+  await purgePlaintextLedgerAndHashes();
   try{ await snapConvertAll(true); }catch(e){ /* older safety copies are converted best-effort */ }
   return '';
 }
@@ -205,11 +207,12 @@ async function joinEncryptedSync(sharedPin, localPin, localAnswer, remote){
   const meta = {v:1, iter:ENC_ITER, pin: await encWrap(dek, localPin, ENC_ITER), rec: await encWrap(dek, normalizeAnswer(localAnswer), ENC_ITER)};
   const blob = await encSealWith(dek, JSON.stringify(DATA));
   try{
-    localStorage.setItem(ENC_DATA_KEY, blob);
+    await ledgerWrite(ENC_DATA_KEY, blob);
+    if(await ledgerRead(ENC_DATA_KEY) !== blob) throw new Error('verify failed');
     localStorage.setItem(ENC_META_KEY, JSON.stringify(meta));
   }catch(e){ return 'Not enough storage space to write the encrypted copy — nothing was changed.'; }
   ENC_DEK = dek; ENC_PENDING_LOAD = false; ENC_LOAD_FAILED = false;
-  purgePlaintextLedgerAndHashes();
+  await purgePlaintextLedgerAndHashes();
   try{ if(typeof skAdoptVault === 'function') await skAdoptVault(vaultJson); }catch(e){ console.error(e); }
   try{ await snapConvertAll(true); }catch(e){ /* best effort */ }
   return '';
@@ -222,17 +225,18 @@ async function disableEncryption(pin, answer){
   if(!(await checkRecoveryAnswer(answer))) return 'Recovery answer is incorrect.';
   const json = JSON.stringify(DATA);
   try{
-    localStorage.setItem(STORAGE_KEY, json);
-    if(localStorage.getItem(STORAGE_KEY) !== json) throw new Error('verify failed');
+    await ledgerWrite(STORAGE_KEY, json);
+    if(await ledgerRead(STORAGE_KEY) !== json) throw new Error('verify failed');
   }catch(e){
-    try{ localStorage.removeItem(STORAGE_KEY); }catch(_){ /* nothing more to do */ }
+    try{ await ledgerRemove(STORAGE_KEY); }catch(_){ /* nothing more to do */ }
     return 'Not enough storage space to write the plain copy — nothing was changed.';
   }
   try{ if(typeof skOnEncryptionOff === 'function') await skOnEncryptionOff(); }catch(e){ /* best effort: the owner's cloud keys stay with the phone */ }
   await setPinPlain(pin);
   await setRecoveryPlain(getRecoveryQuestion(), answer);
   try{ await snapConvertAll(false); }catch(e){ /* best effort */ }
-  try{ localStorage.removeItem(ENC_META_KEY); localStorage.removeItem(ENC_DATA_KEY); }catch(e){ /* best effort */ }
+  try{ localStorage.removeItem(ENC_META_KEY); }catch(e){ /* best effort */ }
+  try{ await ledgerRemove(ENC_DATA_KEY); }catch(e){ /* best effort */ }
   ENC_DEK = null;
   return '';
 }

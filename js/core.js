@@ -672,16 +672,19 @@ async function save(){
     document.getElementById('statusLine').textContent = 'Saved';
     clearSaveFailure(); noteLedgerSize(json.length); saveOk = true;
   }catch(e){
-    // Fall back to the browser's own localStorage so data still persists even
-    // when this file is opened outside a Claude artifact (window.storage missing).
+    // The normal case: this phone's own database (IndexedDB, with localStorage as the safety net) — see
+    // js/ledger-store.js. Used whenever this file is opened outside a Claude artifact (window.storage missing).
     try{
-      await ledgerToLocalStorage(json); // plain or encrypted, depending on Settings > Encrypt Data
+      await ledgerToStorage(json); // plain or encrypted, depending on Settings > Encrypt Data
       document.getElementById('statusLine').textContent = 'Saved (local backup)';
       clearSaveFailure(); noteLedgerSize(json.length); saveOk = true;
     }catch(e2){
       if(e2 && e2.message === 'locked'){
         // Encrypted and not unlocked (or its stored copy couldn't be read): refuse to write, so nothing is ever overwritten.
         document.getElementById('statusLine').textContent = 'Locked';
+      }else if(e2 && e2.message === 'unreadable'){
+        // The stored ledger could not be read at startup (red notice already shown): writing now could overwrite it.
+        document.getElementById('statusLine').textContent = 'Not saved — ledger unreadable';
       }else{
         document.getElementById('statusLine').textContent = 'Save failed — take a backup now';
         showSaveFailure();
@@ -702,7 +705,11 @@ async function load(){
     // After that, afterUnlockLoad() calls this again.
     if(!ENC_DEK){ document.getElementById('statusLine').textContent = 'Locked'; return; }
     let stored = null;
-    try{ stored = localStorage.getItem(ENC_DATA_KEY); }catch(e){ /* treated as empty below */ }
+    try{ stored = await ledgerRead(ENC_DATA_KEY); }
+    catch(e){
+      if(e && e.message === 'unreadable'){ showLedgerUnreadable(); return; }
+      /* anything else: treated as empty below */
+    }
     if(stored){
       try{ Object.assign(DATA, JSON.parse(await encOpen(stored))); }
       catch(e){
@@ -722,7 +729,11 @@ async function load(){
     const r = await window.storage.get(STORAGE_KEY);
     if(r && r.value) raw = r.value;
   }catch(e){
-    try{ raw = localStorage.getItem(STORAGE_KEY); }catch(e2){ /* no storage at all available */ }
+    try{ raw = await ledgerRead(STORAGE_KEY); }
+    catch(e2){
+      if(e2 && e2.message === 'unreadable'){ showLedgerUnreadable(); return; }
+      /* no storage at all available */
+    }
   }
   if(raw){
     try{
@@ -736,6 +747,12 @@ async function load(){
   }
   if(await ensureDataDefaults()) await save();
   document.getElementById('statusLine').textContent = '';
+}
+// The ledger is stored on this phone but could not be read this time (ledger-store.js, rule 3). Carrying on
+// would start from a blank ledger and the next save would overwrite the real one, so saving stays blocked.
+function showLedgerUnreadable(){
+  document.getElementById('statusLine').textContent = 'Ledger unreadable';
+  showEncProblem('The ledger stored on this phone could not be read just now, so nothing was changed or overwritten. Close the app completely and open it again. If it keeps happening, restore a backup (clear the app data first if needed) or use Cloud Sync.');
 }
 // Fills in any array/field a loaded DATA object might be missing (a brand-new install,
 // or a JSON backup restored from before a feature existed) and runs one-time migrations.
