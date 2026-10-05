@@ -398,6 +398,7 @@ const I18N_UR_EXTRA = {"Ibrahim Weaving — Power Loom Ledger":"ابراہیم �
 "Audit log could not be saved on this phone - free up storage":"آڈٹ لاگ اس فون میں محفوظ نہیں ہو سکا - اسٹوریج خالی کریں",
 "Automatic email backup":"خودکار ای میل بیک اپ",
 "Email me a backup automatically":"مجھے بیک اپ خود بخود ای میل کریں",
+"Backup time (every day)":"بیک اپ کا وقت (روزانہ)",
 "Backup service address":"بیک اپ سروس کا پتہ",
 "Backup key":"بیک اپ کی",
 "Password for the emailed file":"ای میل شدہ فائل کا پاس ورڈ",
