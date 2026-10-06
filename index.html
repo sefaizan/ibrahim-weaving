@@ -21,7 +21,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.27-release3-orders-urdu">
+<meta name="app-build" content="v3.18.29-release3-overview-groups">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -578,6 +578,23 @@
   .card.foldable h2::after{ content:'▾'; margin-left:8px; font-size:.8em; opacity:.6; }
   .card.foldable.folded h2::after{ content:'▸'; }
   .card.foldable.folded > :not(.card-head):not(h2){ display:none; }
+  .card[hidden]{ display:none !important; }
+  .ovo-sec{ display:flex; align-items:center; gap:10px; margin:18px 2px 8px; padding:8px 4px; border-bottom:2px solid var(--rust); cursor:pointer; user-select:none; } .ovo-sec-t{ font:700 15px 'Roboto Condensed',Roboto,sans-serif; letter-spacing:.3px; color:var(--rust-deep); text-transform:uppercase; } .ovo-sec-n{ margin-inline-start:auto; font-size:11.5px; color:var(--ink-soft); } .ovo-sec-c{ transition:transform 160ms ease; color:var(--rust-deep); } .ovo-sec.folded .ovo-sec-c{ transform:rotate(-90deg); } .ovo-sec:focus-visible{ outline:2px solid var(--rust); }
+  .ovo-attn{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 6px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; background:var(--card); } .ovo-attn-t{ flex:0 0 100%; font-size:11.5px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--ink-soft); }
+  .ovo-ach{ width:auto; margin:0; padding:6px 12px; font-size:12.5px; } .ovo-ach.warn{ border-color:var(--red); color:var(--red); } .ovo-clear{ font-size:13px; font-weight:600; color:var(--green); }
+  .ovo-foldbar{ display:flex; justify-content:flex-end; margin:-4px 0 8px; } .ovo-foldbar button{ width:auto; margin:0; padding:6px 14px; font-size:12px; }
+  .card.foldable > .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ovo-badge{ font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:14px; background:var(--rust-tonal); color:var(--rust-deep); white-space:nowrap; }
+  .ovo-kpis{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:6px; } .ovo-kpi{ background:var(--paper-dim); border-radius:var(--shape-sm); padding:10px 12px; border-left:4px solid var(--rust); min-width:0; } .ovo-kpi.warn{ border-left-color:var(--red); }
+  .ovo-kpi .label{ font-size:11.5px; color:var(--ink-soft); } .ovo-kpi .value{ font:700 20px/1.2 'Roboto Condensed',Roboto,sans-serif; overflow-wrap:anywhere; } .ovo-sub{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+  .ovo-bar{ position:relative; height:9px; background:var(--paper-dim); border-radius:6px; margin:8px 0 6px; } .ovo-bar i{ position:absolute; left:0; top:0; bottom:0; border-radius:6px; background:var(--odc,var(--rust)); } .ovo-bar u{ position:absolute; top:0; bottom:0; background:var(--green); opacity:.22; } .ovo-bar b{ position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink); } .ovo-all{ margin:12px 0 4px; } .ovo-all i{ background:var(--rust); }
+  .ovo-row{ --odc:var(--rust); margin-top:12px; padding:10px 12px; border:1px solid var(--line); border-inline-start:5px solid var(--odc); border-radius:12px; cursor:pointer; background:var(--card); } .ovo-row:focus-visible{ outline:2px solid var(--rust); }
+  .ovo-row.k-stalled{ --odc:var(--red); } .ovo-row.k-over{ --odc:var(--gold); } .ovo-row.k-within{ --odc:var(--green); } .ovo-row.k-new{ --odc:#7B8794; }
+  .ovo-top{ display:flex; justify-content:space-between; align-items:center; gap:8px; } .ovo-top > b{ font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ovo-row > small{ display:block; color:var(--ink-soft); font-size:12px; }
+  .ovo-chip{ display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:14px; background:var(--paper-dim); white-space:nowrap; } .ovo-chip i{ width:8px; height:8px; border-radius:50%; background:var(--odc); }
+  .ovo-line{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:13px; } .ovo-line small{ color:var(--ink-soft); } .ovo-right{ font-weight:700; color:var(--odc); }
+  .ovo-pills{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .ovo-pill{ font-size:11px; padding:2px 9px; border-radius:12px; background:var(--rust-tonal); color:var(--rust-deep); font-weight:600; }
+  .ovo-morebtn{ width:100%; margin:12px 0 0; } .ovo-foot{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:12px; color:var(--ink-soft); } .ovo-foot button{ width:auto; margin:0; padding:6px 14px; font-size:12px; }
   .inline-warn{ margin-top:4px; font-size:12px; font-weight:600; color:#B7791F; }
   .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .chip{
@@ -1385,7 +1402,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.27</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.29</span></span>
     </div>
   </header>
 
