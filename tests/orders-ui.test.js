@@ -48,3 +48,36 @@ describe('order width', () => {
     assert.ok(mk([base]).agr(base, 'en').includes('64 inches'));
   });
 });
+
+describe('order card and language', () => {
+  test('no language dropdown on the card; the agreement language follows the app language', () => {
+    const c = mk([base]); assert.ok(!c.panel().includes('od-lang'));
+    assert.equal(vm.runInContext('odLang()', c), 'en'); c.I18N_LANG = 'ur'; assert.equal(vm.runInContext('odLang()', c), 'ur');
+    c.I18N_LANG = 'en'; assert.equal(vm.runInContext('odLang()', c), 'en');
+  });
+  test('the card shows initial, status, progress ring, tiles and the share row', () => {
+    const h = mk([base]).panel();
+    for(const t of ['od-av', 'od-chip', 'od-ring', 'od-bar', 'od-meta', 'data-a="img"', 'data-a="pdf"']) assert.ok(h.includes(t), t);
+    assert.ok(h.includes('k-new')); assert.ok(mk([Object.assign({}, base, {closed: true, revoked: {date: 'd', terms: '', delivered: 0, rate: 100}})]).panel().includes('k-rev'));
+  });
+});
+
+describe('sale form order dropdown', () => {
+  const o = (id, no, client, quality, x) => Object.assign({id, no, client, quality, qty: 1000, rate: 100, closed: false}, x || {});
+  const c = () => mk([o('a', 'ORD-001', 'Javed Ashraf', '62/44 (150.144 Micro)'), o('b', 'ORD-002', 'Ali', 'Q2'), o('c', 'ORD-010', 'Javed Ashraf', 'Q2'),
+    o('d', 'ORD-003', 'Ali', 'Q2', {closed: true}), o('e', 'ORD-004', 'Ali', 'Q2', {closed: true, revoked: {date: 'd'}})]);
+  const ids = (cx, cl, q, keep) => vm.runInContext(`orderSaleChoices(${JSON.stringify(cl)}, ${JSON.stringify(q)}, ${JSON.stringify(keep)}).map(x => x.id).join()`, cx);
+  test('the label is order number - client - quality', () => {
+    const cx = c(); assert.equal(vm.runInContext('orderLabel(DATA.orders[0])', cx), 'ORD-001 - Javed Ashraf - 62/44 (150.144 Micro)');
+  });
+  test('with nothing chosen every open order is listed (newest first); completed and revoked ones are left out', () => {
+    assert.equal(ids(c(), '', '', ''), 'c,b,a');
+  });
+  test('choosing a client or quality narrows the list, but never to nothing', () => {
+    const cx = c(); assert.equal(ids(cx, 'Javed Ashraf', '', ''), 'c,a'); assert.equal(ids(cx, 'Javed Ashraf', 'Q2', ''), 'c');
+    assert.equal(ids(cx, 'Nobody', '', ''), 'c,b,a');
+  });
+  test('the order of the sale being edited stays listed even when completed', () => {
+    assert.equal(ids(c(), 'Ali', 'Q2', 'd'), 'd,b');
+  });
+});
