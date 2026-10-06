@@ -8,7 +8,7 @@ function renderPanel(id){
     overview: overviewPanel, production: productionPanel, sale: salePanel, recovery: recoveryPanel,
     expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel, ownerloans: ownerLoansPanel,
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
-    loans: loansPanel, ratecalc: ratecalcPanel, costing: costingPanel,
+    loans: loansPanel, ratecalc: ratecalcPanel, costing: costingPanel, orders: ordersPanel,
     checkpoints: checkpointsPanel, fiscal: typeof fiscalPanel === 'function' ? fiscalPanel : () => '', settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
     inbox: typeof proposalsInboxPanel === 'function' ? proposalsInboxPanel : () => '', // owner only (js/proposals.js)
     audit: typeof auditPanel === 'function' ? auditPanel : () => '', // owner only (js/audit.js)
@@ -18,6 +18,8 @@ function renderPanel(id){
 
 function wirePanel(id){
   if(id==='costing') wireCosting();
+  if(id==='orders') wireOrders();
+  if(id==='sale') setTimeout(wireSaleOrder, 0);
   if(id==='inbox' && typeof wireProposalsInbox === 'function') wireProposalsInbox();
   if(id==='audit' && typeof wireAuditPanel === 'function') wireAuditPanel();
   if(id==='overview'){
@@ -509,7 +511,7 @@ function wirePanel(id){
         [qty > 0, 'Enter the quantity (mtr) first.', 's_qty'],
         [keepAmount || rate > 0, rateMsg, 's_rate'],
       ])) return;
-      const rec = {date:v('s_date'), invoice:v('s_inv'), client:v('s_client'), quality:v('s_quality'), qty, rate, amount: keepAmount ? Number(existing.amount) : Math.floor(qty*rate + 1e-6), dyeing:v('s_dyeing'), desc:v('s_desc')};
+      const rec = {date:v('s_date'), invoice:v('s_inv'), client:v('s_client'), quality:v('s_quality'), order:(document.getElementById('s_order')||{}).value||'', qty, rate, amount: keepAmount ? Number(existing.amount) : Math.floor(qty*rate + 1e-6), dyeing:v('s_dyeing'), desc:v('s_desc')};
       // An L (AIL)-applied original, a returned lot, or an adjustment entry itself (lAdjustedFromId)
       // has its qty/rate/amount tied to a linked record via that exact math (shortage/deduction
       // computed from THIS qty, or the adjustment's qty/amount computed as original-minus-shortage).
@@ -544,7 +546,8 @@ function wirePanel(id){
         if(rec.dyeing) rec.lStatus = 'awaiting';
         DATA.sale.push({id:uid(), ...rec}); PAGE.sale = 1;
       }
-      await save(); switchTab('sale');
+      const _ow = orderSaleWarn(rec);
+      await save(); switchTab('sale'); if(_ow) showToast(_ow, 6000);
       try{
         const cl = DATA.clients.find(c=>c.name===rec.client);
         if(cl && cl.creditLimit){

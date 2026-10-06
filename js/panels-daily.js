@@ -323,6 +323,7 @@ function salePanel(){
       ${field('Date','s_date','date',`value="${todayStr()}" autofocus`)}
       ${clientSelectField('Client','s_client')}
       ${selectField('Quality','s_quality',DATA.qualities)}
+      ${orderSaleField()}
     </div>
     <div class="grid cols-3" style="margin-top:12px">
       ${meterFracField('Quantity (mtr)','s_qty','s_qty_16')}

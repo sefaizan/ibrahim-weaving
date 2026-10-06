@@ -1063,7 +1063,7 @@ async function cloudCurrentHash(){ return sha256Hex(JSON.stringify(DATA)); }
 const CLOUD_SECTIONS = [
   { id:'production', keys:['production','loomAssignments','warpBeams'] },
   { id:'reference',  keys:['qualities','looms','employees'] },
-  { id:'sales',      keys:['sale','clients','dyeingUnits'] },
+  { id:'sales',      keys:['sale','orders','clients','dyeingUnits'] },
   { id:'recovery',   keys:['recovery','banks'] },
   { id:'expenses',   keys:['expense'] },
   { id:'wages',      keys:['wageBonuses','wagePayments','wageSettlements','wageRateHistory','staffSalary','wageFrom','wageTo'] },

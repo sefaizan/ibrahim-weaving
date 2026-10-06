@@ -1511,3 +1511,28 @@ function costMonth(month, bill){
   ['warp', 'weft', 'wage', 'power', 'rent', 'other'].forEach(k => { tot[k] = M ? sum(r => r.lines[k] * r.m) / M : 0; });
   return {month, M, linked, est, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), rent, power};
 }
+
+/* ---------------- Client orders (v3.18.12) ----------------
+ * An order is one client + one quality + an agreed rate. Sales point at it with sale.order; the order never
+ * closes by itself because deliveries never land on the exact meters (closed = the owner's call). */
+function orderStats(o, today){
+  const live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned', sum = (a, f) => a.reduce((t, r) => t + (Number(f(r)) || 0), 0);
+  const rows = (DATA.sale || []).filter(s => s.order === o.id && live(s));
+  const got = sum(rows, r => r.qty), val = sum(rows, r => r.amount), qty = Number(o.qty) || 0;
+  const tol = o.tolerance !== undefined && o.tolerance !== '' && o.tolerance !== null ? Number(o.tolerance) : 5;
+  const diff = got - qty, pct = qty ? diff / qty * 100 : 0;
+  const d = new Date((today || todayStr()) + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const mon = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const stock = Math.max(0, sum((DATA.production || []).filter(p => p.quality === o.quality), r => r.qty) - sum((DATA.sale || []).filter(s => s.quality === o.quality && live(s)), r => r.qty));
+  const pending = Math.max(0, qty - got);
+  return {got, val, qty, avg: got ? val / got : 0, diff, pct, tol, pending, stock, toWeave: Math.max(0, pending - stock), batches: rows.length,
+    last: rows.reduce((m, r) => r.date > m ? r.date : m, ''), weekGot: sum(rows.filter(r => r.date >= mon), r => r.qty),
+    offRate: rows.filter(r => Number(r.rate) !== Number(o.rate)).length,
+    status: o.closed ? 'closed' : pct > tol ? 'over' : got > 0 && pct >= -tol ? 'within' : got > 0 ? 'open' : 'new'};
+}
+function orderSaleWarn(rec){
+  const o = (DATA.orders || []).find(x => x.id === rec.order); if(!o) return '';
+  const w = []; if(o.closed) w.push('This order is already marked complete.');
+  if(Number(o.minBatch) > 0 && Number(rec.qty) < Number(o.minBatch)) w.push('This batch is below the order minimum of ' + o.minBatch + ' m.');
+  return w.join(' ');
+}

@@ -33,6 +33,7 @@ const TABS = [
   {id:'graphs', label:'Graphs', icon:'monitoring', group:'Daily'}, // right under Overview (moved from Tools in v3.18.1)
   {id:'production', label:'Production', icon:'precision_manufacturing', group:'Daily'},
   {id:'sale', label:'Sale', icon:'point_of_sale', group:'Money'},
+  {id:'orders', label:'Orders', icon:'assignment', group:'Money'},
   {id:'recovery', label:'Recovery', icon:'payments', group:'Money'},
   {id:'expense', label:'Expense', icon:'receipt_long', group:'Money'},
   {id:'wages', label:'Wages', icon:'groups', group:'Money'},
@@ -90,7 +91,8 @@ let DATA = {
   "wageTo": "",
   "rateCalcs": [],
   "rateCalcDefaults": {},
-  "costSettings": {}
+  "costSettings": {},
+  "orders": []
 };
 
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
