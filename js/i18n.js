@@ -17,7 +17,7 @@ const I18N_UR = {
   // Menu groups and pages
   'Daily':'روزانہ', 'Money':'رقم', 'Family':'گھر', 'Materials':'مال', 'Tools':'ٹولز',
   'Overview':'جائزہ', 'Production':'پیداوار', 'Sale':'فروخت', 'Recovery':'وصولی', 'Expense':'اخراجات', 'Wages':'اجرت',
-  'Loans (Employee)':'قرض (ملازم)', 'Grey Cloth Rate':'گرے کپڑے کا ریٹ', 'Family Expense':'گھریلو اخراجات',
+  'Loans (Employee)':'قرض (ملازم)', 'Grey Cloth Rate':'گرے کپڑے کا ریٹ', 'Cost & Margin':'لاگت اور منافع', 'Family Expense':'گھریلو اخراجات',
   'Personal Expense':'ذاتی اخراجات', 'Personal Loans (Given)':'ذاتی قرض (دیے گئے)', 'Owner Loans (to Company)':'مالک کا قرض (کمپنی کو)', 'Warp (Tana)':'تانا',
   'Weft (Bana)':'بانا', 'Warp (Tana) Beam':'تانا بیم', 'Cash Checkpoints':'کیش چیک پوائنٹس', 'Graphs':'گراف', 'Year Report':'سالانہ رپورٹ', 'Quarterly Stock Valuation':'اسٹاک کی قدر', 'Add valuation':'قدر شامل کریں', 'Save opening position':'ابتدائی پوزیشن محفوظ کریں', 'Full period':'پوری مدت', 'Profit before drawings':'نکالی گئی رقم سے پہلے منافع', 'Profit after drawings':'نکالی گئی رقم کے بعد منافع', 'Closing capital':'اختتامی سرمایہ', 'Opening capital':'ابتدائی سرمایہ',
   'Approvals':'منظوریاں', 'Audit':'آڈٹ', 'Settings':'سیٹنگز', 'Backup & Restore':'بیک اپ اور بحالی',

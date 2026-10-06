@@ -1442,3 +1442,72 @@ function computeGraphsData(monthKeys, withPrev){
   const startReceivable = monthKeys.length ? computeStats(graphsShiftMonthKey(monthKeys[0], -1)).receivable : 0;
   return {monthKeys, cur, prev, totals, prevTotals, qualities, clients, expenseSplit, bounds, startReceivable};
 }
+
+/* ---------------- Cost & Margin per meter (v3.18.9) ----------------
+ * Estimates, not accounts: yarn use per meter comes from two rules fitted to the ledger (Nov 2025 - Oct 2026):
+ *   warp lbs/m = warpK x reed x (width + widthAdd) / count      weft lbs/m = weftK x picks x width
+ * Rent, "staff + other" per meter and the rest live in DATA.costSettings (edited on the Cost & Margin page). */
+const COST_DEFAULTS = {
+  warpK: 0.00145, weftK: 0.0000364, widthAdd: 2, width: 64, widthByReed: {72: 65},
+  otherPerM: 4, elecPerM: 4.3, startMonth: '2026-09', weftCount: 36,
+  rent: [{from: '2026-01', amount: 58500}, {from: '2026-11', amount: 64350}],
+  warpCount: {'150.144 Micro': 36, '100.144 Micro': 52}, bills: {},
+};
+function costCfg(){ return Object.assign({}, COST_DEFAULTS, DATA.costSettings || {}); }
+function costWarpLbs(reed, width, count, cfg){ cfg = cfg || costCfg(); return count > 0 ? cfg.warpK * reed * (width + cfg.widthAdd) / count : 0; }
+function costWeftLbs(picks, width, cfg){ cfg = cfg || costCfg(); return cfg.weftK * picks * width; }
+function costRent(month, cfg){ cfg = cfg || costCfg(); let r = 0; cfg.rent.slice().sort((a, b) => a.from < b.from ? -1 : 1).forEach(e => { if(e.from <= month) r = Number(e.amount) || 0; }); return r; }
+// Newest purchase rate on or before `date` (any date when null), optionally for one yarn type.
+function costLastRate(list, date, type){
+  let best = null;
+  (list || []).forEach(x => {
+    if(type && x.type !== type) return;
+    if(date && x.date > date) return;
+    if(!best || (x.date + (x.time || '')) >= (best.date + (best.time || ''))) best = x;
+  });
+  return best ? Number(best.rate) || 0 : 0;
+}
+function costWageRate(quality, date){
+  let r = 0;
+  ((DATA.wageRateHistory || {})[quality] || []).slice().sort((a, b) => a.date < b.date ? -1 : 1).forEach(e => { if(e.date <= date) r = Number(e.rate) || 0; });
+  return r;
+}
+// One quality, one set of rates -> cost per meter by line. i: reed,width,picks,count,warpRate,weftRate,wage,power,rent,other
+function costBreakdown(i){
+  const cfg = costCfg(), wl = costWarpLbs(i.reed, i.width, i.count, cfg), fl = costWeftLbs(i.picks, i.width, cfg);
+  const lines = {warp: wl * i.warpRate, weft: fl * i.weftRate, wage: i.wage || 0, power: i.power || 0, rent: i.rent || 0, other: i.other != null ? i.other : cfg.otherPerM};
+  const total = Object.keys(lines).reduce((s, k) => s + lines[k], 0);
+  return {lines, total, warpLbs: wl, weftLbs: fl};
+}
+function costSaleRate(month, quality){
+  const rows = (DATA.sale || []).filter(s => s.date.slice(0, 7) === month && (!quality || s.quality === quality));
+  const q = rows.reduce((s, x) => s + x.qty, 0);
+  return q ? rows.reduce((s, x) => s + x.amount, 0) / q : 0;
+}
+// A whole month: production by quality x the rules x the yarn rate actually in use that day.
+function costMonth(month, bill){
+  const cfg = costCfg(), by = {};
+  let M = 0, linked = 0;
+  (DATA.production || []).filter(r => r.date.slice(0, 7) === month).forEach(r => {
+    const q = (DATA.qualities || []).find(x => x.name === r.quality); if(!q) return;
+    const width = cfg.widthByReed[q.kangi] || cfg.width, count = cfg.warpCount[q.warpType] || 36;
+    const b = (DATA.warpBeams || []).find(x => x.id === r.beam), p = b && (DATA.warp || []).find(x => x.id === b.purchaseId);
+    if(p) linked += r.qty;
+    const wr = p ? Number(p.rate) : costLastRate(DATA.warp, r.date, q.warpType), fr = costLastRate(DATA.weft, r.date);
+    const o = by[r.quality] || (by[r.quality] = {quality: r.quality, m: 0, warp: 0, weft: 0, wage: 0});
+    o.m += r.qty; M += r.qty;
+    o.warp += r.qty * costWarpLbs(q.kangi, width, count, cfg) * wr;
+    o.weft += r.qty * costWeftLbs(q.picks, width, cfg) * fr;
+    o.wage += r.qty * costWageRate(r.quality, r.date);
+  });
+  const est = !(bill > 0), power = M ? (est ? cfg.elecPerM : bill / M) : 0, rent = costRent(month, cfg), rentM = M ? rent / M : 0, all = costSaleRate(month, null);
+  const rows = Object.keys(by).map(k => {
+    const o = by[k], sale = costSaleRate(month, k) || all;
+    const lines = {warp: o.warp / o.m, weft: o.weft / o.m, wage: o.wage / o.m, power, rent: rentM, other: cfg.otherPerM};
+    const cost = Object.keys(lines).reduce((s, x) => s + lines[x], 0);
+    return {quality: k, m: o.m, lines, cost, sale, margin: sale - cost, profit: (sale - cost) * o.m};
+  });
+  const sum = f => rows.reduce((s, r) => s + f(r), 0), tot = {};
+  ['warp', 'weft', 'wage', 'power', 'rent', 'other'].forEach(k => { tot[k] = M ? sum(r => r.lines[k] * r.m) / M : 0; });
+  return {month, M, linked, est, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), rent, power};
+}

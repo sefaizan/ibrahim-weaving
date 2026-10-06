@@ -8,7 +8,7 @@ function renderPanel(id){
     overview: overviewPanel, production: productionPanel, sale: salePanel, recovery: recoveryPanel,
     expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel, ownerloans: ownerLoansPanel,
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
-    loans: loansPanel, ratecalc: ratecalcPanel,
+    loans: loansPanel, ratecalc: ratecalcPanel, costing: costingPanel,
     checkpoints: checkpointsPanel, fiscal: typeof fiscalPanel === 'function' ? fiscalPanel : () => '', settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
     inbox: typeof proposalsInboxPanel === 'function' ? proposalsInboxPanel : () => '', // owner only (js/proposals.js)
     audit: typeof auditPanel === 'function' ? auditPanel : () => '', // owner only (js/audit.js)
@@ -17,6 +17,7 @@ function renderPanel(id){
 }
 
 function wirePanel(id){
+  if(id==='costing') wireCosting();
   if(id==='inbox' && typeof wireProposalsInbox === 'function') wireProposalsInbox();
   if(id==='audit' && typeof wireAuditPanel === 'function') wireAuditPanel();
   if(id==='overview'){

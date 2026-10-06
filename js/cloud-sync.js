@@ -1072,7 +1072,7 @@ const CLOUD_SECTIONS = [
   { id:'materials',  keys:['warp','weft','warpTypes','weftTypes'] },
   { id:'business',   keys:['businessInfo'] },
   { id:'stock',      keys:['stockSummary'] },   // calculated total + per-quality stock, written by the owner's phone only, so a person can be given Stock alone
-  { id:'tools',      keys:['checkpoints','openingBalance','rateCalcs','rateCalcDefaults','ownerLoans','stockValuations','fiscalOpenings'] },
+  { id:'tools',      keys:['checkpoints','openingBalance','rateCalcs','rateCalcDefaults','costSettings','ownerLoans','stockValuations','fiscalOpenings'] },
 ];
 const CLOUD_SECTION_FALLBACK = 'tools';
 const CLOUD_KEY_SECTION = (()=>{ const m = {}; CLOUD_SECTIONS.forEach(sec=> sec.keys.forEach(k=>{ m[k] = sec.id; })); return m; })();
