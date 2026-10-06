@@ -646,6 +646,10 @@ const I18N_UR_ORD = {
   'Revoke':'منسوخ کریں', 'Revoke order':'آرڈر منسوخ کریں', 'Link':'جوڑیں', 'Completion':'تکمیل', 'Completion date':'تکمیل کی تاریخ', 'Date of revocation':'منسوخی کی تاریخ',
   'Terms agreed by both parties':'دونوں فریقوں کی طے کردہ شرائط', 'Make a new order now (opens a form with these details)':'ابھی نیا آرڈر بنائیں (ان تفصیلات کے ساتھ فارم کھلے گا)',
   'Client and quality are locked because deliveries are linked to this order.':'اس آرڈر سے ڈیلیوریاں جڑی ہیں، اس لیے کلائنٹ اور کوالٹی مقفل ہیں۔',
+  'Business':'کاروبار', 'Cash':'نقد', 'Costs & Profit':'لاگت اور منافع', 'More':'مزید', 'Needs attention':'توجہ طلب', 'Nothing needs attention':'کسی چیز پر توجہ درکار نہیں', 'Orders show their full progress, not just the selected period.':'آرڈرز کی مکمل پیش رفت دکھائی گئی ہے، صرف منتخب مدت کی نہیں۔',
+  'Collapse all':'سب سمیٹیں', 'Expand all':'سب کھولیں', 'Stalled':'رکا ہوا', 'Over delivered':'زائد ڈیلیور', 'Not started':'شروع نہیں ہوا', 'Still to deliver':'ابھی ڈیلیور کرنا باقی', 'Value to bill':'بل کی مالیت',
+  'at the agreed rates':'طے شدہ ریٹس پر', 'All moving':'سب جاری', 'Every order is completed or revoked.':'ہر آرڈر مکمل یا منسوخ ہو چکا ہے۔', 'All orders':'تمام آرڈرز', 'No open orders':'کوئی کھلا آرڈر نہیں',
+  'Last delivery today':'آخری ڈیلیوری آج', 'Last delivery yesterday':'آخری ڈیلیوری کل', 'Show fewer':'کم دکھائیں',
   'Edit order':'آرڈر میں ترمیم', 'Order (optional)':'آرڈر (اختیاری)', 'No order':'کوئی آرڈر نہیں',
   // messages (toasts) and pop-up questions
   'Select the client and the quality first.':'پہلے کلائنٹ اور کوالٹی منتخب کریں۔', 'Enter the ordered meters and the agreed rate first.':'پہلے آرڈر کردہ میٹر اور طے شدہ ریٹ درج کریں۔',
@@ -674,6 +678,12 @@ const I18N_UR_RE_ORD = [
   [/^Undo the revocation of (.*?)\?( The replacement (.+) \(no deliveries\) will be deleted\.)?$/, m => 'آرڈر ' + m[1] + ' کی منسوخی واپس لیں؟' + (m[3] ? ' متبادل آرڈر ' + m[3] + ' (جس پر ڈیلیوری نہیں) حذف ہو جائے گا۔' : '')],
   [/^Delete order (.+)\?$/, 'آرڈر $1 حذف کریں؟'], [/^This order already has deliveries\. Change (.+)\?$/, 'اس آرڈر پر ڈیلیوریاں ہو چکی ہیں۔ $1 تبدیل کریں؟']
 ];
+I18N_UR_RE_ORD.push(
+  [/^(\d+) cards?$/, '$1 کارڈ'], [/^(\d+) orders? needs? attention$/, '$1 آرڈر پر توجہ درکار'], [/^(\d+) bounced cheques? · (.+)$/, '$1 باؤنس چیک · $2'], [/^(\d+) sales? awaiting L \(AIL\)$/, '$1 فروخت L (AIL) کے انتظار میں'],
+  [/^(\d+) open · (\d+)% delivered$/, '$1 کھلے · $2% ڈیلیور'], [/^(\d+) need attention$/, '$1 پر توجہ درکار'], [/^([\d,.]+) m$/, '$1 میٹر'], [/^of (.+) m \((\d+)%\)$/, 'از $1 میٹر ($2%)'],
+  [/^(.+) m delivered this week$/, 'اس ہفتے $1 میٹر ڈیلیور'], [/^Last delivery (\d+) days ago$/, 'آخری ڈیلیوری $1 دن پہلے'], [/^Completed orders: (\d+)$/, 'مکمل آرڈرز: $1'], [/^Show (\d+) more$/, '$1 مزید دکھائیں'],
+  [/^About (.+) m\/week( · under a week to finish| · ~(\d+) weeks to finish)?$/, m => 'تقریباً ' + m[1] + ' میٹر فی ہفتہ' + (m[3] ? ' · مکمل ہونے میں ~' + m[3] + ' ہفتے' : m[2] ? ' · ایک ہفتے سے کم میں مکمل' : '')]
+);
 I18N_UR_RE_ORD.forEach(p => I18N_UR_RE74.push(p));
 const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
 let I18N_LANG = 'en';

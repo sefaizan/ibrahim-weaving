@@ -423,6 +423,7 @@ function renderStats(monthVal){
       if(!tiles.length && !stockHtml) return '';
       return `<div class="card ov-glance"><h2>At a Glance</h2>${tiles.length ? `<div class="ov-kpis">${tiles.join('')}</div>` : ''}${stockHtml}<div class="ov-sub">${periodLabel(monthVal)}</div></div>`;
     })()}
+    ${ovCardOn('orders_progress') ? ordersOverviewCard() : ''}
     ${ovCardOn('pending_l') ? pendingLCardHtml() : ''}
     ${ovCardOn('pending_cheques') ? pendingChequesCardHtml() : ''}
     ${ovCardOn('bounced_cheques') ? bouncedChequesCardHtml() : ''}
@@ -593,19 +594,126 @@ function renderStats(monthVal){
 }
 
 // Warp Usage, Receivables Aging, Clients Breakdown and Expenses fold down; the choice is remembered.
+/* Orders card (v3.18.28): every open order with how much is delivered, how fast, and which ones need a look. */
+function ordersOverviewCard(){
+  const all = DATA.orders || [], today = todayStr(); if(!all.length) return '';
+  const open = all.filter(o => !o.closed && !o.revoked), doneN = all.filter(o => o.closed && !o.revoked).length, n = x => fmtNum(Math.round(x));
+  const short = typeof fmtRsShort === 'function' ? fmtRsShort : fmtRs;
+  const info = open.map(o => {
+    const s = orderStats(o), p = orderPace(o), idle = s.got > 0 ? p.since : p.age;
+    const lvl = s.pending > 0 && idle >= 7 ? 'stalled' : s.status === 'over' ? 'over' : s.status === 'within' ? 'within' : s.got > 0 ? 'run' : 'new';
+    return {o, s, p, lvl, idle, rank: {stalled: 0, over: 1, within: 2, run: 3, new: 4}[lvl]};
+  }).sort((a, b) => a.rank - b.rank || b.s.pending - a.s.pending);
+  const tot = info.reduce((t, x) => ({q: t.q + x.s.qty, g: t.g + x.s.got, pend: t.pend + x.s.pending, val: t.val + x.s.pending * (Number(x.o.rate) || 0), wk: t.wk + x.s.weekGot}), {q: 0, g: 0, pend: 0, val: 0, wk: 0});
+  const attn = info.filter(x => x.lvl === 'stalled' || x.lvl === 'over').length, pct = tot.q ? Math.min(100, Math.round(tot.g / tot.q * 100)) : 0;
+  const chip = {stalled: 'Stalled', over: 'Over delivered', within: 'Within tolerance', run: 'In progress', new: 'Not started'};
+  const row = x => {
+    const {o, s, p, lvl} = x, top = Math.max(s.qty * (1 + s.tol / 100) * 1.03, s.got) || 1, w = v => (v / top * 100).toFixed(2) + '%', pc = s.qty ? Math.min(100, Math.round(s.got / s.qty * 100)) : 0;
+    const last = s.got ? (p.since === 0 ? 'Last delivery today' : p.since === 1 ? 'Last delivery yesterday' : 'Last delivery ' + p.since + ' days ago') : 'No delivery yet';
+    const pace = p.perWeek > 0 && p.weeks !== null ? 'About ' + n(p.perWeek) + ' m/week' + (p.weeks <= 1 ? ' · under a week to finish' : ' · ~' + Math.ceil(p.weeks) + ' weeks to finish') : '';
+    const pills = [last, pace, Number(o.weekly) > 0 ? 'This week ' + n(s.weekGot) + ' of ' + n(o.weekly) + ' m' + (s.weekGot >= o.weekly ? ' (done)' : '') : '', s.pending && s.stock ? 'Stock covers ' + n(Math.min(s.stock, s.pending)) + ' m' : '', s.toWeave ? n(s.toWeave) + ' m still to weave' : '']
+      .filter(Boolean).map(t => `<span class="ovo-pill">${t}</span>`).join('');
+    const right = lvl === 'over' ? '+' + n(s.diff) + ' m extra' : s.pending ? n(s.pending) + ' m to go' : 'Delivered';
+    return `<div class="ovo-row k-${lvl}" role="button" tabindex="0" data-go-orders="${o.id}"><div class="ovo-top"><b>${escHtml(o.client)}</b><span class="ovo-chip"><i></i>${chip[lvl]}</span></div>
+      <small>${escHtml(o.no || '')} · ${escHtml(String(o.quality || '').split(' (')[0])} · Rs ${o.rate}/m</small>
+      <div class="ovo-bar"><i style="width:${w(s.got)}"></i><u style="left:${w(s.qty * (1 - s.tol / 100))};width:${w(s.qty * s.tol / 50)}"></u><b style="left:${w(s.qty)}"></b></div>
+      <div class="ovo-line"><span><b>${n(s.got)}</b> <small>of ${n(s.qty)} m (${pc}%)</small></span><span class="ovo-right">${right}</span></div>${pills ? `<div class="ovo-pills">${pills}</div>` : ''}</div>`;
+  };
+  const SHOW = 6, shown = info.slice(0, SHOW).map(row).join(''), more = info.slice(SHOW);
+  const tile = (l, v, sub, cls) => `<div class="ovo-kpi ${cls || ''}"><div class="label">${l}</div><div class="value">${v}</div>${sub ? `<div class="ovo-sub">${sub}</div>` : ''}</div>`;
+  const badge = open.length ? open.length + ' open · ' + pct + '% delivered' : 'No open orders';
+  return `<div class="card ovo-card" data-fold="orders_progress"><div class="card-head"><h2>Orders</h2><span class="ovo-badge">${badge}</span></div>
+    ${open.length ? `<div class="ovo-kpis">${tile('Open orders', open.length, attn ? attn + ' need attention' : 'All moving', attn ? 'warn' : '')}${tile('Delivered', n(tot.g) + ' m', 'of ' + n(tot.q) + ' m (' + pct + '%)')}${tile('Still to deliver', n(tot.pend) + ' m', tot.wk ? n(tot.wk) + ' m delivered this week' : '')}${tile('Value to bill', short(tot.val), 'at the agreed rates')}</div>
+    <div class="ovo-bar ovo-all"><i style="width:${pct}%"></i></div>
+    ${shown}${more.length ? `<div class="ovo-more" hidden>${more.map(row).join('')}</div><button type="button" class="ghost ovo-morebtn" data-ovo-more>Show ${more.length} more</button>` : ''}` : '<p class="note">Every order is completed or revoked.</p>'}
+    ${LAST_STATS_MONTHVAL ? '<p class="note" style="margin:10px 0 0">Orders show their full progress, not just the selected period.</p>' : ''}
+    <div class="ovo-foot"><span>${doneN ? 'Completed orders: ' + doneN : ''}</span><button type="button" class="ghost" data-go-orders="">All orders</button></div></div>`;
+}
+function wireOrdersCard(root){
+  const go = el => { if(typeof switchTab === 'function') switchTab('orders'); };
+  root.querySelectorAll('[data-go-orders]').forEach(el => { el.addEventListener('click', () => go(el)); el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); go(el); } }); });
+  const mb = root.querySelector('[data-ovo-more]'); if(mb) mb.addEventListener('click', () => { const m = root.querySelector('.ovo-more'); const h = m.hidden; m.hidden = !h; mb.textContent = h ? 'Show fewer' : 'Show ' + m.children.length + ' more'; });
+}
+/* Overview layout (v3.18.29): At a Glance, then a "Needs attention" strip, then the cards grouped under Business / Cash / Costs & Profit.
+   The page is drawn as before; this only regroups the finished cards (nothing is removed). A card that is not listed below lands in "More", so no card can go missing. */
+const OV_SECS = [
+  ['business', 'Business', ['orders', 'awaiting-l-ail', 'stock-position', 'sales-receivables', 'receivables-aging', 'clients-breakdown-by-quality', 'client-statement']],
+  ['cash', 'Cash', ['pending-cheques', 'bounced-cheques', 'owner-loans-owed-to-you']],
+  ['costs', 'Costs & Profit', ['expenses-material-cost', 'warp-usage-last-2-months', 'profit-loss']],
+  ['more', 'More', []]
+];
+const OV_SEC_DEFAULT_FOLDED = {cash: 1, costs: 1};
+function ovGroupOf(slug){ if(slug === 'at-a-glance') return 'top'; const s = OV_SECS.find(x => x[2].includes(slug)); return s ? s[0] : 'more'; }
+// What needs a look right now: orders that are stalled or over delivered, bounced cheques, sales waiting for their L (AIL). Each count follows the card's own permission.
+function ovAttention(){
+  const out = [], today = todayStr();
+  if(ovCardOn('orders_progress') && typeof orderStats === 'function'){
+    const n = (DATA.orders || []).filter(o => { if(o.closed || o.revoked) return false; const s = orderStats(o), p = orderPace(o, today); return (s.pending > 0 && (s.got > 0 ? p.since : p.age) >= 7) || s.status === 'over'; }).length;
+    if(n) out.push({key: 'orders', text: n + ' order' + (n > 1 ? 's' : '') + ' need' + (n > 1 ? '' : 's') + ' attention', tone: 'warn'});
+  }
+  if(ovCardOn('bounced_cheques') && typeof computeBouncedCheques === 'function'){
+    const b = computeBouncedCheques(); if(b.length) out.push({key: 'bounced-cheques', text: b.length + ' bounced cheque' + (b.length > 1 ? 's' : '') + ' · ' + fmtRs(b.reduce((t, c) => t + (Number(c.amount) || 0), 0)), tone: 'warn'});
+  }
+  if(ovCardOn('pending_l')){
+    const n = (DATA.sale || []).filter(r => r.lStatus === 'awaiting').length; if(n) out.push({key: 'awaiting-l-ail', text: n + ' sale' + (n > 1 ? 's' : '') + ' awaiting L (AIL)', tone: ''});
+  }
+  return out;
+}
 function wireFoldCards(root){
   if(!root || typeof root.querySelectorAll !== 'function') return;
-  let st = {}; try{ st = JSON.parse(localStorage.getItem('ov_folded')||'{}'); }catch(e){}
-  root.querySelectorAll('.card[data-fold]').forEach(c=>{
-    const key = c.dataset.fold, head = c.querySelector('.card-head') || c.querySelector('h2');
-    if(!head) return;
-    c.classList.add('foldable'); c.classList.toggle('folded', !!st[key]);
-    head.addEventListener('click', e=>{
-      if(e.target.closest('button')) return;
-      const f = c.classList.toggle('folded'); st[key] = f ? 1 : 0;
-      try{ localStorage.setItem('ov_folded', JSON.stringify(st)); }catch(err){}
-    });
+  const load = k => { try{ return JSON.parse(localStorage.getItem(k) || '{}'); }catch(e){ return {}; } }, put = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+  let st = load('ov_folded'), secSt = load('ov_secs');
+  const slugOf = t => String(t).split(' — ')[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const cards = Array.from(root.children).filter(c => c.classList && c.classList.contains('card'));
+  const anchor = Array.from(root.children).find(c => !(c.classList && c.classList.contains('card'))) || null;
+  const info = [];
+  cards.forEach(c => {
+    const head = c.querySelector(':scope > .card-head') || c.querySelector(':scope > h2'), h2 = head && (head.tagName === 'H2' ? head : head.querySelector('h2'));
+    if(!head || !h2){ info.push({c, g: 'more', slug: ''}); return; }
+    const slug = slugOf(h2.childNodes[0] ? h2.childNodes[0].textContent : h2.textContent);
+    info.push({c, head, slug, g: ovGroupOf(slug), key: c.dataset.fold || slug, own: c.classList.contains('summary-card')});
   });
+  // 1. Regroup: top cards, attention strip, then one header per group that has cards (a group nobody may see simply has no header).
+  cards.forEach(c => root.removeChild(c));
+  const put2 = el => root.insertBefore(el, anchor);
+  info.filter(x => x.g === 'top').forEach(x => put2(x.c));
+  const att = ovAttention(), strip = document.createElement('div'); strip.className = 'ovo-attn';
+  strip.innerHTML = `<div class="ovo-attn-t">Needs attention</div>` + (att.length ? att.map(a => `<button type="button" class="ghost ovo-ach ${a.tone}" data-jump="${a.key}">${a.text}</button>`).join('') : `<div class="ovo-clear">Nothing needs attention</div>`);
+  if(info.length > 1) put2(strip);
+  const tracked = [], secs = [];
+  OV_SECS.forEach(([id, title]) => {
+    const list = OV_SECS.find(x => x[0] === id)[2], mem = info.filter(x => x.g === id).sort((p, q) => list.indexOf(p.slug) - list.indexOf(q.slug)); if(!mem.length) return;
+    const h = document.createElement('div'); h.className = 'ovo-sec'; h.setAttribute('role', 'button'); h.tabIndex = 0; h.dataset.sec = id;
+    h.innerHTML = `<span class="ovo-sec-t">${title}</span><span class="ovo-sec-n">${mem.length} card${mem.length > 1 ? 's' : ''}</span><span class="ovo-sec-c">▾</span>`;
+    put2(h); mem.forEach(x => put2(x.c));
+    const sec = {id, h, mem}; secs.push(sec);
+    const apply = () => { const f = !!(secSt[id] === undefined ? OV_SEC_DEFAULT_FOLDED[id] : secSt[id]); h.classList.toggle('folded', f); mem.forEach(x => { x.c.hidden = f; }); };
+    sec.apply = apply; sec.set = f => { secSt[id] = f ? 1 : 0; put('ov_secs', secSt); apply(); label(); }; sec.isFolded = () => h.classList.contains('folded');
+    const flip = () => sec.set(!sec.isFolded()); h.addEventListener('click', flip); h.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); } });
+    apply();
+  });
+  // 2. Each card folds by tapping its heading (cards with their own Show/Hide, like Client Statement, keep that).
+  info.forEach(x => {
+    if(!x.head || x.own) return;
+    x.c.classList.add('foldable'); x.c.classList.toggle('folded', !!st[x.key]); tracked.push(x); x.c.dataset.fkey = x.slug;
+    x.head.addEventListener('click', e => { if(e.target.closest('button')) return; const f = x.c.classList.toggle('folded'); st[x.key] = f ? 1 : 0; put('ov_folded', st); label(); });
+  });
+  // 3. Collapse all / Expand all (groups and cards together).
+  let btn = null;
+  const anyOpen = () => secs.some(s => !s.isFolded()) || tracked.some(x => !x.c.classList.contains('folded'));
+  function label(){ if(btn) btn.textContent = anyOpen() ? 'Collapse all' : 'Expand all'; }
+  if(info.length > 1){
+    const bar = document.createElement('div'); bar.className = 'ovo-foldbar'; btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ghost'; bar.appendChild(btn); root.insertBefore(bar, root.firstChild); label();
+    btn.addEventListener('click', () => { const fold = anyOpen(); secs.forEach(s => { secSt[s.id] = fold ? 1 : 0; s.apply(); }); tracked.forEach(x => { x.c.classList.toggle('folded', fold); st[x.key] = fold ? 1 : 0; }); put('ov_secs', secSt); put('ov_folded', st); label(); });
+  }
+  // 4. Attention chips jump to their card, opening its group and the card first.
+  strip.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => {
+    const x = info.find(i => i.slug === b.dataset.jump); if(!x) return;
+    const s = secs.find(g => g.mem.includes(x)); if(s && s.isFolded()) s.set(false);
+    if(x.c.classList.contains('folded')){ x.c.classList.remove('folded'); st[x.key] = 0; put('ov_folded', st); label(); }
+    if(x.c.scrollIntoView) x.c.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }));
+  wireOrdersCard(root);
 }
 
 /* ---------------- Graphs (trends over time) ----------------
