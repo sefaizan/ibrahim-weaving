@@ -220,6 +220,10 @@ describe('the rest of the app goes through the store', () => {
     assert.match(enc, /await ledgerRemove\(STORAGE_KEY\)/);
     assert.match(read('js/lock-init.js'), /await purgePlaintextLedgerAndHashes\(\)/);
   });
+  test('while the ledger is unreadable, cloud sync and safety copies do nothing with the blank screen', () => {
+    assert.match(read('js/cloud-sync.js'), /async function cloudPushNow\(force\)\{[\s\S]{0,260}LEDGER_LOAD_FAILED\) return;/);
+    assert.match(read('js/shell.js'), /async function snapAdd\(reason, json\)\{\s*if\(typeof LEDGER_LOAD_FAILED[^\n]*return;/);
+  });
   test('the size line in Settings follows where the ledger is kept', () => {
     const shell = read('js/shell.js');
     assert.match(shell, /LEDGER_BACKEND === 'idb'/); assert.match(shell, /plenty of room/);
