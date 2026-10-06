@@ -10,7 +10,7 @@ function load(data){
     clientSelectField: (l, id, ex) => `<select id="${id}" ${ex || ''}><option value="">—</option><option value="Javed">Javed</option></select>`,
     selectField: (l, id, a, ex) => `<select id="${id}" ${ex || ''}><option value="">—</option>${(a || []).map(x => `<option value="${x.name}">${x.name}</option>`).join('')}</select>`,
     document: {getElementById: () => null}, console};
-  vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(root, 'calc.js'), 'utf8') + fs.readFileSync(path.join(root, 'orders.js'), 'utf8') + ';this.panel = ordersPanel; this.agr = orderAgreementHtml;', ctx); return ctx;
+  vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(root, 'core.js'), 'utf8').match(/const fmtQtyMtr = n => \{[\s\S]*?\n\};/)[0] + fs.readFileSync(path.join(root, 'calc.js'), 'utf8') + fs.readFileSync(path.join(root, 'orders.js'), 'utf8') + ';this.panel = ordersPanel; this.agr = orderAgreementHtml;', ctx); return ctx;
 }
 const base = {id: 'o1', no: 'ORD-001', client: 'Javed', quality: 'Q1', qty: 20000, rate: 100, date: '2026-10-01', closed: false, witBuyer: 'Ali', witSeller: 'Umar'};
 const mk = (orders, sale) => load({orders, sale: sale || [], qualities: [{name: 'Q1'}], clients: [{name: 'Javed'}], production: [], recovery: [], businessInfo: {name: 'IW', address: 'Faisalabad', phone: '0300'}});
@@ -137,5 +137,19 @@ describe('completion statement over several pictures (v3.18.25)', () => {
   test('without a slice the whole statement comes back in one piece, as before', () => {
     const h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', mk([done], many));
     assert.ok(h.includes('INV-1<') && h.includes('INV-12<') && h.includes('<tfoot>') && h.includes('class="cpb"') && !h.includes('(continued)'));
+  });
+});
+
+describe('completion statement quantities in 16ths, totals not rounded (v3.18.26)', () => {
+  const done = Object.assign({}, base, {closed: true, completedOn: '2026-10-06', qty: 3000});
+  const sales = [{id: 's1', order: 'o1', client: 'Javed', date: '2026-10-02', invoice: 'INV-1', qty: 1000.75, rate: 100, amount: 100075}, {id: 's2', order: 'o1', client: 'Javed', date: '2026-10-05', invoice: 'INV-2', qty: 1500.5, rate: 100, amount: 150050}];
+  const h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', mk([done], sales));
+  test('delivery rows, total and Delivered show meters-and-16ths, with no rounding', () => {
+    assert.ok(h.includes('>1000-12<') && h.includes('>1500-8<'), 'rows');
+    assert.ok(h.includes('>2501-4<'), 'total 2501.25 stays 2501-4, not 2501');
+    assert.ok(h.includes('2501-4 m'), 'Delivered tile');
+  });
+  test('difference and result use 16ths too', () => {
+    assert.ok(h.includes('-498-12 m'), 'difference'); assert.ok(h.includes('Short of the order by 498-12 m'));
   });
 });
