@@ -59,17 +59,23 @@ function linkForm(o){
     <div class="field"><select id="l_ord"><option value="">—</option>${el.map(x => `<option value="${x.id}">${escHtml(x.no || '')}: ${fmtNum(x.qty)} m at Rs ${x.rate}</option>`).join('')}</select></div>
     <div class="od-act"><button type="button" class="primary" id="l_ok" data-edit="orders:${o.id}">Link</button><button type="button" class="ghost" id="l_no">Cancel</button></div></div>`;
 }
+const odLang = () => (typeof I18N_LANG !== 'undefined' && I18N_LANG === 'ur') ? 'ur' : 'en'; // the agreement follows the app language
 function orderCard(o){
   const s = orderStats(o), [txt, tone] = odStatus(o, s), top = Math.max(o.qty * (1 + s.tol / 100) * 1.03, s.got), p = x => (x / top * 100).toFixed(2) + '%';
-  const meta = [['Avg rate', s.got ? 'Rs ' + (Math.round(s.avg * 10) / 10) : '-'], ['Value', s.got ? fmtRs(s.val) : '-'], ['Batches', s.batches], ['Last', s.last ? fmtDate(s.last) : '-']].map(m => `<div><small>${m[0]}</small><b>${m[1]}</b></div>`).join('');
-  const extra = [Number(o.weekly) > 0 ? `This week ${fmtNum(s.weekGot)} of ${fmtNum(o.weekly)} m` + (s.weekGot >= o.weekly ? ' (done)' : '') : '', Number(o.minBatch) > 0 ? 'Minimum batch ' + fmtNum(o.minBatch) + ' m' : '',
-    s.offRate ? s.offRate + ' batch(es) at a different rate than Rs ' + o.rate : '', !o.closed && s.pending ? `Pending ${fmtNum(Math.round(s.pending))} m` + (s.stock ? `, stock covers ${fmtNum(Math.round(Math.min(s.stock, s.pending)))} m` : '') + (s.toWeave ? `, ${fmtNum(Math.round(s.toWeave))} m still to weave` : '') : ''].filter(Boolean).map(x => `<li>${x}</li>`).join('');
-  return `<div class="card od-card" data-id="${o.id}"><div class="od-top"><div><b>${escHtml(o.client)}</b><small>${escHtml(o.no || '')}, ${escHtml(o.quality.split(' (')[0])}, Rs ${o.rate}/m</small></div><span class="od-chip ${tone}">${txt}</span></div>
-    <div class="od-big">${fmtNum(Math.round(s.got))}<small> of ${fmtNum(o.qty)} m</small></div>
-    <div class="od-bar"><i class="${tone}" style="width:${p(s.got)}"></i><u style="left:${p(o.qty * (1 - s.tol / 100))};width:${p(o.qty * s.tol / 50)}"></u><b style="left:${p(o.qty)}"></b></div>
-    <div class="od-meta">${meta}</div><ul class="od-x">${extra}</ul>
-    ${revForm(o)}${linkForm(o)}${(o.history || []).slice(-3).map(h => `<small class="od-link">Changed ${fmtDate(h.date)}: ${escHtml(h.text)}</small>`).join('')}${o.replaces ? `<small class="od-link">Replaces ${escHtml(ordNo(o.replaces))}</small>` : ''}${o.revoked && o.revoked.newId ? `<small class="od-link">Revoked ${fmtDate(o.revoked.date)}, replaced by ${escHtml(ordNo(o.revoked.newId))}</small>` : o.revoked ? `<small class="od-link">Revoked ${fmtDate(o.revoked.date)}</small>` : ''}<div class="od-act"><select class="od-lang"><option value="en">English</option><option value="ur">اردو</option></select><button type="button" class="ghost" data-a="img">Share image</button><button type="button" class="ghost" data-a="pdf">PDF</button>
-    ${act(o, 'edit', 'Edit', 'ghost', !o.revoked)}${o.revoked ? act(o, 'unrev', 'Undo revoke', 'ghost', true) + (o.revoked.newId ? '' : act(o, 'mkrep', 'Make replacement', 'primary', true) + act(o, 'linkex', 'Link existing', 'ghost', true)) : act(o, 'done', o.closed ? 'Reopen' : 'Mark complete', o.closed ? 'ghost' : 'primary', true) + act(o, 'revoke', 'Revoke', 'ghost', !o.closed)}<button type="button" class="ghost" data-a="del" data-del="orders:${o.id}">Delete</button></div></div>`;
+  const k = o.revoked ? 'rev' : o.closed ? 'done' : tone === 'good' ? 'good' : tone === 'thin' ? 'thin' : s.got ? 'run' : 'new';
+  const pct = s.qty ? Math.min(100, Math.round(s.got / s.qty * 100)) : 0, ini = escHtml((o.client || '?').trim().charAt(0).toUpperCase());
+  const left = !o.closed && s.pending ? fmtNum(Math.round(s.pending)) + ' m to go' : o.revoked ? 'Revoked' : o.closed ? 'Completed' : s.diff > 0 ? '+' + fmtNum(Math.round(s.diff)) + ' m extra' : 'Delivered';
+  const tiles = [['Avg rate', s.got ? 'Rs ' + (Math.round(s.avg * 10) / 10) : '-'], ['Value', s.got ? fmtRs(s.val) : '-'], ['Batches', s.batches], ['Last', s.last ? fmtDate(s.last) : '-']].map(m => `<div><small>${m[0]}</small><b>${m[1]}</b></div>`).join('');
+  const pills = [Number(o.weekly) > 0 ? `This week ${fmtNum(s.weekGot)} of ${fmtNum(o.weekly)} m` + (s.weekGot >= o.weekly ? ' (done)' : '') : '', Number(o.minBatch) > 0 ? 'Minimum batch ' + fmtNum(o.minBatch) + ' m' : '',
+    s.offRate ? s.offRate + ' batch(es) at a different rate than Rs ' + o.rate : '', !o.closed && s.pending && s.stock ? `Stock covers ${fmtNum(Math.round(Math.min(s.stock, s.pending)))} m` : '', !o.closed && s.toWeave ? `${fmtNum(Math.round(s.toWeave))} m still to weave` : '',
+    o.replaces ? 'Replaces ' + escHtml(ordNo(o.replaces)) : '', o.revoked ? 'Revoked ' + fmtDate(o.revoked.date) + (o.revoked.newId ? ', replaced by ' + escHtml(ordNo(o.revoked.newId)) : '') : ''].filter(Boolean).map(x => `<span class="od-pill">${x}</span>`).join('');
+  const hist = (o.history || []).slice(-3).map(h => `<small class="od-link">Changed ${fmtDate(h.date)}: ${escHtml(h.text)}</small>`).join('');
+  return `<div class="card od-card k-${k}" data-id="${o.id}"><div class="od-top"><span class="od-av">${ini}</span><div class="od-nm"><b>${escHtml(o.client)}</b><small>${escHtml(o.no || '')} · ${escHtml(o.quality.split(' (')[0])} · Rs ${o.rate}/m</small></div><span class="od-chip ${tone}"><i></i>${txt}</span></div>
+    <div class="od-mid"><div class="od-ring" style="--p:${pct}"><b>${pct}%</b></div><div class="od-nums"><div class="od-big">${fmtNum(Math.round(s.got))}<small> of ${fmtNum(o.qty)} m</small></div><div class="od-left">${left}</div></div></div>
+    <div class="od-bar"><i style="width:${p(s.got)}"></i><u style="left:${p(o.qty * (1 - s.tol / 100))};width:${p(o.qty * s.tol / 50)}"></u><b style="left:${p(o.qty)}"></b></div>
+    <div class="od-meta">${tiles}</div>${pills ? `<div class="od-pills">${pills}</div>` : ''}${revForm(o)}${linkForm(o)}${hist}
+    <div class="od-share"><button type="button" class="primary" data-a="img">Share image</button><button type="button" class="ghost" data-a="pdf">PDF</button></div>
+    <div class="od-act">${act(o, 'edit', 'Edit', 'ghost', !o.revoked)}${o.revoked ? act(o, 'unrev', 'Undo revoke', 'ghost', true) + (o.revoked.newId ? '' : act(o, 'mkrep', 'Make replacement', 'primary', true) + act(o, 'linkex', 'Link existing', 'ghost', true)) : act(o, 'done', o.closed ? 'Reopen' : 'Mark complete', 'ghost', true) + act(o, 'revoke', 'Revoke', 'ghost', !o.closed)}<button type="button" class="ghost od-del" data-a="del" data-del="orders:${o.id}">Delete</button></div></div>`;
 }
 function ordersPanel(){
   if(ORD_EDIT && ((DATA.orders || []).find(x => x.id === ORD_EDIT) || {}).revoked) ORD_EDIT = null;
@@ -90,10 +96,19 @@ function ordersPanel(){
     ${done.length ? `<details class="card"><summary>Completed and revoked (${done.length})</summary>${done.map(orderCard).join('')}</details>` : ''}</div>`;
 }
 function wireOrders(){
-  if(!document.getElementById('od_css')){ const s = document.createElement('style'); s.id = 'od_css';
-    s.textContent = `.od-card{margin-top:12px}.od-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.od-top small{display:block;color:var(--ink-soft)}.od-chip{font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;background:var(--paper-dim);white-space:nowrap}.od-chip.good{color:var(--green)}.od-chip.thin{color:var(--gold)}.od-big{font:700 34px/1.2 'Roboto Condensed',Roboto,sans-serif;margin-top:6px}.od-big small{font:400 14px Roboto,sans-serif;color:var(--ink-soft)}
-.od-bar{position:relative;height:12px;background:var(--paper-dim);border-radius:6px;margin:10px 0 14px;overflow:visible}.od-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--rust);transition:width .4s}.od-bar i.good{background:var(--green)}.od-bar i.thin{background:var(--gold)}.od-bar u{position:absolute;top:0;bottom:0;background:var(--green);opacity:.22}.od-bar b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
-.od-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.od-meta small{display:block;color:var(--ink-soft);font-size:11px}.od-meta b{font-size:13px}.od-x{margin:10px 0 0;padding-left:18px;font-size:13px;color:var(--ink-soft)}.od-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}.od-act select{padding:8px;border-radius:8px;width:auto}.od-sec{margin:14px 0 6px;font-size:12px;font-weight:700;letter-spacing:.3px;color:var(--rust-deep);text-transform:uppercase;border-bottom:1px dashed var(--line);padding-bottom:3px}.od-sec:first-of-type{margin-top:4px}.od-sum{margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--rust-tonal);color:var(--rust-deep);font-size:13px;font-weight:700}.od-sum:empty{display:none}.od-rev{margin-top:12px;padding:12px;border:1px solid var(--rust);border-radius:12px;background:var(--paper-dim)}.od-rev small{display:block;color:var(--ink-soft);margin:2px 0 8px}.od-ck{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px}.od-ck input{width:auto}.od-link{display:block;margin-top:8px;color:var(--ink-soft);font-weight:700}.od-act button{width:auto;flex:0 0 auto;margin:0}`; document.head.appendChild(s); }
+  if(!document.getElementById('od_css2')){ const old = document.getElementById('od_css'); if(old) old.remove(); const s = document.createElement('style'); s.id = 'od_css2';
+    s.textContent = `.od-card{margin-top:14px;position:relative;overflow:hidden;border-inline-start:5px solid var(--odc);--odc:var(--rust);animation:odUp .35s ease both}.od-card.k-good{--odc:var(--green)}.od-card.k-thin{--odc:var(--gold)}.od-card.k-run{--odc:var(--rust)}.od-card.k-new{--odc:#7B8794}.od-card.k-done{--odc:#7B8794}.od-card.k-rev{--odc:var(--red)}
+@keyframes odUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes odGrow{from{width:0}}
+.od-top{display:flex;gap:10px;align-items:center}.od-av{flex:0 0 auto;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font:700 18px Roboto,sans-serif;color:#fff;background:var(--odc)}.od-nm{flex:1;min-width:0}.od-nm b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.od-nm small{display:block;color:var(--ink-soft);font-size:12px}
+.od-chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:14px;background:var(--paper-dim);white-space:nowrap}.od-chip i{width:8px;height:8px;border-radius:50%;background:var(--odc)}.od-chip.good{color:var(--green)}.od-chip.thin{color:var(--gold)}
+.od-mid{display:flex;align-items:center;gap:16px;margin-top:14px}.od-ring{flex:0 0 auto;width:78px;height:78px;border-radius:50%;display:grid;place-items:center;position:relative;background:conic-gradient(var(--odc) calc(var(--p) * 1%),var(--paper-dim) 0)}.od-ring::before{content:'';position:absolute;inset:8px;border-radius:50%;background:var(--card)}.od-ring b{position:relative;font:700 17px 'Roboto Condensed',Roboto,sans-serif}
+.od-big{font:700 30px/1.15 'Roboto Condensed',Roboto,sans-serif}.od-big small{font:400 13px Roboto,sans-serif;color:var(--ink-soft)}.od-left{margin-top:2px;font-size:13px;font-weight:700;color:var(--odc)}
+.od-bar{position:relative;height:10px;background:var(--paper-dim);border-radius:6px;margin:16px 0 14px;overflow:visible}.od-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--odc);animation:odGrow .7s ease both}.od-bar u{position:absolute;top:0;bottom:0;background:var(--green);opacity:.22}.od-bar b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.od-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.od-meta div{background:var(--paper-dim);border-radius:10px;padding:7px 8px;min-width:0}.od-meta small{display:block;color:var(--ink-soft);font-size:10.5px}.od-meta b{font-size:12.5px;overflow-wrap:anywhere}
+.od-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.od-pill{font-size:11.5px;padding:3px 10px;border-radius:12px;background:var(--rust-tonal);color:var(--rust-deep);font-weight:600}
+.od-share{display:flex;gap:8px;margin-top:14px}.od-share button{flex:1;margin:0}.od-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}.od-act button{width:auto;flex:0 0 auto;margin:0;padding:8px 14px;font-size:12.5px}.od-del{margin-inline-start:auto!important;color:var(--red)!important}
+.od-sec{margin:14px 0 6px;font-size:12px;font-weight:700;letter-spacing:.3px;color:var(--rust-deep);text-transform:uppercase;border-bottom:1px dashed var(--line);padding-bottom:3px}.od-sec:first-of-type{margin-top:4px}.od-sum{margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--rust-tonal);color:var(--rust-deep);font-size:13px;font-weight:700}.od-sum:empty{display:none}.od-rev{margin-top:12px;padding:12px;border:1px solid var(--rust);border-radius:12px;background:var(--paper-dim)}.od-rev small{display:block;color:var(--ink-soft);margin:2px 0 8px}.od-ck{display:flex;gap:8px;align-items:center;font-size:13px;margin-top:8px}.od-ck input{width:auto}.od-link{display:block;margin-top:8px;color:var(--ink-soft);font-weight:700}
+@media (prefers-reduced-motion:reduce){.od-card,.od-bar i{animation:none}}`; document.head.appendChild(s); }
   const g = id => document.getElementById(id), n = id => parseFloat(g(id).value) || 0;
   const live = () => { if(!g('o_qty')) return; const q = (DATA.qualities || []).find(x => x.name === g('o_quality').value) || {}, c = costCfg(), t = g('o_tol').value === '' ? 5 : n('o_tol'), qy = n('o_qty');
     if(!g('o_width').dataset.t) g('o_width').value = q.name ? (c.widthByReed[q.kangi] || c.width) : '';
@@ -128,7 +143,7 @@ function wireOrders(){
   };
   if(g('o_cancel')) g('o_cancel').onclick = () => { ORD_EDIT = null; ORD_FROM = null; switchTab('orders'); };
   document.querySelectorAll('.od-card').forEach(c => c.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
-    const id = c.dataset.id, a = b.dataset.a, o = DATA.orders.find(x => x.id === id), lang = c.querySelector('.od-lang').value;
+    const id = c.dataset.id, a = b.dataset.a, o = DATA.orders.find(x => x.id === id), lang = odLang();
     if(a === 'img') orderShare(id, lang); else if(a === 'pdf') orderPdf(id, lang);
     else if(a === 'edit'){ ORD_EDIT = id; switchTab('orders'); }
     else if(a === 'revoke'){ ORD_REV = id; switchTab('orders'); }
@@ -147,16 +162,32 @@ function wireOrders(){
     }
   }));
 }
-// Sale form: pick the order a delivery belongs to (only open orders of that client + quality; chosen for you when there is exactly one).
-function orderSaleField(){ return '<div class="field"><label>Order (optional)</label><select id="s_order"><option value="">No order</option></select></div>'; }
+// Sale form: pick the order a delivery belongs to. Every open order is listed as "ORD-001 - Client - Quality" (narrowed to the chosen client / quality when
+// that leaves something to pick). Choosing an order fills the client, quality and rate of the sale; with client and quality already chosen and exactly one open order, it is chosen for you.
+const orderLabel = o => [o.no || '', o.client, o.quality].join(' - ');
+function orderSaleChoices(client, quality, keep){
+  const live = (DATA.orders || []).filter(o => (!o.closed && !o.revoked) || o.id === keep).sort((a, b) => String(b.no || '').localeCompare(String(a.no || ''), undefined, {numeric: true}));
+  const byC = client ? live.filter(o => o.client === client || o.id === keep) : live, byQ = quality ? byC.filter(o => o.quality === quality || o.id === keep) : byC;
+  return byQ.length ? byQ : byC.length ? byC : live;
+}
+function orderSaleField(){ return '<div class="field"><label>Order (optional)</label><select id="s_order"><option value="">No order</option></select><small id="s_order_info" class="note" style="display:block;margin-top:4px"></small></div>'; }
 function wireSaleOrder(){
   const sel = document.getElementById('s_order'), cl = document.getElementById('s_client'), q = document.getElementById('s_quality'); if(!sel || !cl || !q) return;
-  const ed = typeof EDITING !== 'undefined' && EDITING && EDITING.key === 'sale' ? (DATA.sale || []).find(r => r.id === EDITING.id) : null;
-  const rate = () => { const o = (DATA.orders || []).find(x => x.id === sel.value), r = document.getElementById('s_rate'); if(o && r && !r.value) r.value = o.rate; };
+  const ed = typeof EDITING !== 'undefined' && EDITING && EDITING.key === 'sale' ? (DATA.sale || []).find(r => r.id === EDITING.id) : null, info = document.getElementById('s_order_info');
+  let busy = false;
+  const show = () => { const o = (DATA.orders || []).find(x => x.id === sel.value); if(!info) return; if(!o){ info.textContent = ''; return; }
+    const st = orderStats(o); info.textContent = fmtNum(o.qty) + ' m at Rs ' + o.rate + ', delivered ' + fmtNum(Math.round(st.got)) + ' m' + (st.pending ? ', ' + fmtNum(Math.round(st.pending)) + ' m to go' : '') + (o.closed ? (o.revoked ? ' (revoked)' : ' (completed)') : ''); };
   const fill = keep => {
-    const opts = (DATA.orders || []).filter(o => (!o.closed || o.id === keep) && o.client === cl.value && o.quality === q.value);
-    sel.innerHTML = '<option value="">No order</option>' + opts.map(o => `<option value="${o.id}">${escHtml(o.no || '')}: ${fmtNum(o.qty)} m at Rs ${o.rate}</option>`).join('');
-    sel.value = keep && opts.some(o => o.id === keep) ? keep : (opts.length === 1 && !ed ? opts[0].id : ''); rate();
+    const opts = orderSaleChoices(cl.value, q.value, keep), both = cl.value && q.value ? opts.filter(o => o.client === cl.value && o.quality === q.value && !o.closed) : [];
+    sel.innerHTML = '<option value="">No order</option>' + opts.map(o => `<option value="${o.id}">${escHtml(orderLabel(o))}</option>`).join('');
+    sel.value = keep && opts.some(o => o.id === keep) ? keep : (both.length === 1 && !ed ? both[0].id : ''); show();
   };
-  cl.addEventListener('change', () => fill('')); q.addEventListener('change', () => fill('')); sel.addEventListener('change', rate); fill(ed ? ed.order : '');
+  const pick = () => {
+    const o = (DATA.orders || []).find(x => x.id === sel.value); show(); if(!o || busy) return; busy = true;
+    try{ if(cl.value !== o.client){ cl.value = o.client; cl.dispatchEvent(new Event('change', {bubbles: true})); } if(q.value !== o.quality){ q.value = o.quality; q.dispatchEvent(new Event('change', {bubbles: true})); }
+      const r = document.getElementById('s_rate'); if(r && (!r.value || r.dataset.fromOrder)){ r.value = o.rate; r.dataset.fromOrder = '1'; } }finally{ busy = false; }
+  };
+  const narrow = () => { if(!busy) fill(''); };
+  cl.addEventListener('change', narrow); q.addEventListener('change', narrow); sel.addEventListener('change', pick); fill(ed ? ed.order : '');
+  const rt = document.getElementById('s_rate'); if(rt) rt.addEventListener('input', () => { delete rt.dataset.fromOrder; });
 }
