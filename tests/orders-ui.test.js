@@ -109,8 +109,33 @@ describe('statement watermark and completed badge (v3.18.22)', () => {
       assert.ok(h.includes('class="receipt-watermark"'), fn);
     }
   });
-  test('the completion statement shows a large Completed banner with a tick', () => {
+  test('the completion statement shows a Completed stamp with a tick and the date', () => {
     const h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', mk([done]));
-    assert.match(h, /<div class="cpb"><svg[\s\S]*<span>Completed<\/span><\/div>/);
+    assert.match(h, /<div class="cpb"><div class="in"><svg[\s\S]*<b>Completed<\/b><em dir="ltr">2026-10-05<\/em>/);
+  });
+});
+
+describe('completion statement over several pictures (v3.18.25)', () => {
+  const done = Object.assign({}, base, {closed: true, completedOn: '2026-10-06'});
+  const many = Array.from({length: 12}, (_, i) => ({id: 's' + i, order: 'o1', client: 'Javed', date: '2026-10-' + String(i + 1).padStart(2, '0'), invoice: 'INV-' + (i + 1), qty: 1500, rate: 100, amount: 150000}));
+  const html = (pg) => vm.runInContext('orderCompletionHtml(DATA.orders[0], "en", ' + JSON.stringify(pg) + ')', mk([done], many));
+  test('the first picture has the letterhead, summary and stamp but no totals or balance', () => {
+    const h = html({from: 0, to: 5, label: 'Page 1 of 3'});
+    assert.ok(h.includes('class="cpb"') && h.includes('Account balance') === false && !h.includes('<tfoot>'));
+    assert.ok(h.includes('INV-1<') && h.includes('INV-5<') && !h.includes('INV-6<')); assert.ok(h.includes('Page 1 of 3'));
+  });
+  test('a middle picture is marked continued and has only its own rows', () => {
+    const h = html({from: 5, to: 9, label: 'Page 2 of 3'});
+    assert.ok(h.includes('(continued)') && !h.includes('class="cpb"') && !h.includes('<tfoot>') && !h.includes('Account balance'));
+    assert.ok(h.includes('INV-6<') && h.includes('INV-9<') && !h.includes('INV-5<') && !h.includes('INV-10<'));
+  });
+  test('the last picture carries the totals, the balance and the thank-you line', () => {
+    const h = html({from: 9, to: 12, label: 'Page 3 of 3'});
+    assert.ok(h.includes('<tfoot>') && h.includes('Account balance') && h.includes('Thank you for your business') && h.includes('INV-12<'));
+    assert.ok(h.includes('18000'.replace(/(\d)(?=(\d{3})+$)/, '$1')) || h.includes('18000'));
+  });
+  test('without a slice the whole statement comes back in one piece, as before', () => {
+    const h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', mk([done], many));
+    assert.ok(h.includes('INV-1<') && h.includes('INV-12<') && h.includes('<tfoot>') && h.includes('class="cpb"') && !h.includes('(continued)'));
   });
 });
