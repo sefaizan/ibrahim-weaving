@@ -227,3 +227,45 @@ describe('release 3 step 8 files stay in step', () => {
     assert.match(read('service-worker.js'), /CACHE_VERSION = 'v\d+'/);
   });
 });
+
+describe('Orders card and folding (v3.18.28)', () => {
+  const O = (id, extra) => Object.assign({ id, no: 'ORD-00' + id.slice(1), client: 'Acme', quality: 'Q', qty: 1000, rate: 10, date: dayStr(-30), closed: false }, extra);
+  const withOrders = (orders, sale) => { const d = LEDGER(); d.orders = orders; d.sale = sale || []; return d; };
+  test('is tagged to Sales and shows progress, stalled and pace', () => {
+    load({ email: OWNER, data: withOrders([O('o1'), O('o2', { client: 'Beta' })], [
+      { id: 's1', order: 'o1', qty: 400, rate: 10, amount: 4000, date: dayStr(-10) }, { id: 's2', order: 'o2', qty: 400, rate: 10, amount: 4000, date: dayStr(-1) }]) });
+    run('renderStats("")'); const h = wrap.innerHTML;
+    assert.ok(h.includes('data-fold="orders_progress"') && h.includes('2 open'));
+    assert.ok(h.includes('k-stalled') && h.includes('Last delivery 10 days ago'), 'o1 has had no delivery for 10 days');
+    assert.ok(h.includes('Last delivery yesterday') && h.includes('About 100 m/week') && h.includes('weeks to finish'));
+    assert.ok(h.indexOf('Acme') < h.indexOf('Beta'), 'the stalled order is listed first');
+  });
+  test('hidden without Sales, and absent when there are no orders', () => {
+    load({ perms: { production: 'v', reference: 'v' }, data: withOrders([O('o1')]) }); run('renderStats("")');
+    assert.ok(!wrap.innerHTML.includes('orders_progress'));
+    load({ email: OWNER }); run('renderStats("")'); assert.ok(!wrap.innerHTML.includes('orders_progress'));
+  });
+  test('orderPace: a week of deliveries gives the weekly pace and weeks left', () => {
+    load({ email: OWNER, data: withOrders([O('o1')], [{ id: 's1', order: 'o1', qty: 280, date: dayStr(-3) }]) });
+    const p = run('orderPace(DATA.orders[0])'); assert.equal(p.perWeek, 70); assert.equal(Math.ceil(p.weeks), 11); assert.equal(p.since, 3);
+  });
+});
+
+describe('Overview grouping and attention strip (v3.18.29)', () => {
+  beforeEach(() => load({ email: OWNER }));
+  test('every card heading the Overview draws belongs to a group, so none can go missing', () => {
+    const slug = t => t.split(' — ')[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const src = ['js/overview.js', 'js/panels-daily.js'].map(read).join('\n');
+    const heads = ['Orders', 'Stock Position', 'Sales & Receivables', 'Warp Usage (Last 2 Months)', 'Receivables Aging', 'Clients Breakdown by Quality', 'Owner Loans (Owed to You)', 'Expenses & Material Cost', 'Profit / Loss', 'Client Statement', 'Pending Cheques', 'Bounced Cheques', 'Awaiting L (AIL)'];
+    heads.forEach(h => { assert.ok(src.includes(h), h + ' is still a card'); assert.notEqual(run(`ovGroupOf(${JSON.stringify(slug(h))})`), 'more', h + ' has no group'); });
+    assert.equal(run(`ovGroupOf('at-a-glance')`), 'top'); assert.equal(run(`ovGroupOf('some-new-card')`), 'more');
+  });
+  test('the strip counts stalled orders, bounced cheques and sales awaiting L, and follows permissions', () => {
+    const d = LEDGER(); d.orders = [{ id: 'o1', no: 'ORD-001', client: 'Acme', quality: 'Q', qty: 1000, rate: 10, date: dayStr(-30), closed: false }];
+    d.recovery[0].cheques.push({ chequeId: 'c3', amount: 700, status: 'Bounced', chequeDate: dayStr(-9) }); d.sale.push({ id: 's2', client: 'Acme', quality: 'Q', qty: 5, rate: 10, amount: 50, date: dayStr(-1), lStatus: 'awaiting' });
+    load({ email: OWNER, data: d });
+    const a = JSON.parse(JSON.stringify(run('ovAttention()'))), keys = a.map(x => x.key);
+    assert.deepEqual(keys, ['orders', 'bounced-cheques', 'awaiting-l-ail']); assert.ok(a[1].text.startsWith('1 bounced cheque'));
+    load({ perms: { production: 'v', reference: 'v' }, data: d }); assert.deepEqual(JSON.parse(JSON.stringify(run('ovAttention()'))), []);
+  });
+});
