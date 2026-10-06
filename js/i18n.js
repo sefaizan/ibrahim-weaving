@@ -633,6 +633,48 @@ for(const k in I18N_UR_V74){ if(!Object.prototype.hasOwnProperty.call(I18N_UR, k
 const I18N_UR_RE74 = [[new RegExp("^[\\u2014\\u2013-]? ?\\u26a0? ?No backup yet \\u2014 ([\\d,]+) entries live only on this phone\\.$"),"ابھی تک بیک اپ نہیں — $1 اندراجات صرف اسی فون میں ہیں۔"],[new RegExp("^Week (.+) m$"),"ہفتہ $1 م"],[new RegExp("^Page (\\d+) of (\\d+) \\((\\d+) records\\)$"),"صفحہ $1 از $2 ($3 ریکارڈ)"],[new RegExp("^Export CSV \\((\\d+)\\)$"),"CSV ایکسپورٹ ($1)"],[new RegExp("^([\\u25b2\\u25bc]) (\\d+)% this month vs last month$"),"$1 $2% اس مہینے بمقابلہ پچھلا مہینہ"],[new RegExp("^(\\d+)[\\u2013\\u2014-](\\d+) Days$"),"$1–$2 دن"],[new RegExp("^Cash Rs (.+)$"),"نقد Rs $1"],[new RegExp("^Rs (.+) credit$"),"Rs $1 جمع (کریڈٹ)"],[new RegExp("^Paid ahead \\(credit\\): (.+)$"),"پیشگی ادا (کریڈٹ): $1"],[new RegExp("^Rs (.+) \\(incl\\. Rs (.+) wages\\)$"),"Rs $1 (بشمول Rs $2 اجرت)"],[new RegExp("^Rs (.+) \\((\\d+) sets\\)$"),"Rs $1 ($2 سیٹ)"],[new RegExp("^Rs (.+) \\((\\d+) bags\\)$"),"Rs $1 ($2 بیگ)"],[new RegExp("^Opening capital: (.+)$"),"ابتدائی سرمایہ: $1"],[new RegExp("^Position at (.+)$"),"پوزیشن بتاریخ $1"],[new RegExp("^Earned, paid, bonus and production are for (.+) to (.+)$"),"کمائی، ادائیگی، بونس اور پیداوار $1 سے $2 تک کی ہیں"],[new RegExp("^Total: Rs (.+)$"),"کل: Rs $1"],[new RegExp("^Ledger size: (.+)$"),"لیجر کا سائز: $1"]];
 const I18N_MON74 = {"Jan": "جنوری", "Feb": "فروری", "Mar": "مارچ", "Apr": "اپریل", "May": "مئی", "Jun": "جون", "Jul": "جولائی", "Aug": "اگست", "Sep": "ستمبر", "Oct": "اکتوبر", "Nov": "نومبر", "Dec": "دسمبر"};
 I18N_UR_RE74.push([/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d\d)$/, '$1 $2']);
+/* v3.18.27 — Orders page in Urdu: the page was added after the dictionary, so its labels, buttons, cards, forms, messages and pop-ups were missing. Only fills gaps; existing entries win. */
+const I18N_UR_ORD = {
+  'New order':'نیا آرڈر', 'Agreement':'معاہدہ', 'Order no.':'آرڈر نمبر', 'Date of agreement':'معاہدے کی تاریخ', 'Parties':'فریقین', 'Seller':'فروخت کنندہ', 'Buyer (client)':'خریدار (کلائنٹ)',
+  'Cloth and price':'کپڑا اور قیمت', 'Width (inches)':'چوڑائی (انچ)', 'Ordered meters':'آرڈر کردہ میٹر', 'Agreed rate (Rs/m)':'طے شدہ ریٹ (روپے/میٹر)', 'Delivery terms':'ڈیلیوری کی شرائط',
+  'Tolerance % (default 5)':'کمی بیشی کی گنجائش % (عام طور پر 5)', 'Minimum batch m (optional)':'کم از کم قسط میٹر (اختیاری)', 'Per week m (optional)':'فی ہفتہ میٹر (اختیاری)',
+  'In the presence of':'موجودگی میں', "From the buyer's side: name":'خریدار کی طرف سے: نام', "From the seller's side: name":'فروخت کنندہ کی طرف سے: نام',
+  'Save order':'آرڈر محفوظ کریں', 'Save changes':'تبدیلیاں محفوظ کریں', 'Open orders':'کھلے آرڈرز', 'No open orders.':'کوئی کھلا آرڈر نہیں۔',
+  'In progress':'جاری', 'No delivery yet':'ابھی ڈیلیوری نہیں ہوئی', 'Within tolerance':'گنجائش کے اندر', 'Completed':'مکمل', 'Revoked':'منسوخ', 'Delivered':'ڈیلیور شدہ',
+  'Avg rate':'اوسط ریٹ', 'Value':'مالیت', 'Batches':'اقساط', 'Last':'آخری', 'Share image':'تصویر شیئر کریں', 'Mark complete':'مکمل قرار دیں', 'Reopen':'دوبارہ کھولیں',
+  'Share completion':'تکمیل شیئر کریں', 'Completion PDF':'تکمیل کی PDF', 'Undo revoke':'منسوخی واپس لیں', 'Make replacement':'متبادل آرڈر بنائیں', 'Link existing':'موجودہ آرڈر سے جوڑیں',
+  'Revoke':'منسوخ کریں', 'Revoke order':'آرڈر منسوخ کریں', 'Link':'جوڑیں', 'Completion':'تکمیل', 'Completion date':'تکمیل کی تاریخ', 'Date of revocation':'منسوخی کی تاریخ',
+  'Terms agreed by both parties':'دونوں فریقوں کی طے کردہ شرائط', 'Make a new order now (opens a form with these details)':'ابھی نیا آرڈر بنائیں (ان تفصیلات کے ساتھ فارم کھلے گا)',
+  'Client and quality are locked because deliveries are linked to this order.':'اس آرڈر سے ڈیلیوریاں جڑی ہیں، اس لیے کلائنٹ اور کوالٹی مقفل ہیں۔',
+  'Edit order':'آرڈر میں ترمیم', 'Order (optional)':'آرڈر (اختیاری)', 'No order':'کوئی آرڈر نہیں',
+  // messages (toasts) and pop-up questions
+  'Select the client and the quality first.':'پہلے کلائنٹ اور کوالٹی منتخب کریں۔', 'Enter the ordered meters and the agreed rate first.':'پہلے آرڈر کردہ میٹر اور طے شدہ ریٹ درج کریں۔',
+  'A revoked order cannot be edited. Undo the revoke first.':'منسوخ شدہ آرڈر میں ترمیم نہیں ہو سکتی۔ پہلے منسوخی واپس لیں۔', 'That order cannot be linked.':'اس آرڈر کو جوڑا نہیں جا سکتا۔',
+  'Pick the replacement order first.':'پہلے متبادل آرڈر منتخب کریں۔', 'No open order of this client to link. Use Make replacement.':'اس کلائنٹ کا کوئی کھلا آرڈر جوڑنے کے لیے نہیں ہے۔ \u201Cمتبادل آرڈر بنائیں\u201D استعمال کریں۔',
+  'This order has deliveries linked to it. Mark it complete instead.':'اس آرڈر سے ڈیلیوریاں جڑی ہیں۔ اس کے بجائے اسے مکمل قرار دیں۔', 'Preparing the statement…':'گوشوارہ تیار ہو رہا ہے…',
+  'Ready — tap Share once more to send it.':'تیار ہے — بھیجنے کے لیے ایک بار پھر شیئر دبائیں۔', 'Could not make the image. Tap again.':'تصویر نہیں بن سکی۔ دوبارہ دبائیں۔',
+  'No terms written. Revoke anyway?':'کوئی شرائط نہیں لکھیں۔ پھر بھی منسوخ کریں؟'
+};
+for(const k in I18N_UR_ORD){ if(!Object.prototype.hasOwnProperty.call(I18N_UR, k)) I18N_UR[k] = I18N_UR_ORD[k]; }
+// Orders text that carries a name, number or date. A pattern may give its Urdu as a text with $1, $2... or as a function of the match.
+const I18N_UR_RE_ORD = [
+  [/^Edit order (.+)$/, 'آرڈر $1 میں ترمیم'], [/^Revoke (ORD-.+)$/, 'آرڈر $1 منسوخ کریں'], [/^Link (.+) to an existing order$/, '$1 کو موجودہ آرڈر سے جوڑیں'],
+  [/^New order \(replaces (.+)\)$/, 'نیا آرڈر ($1 کی جگہ)'], [/^Completed and revoked \((\d+)\)$/, 'مکمل اور منسوخ ($1)'],
+  [/^(.+) m already delivered stays on this order at Rs (.+)\/m\.$/, '$1 میٹر جو پہلے ڈیلیور ہو چکے وہ اسی آرڈر پر Rs $2/میٹر کے حساب سے رہیں گے۔'],
+  [/^Open orders of (.+) that are not already a replacement\.$/, '$1 کے وہ کھلے آرڈرز جو پہلے سے کسی کا متبادل نہیں۔'],
+  [/^(ORD-.+) · (.+) · Rs (.+)\/m$/, '$1 · $2 · Rs $3/میٹر'], [/^of (.+) m$/, 'از $1 میٹر'], [/^(.+) m to go$/, '$1 میٹر باقی'], [/^\+(.+) m extra$/, '+$1 میٹر زائد'],
+  [/^Over by (.+) m \((.+)\)$/, '$1 میٹر زائد ($2)'], [/^This week (.+) of (.+) m( \(done\))?$/, m => 'اس ہفتے ' + m[1] + ' از ' + m[2] + ' میٹر' + (m[3] ? ' (مکمل)' : '')],
+  [/^Minimum batch (.+) m$/, 'کم از کم قسط $1 میٹر'], [/^(\d+) batch\(es\) at a different rate than Rs (.+)$/, '$1 قسط(یں) طے شدہ Rs $2 سے مختلف ریٹ پر'],
+  [/^Stock covers (.+) m$/, 'اسٹاک سے $1 میٹر پورے ہوتے ہیں'], [/^(.+) m still to weave$/, '$1 میٹر ابھی بُننا باقی ہے'], [/^Replaces (.+)$/, '$1 کی جگہ'],
+  [/^Revoked (.+?)(, replaced by (.+))?$/, m => 'منسوخ ' + m[1] + (m[3] ? '، متبادل ' + m[3] : '')], [/^Changed (.+?): (.+)$/, 'تبدیلی $1: $2'],
+  [/^(ORD-[^:]+): (.+) m at Rs (.+)$/, '$1: $2 میٹر Rs $3 پر'],
+  [/^Order value Rs (.+)\. Tolerance range (.+) to (.+) m\.$/, 'آرڈر کی مالیت Rs $1۔ گنجائش کی حد $2 سے $3 میٹر۔'],
+  [/^(.+) m at Rs (.+), delivered (.+) m(, (.+) m to go)?( \((revoked|completed)\))?$/, m => m[1] + ' میٹر Rs ' + m[2] + ' پر، ڈیلیور ' + m[3] + ' میٹر' + (m[5] ? '، ' + m[5] + ' میٹر باقی' : '') + (m[7] ? (m[7] === 'revoked' ? ' (منسوخ)' : ' (مکمل)') : '')],
+  [/^(ORD-.+) already has deliveries, so this revoke cannot be undone\.$/, '$1 پر ڈیلیوریاں ہو چکی ہیں، اس لیے یہ منسوخی واپس نہیں ہو سکتی۔'],
+  [/^Undo the revocation of (.*?)\?( The replacement (.+) \(no deliveries\) will be deleted\.)?$/, m => 'آرڈر ' + m[1] + ' کی منسوخی واپس لیں؟' + (m[3] ? ' متبادل آرڈر ' + m[3] + ' (جس پر ڈیلیوری نہیں) حذف ہو جائے گا۔' : '')],
+  [/^Delete order (.+)\?$/, 'آرڈر $1 حذف کریں؟'], [/^This order already has deliveries\. Change (.+)\?$/, 'اس آرڈر پر ڈیلیوریاں ہو چکی ہیں۔ $1 تبدیل کریں؟']
+];
+I18N_UR_RE_ORD.forEach(p => I18N_UR_RE74.push(p));
 const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
 let I18N_LANG = 'en';
 let I18N_TIMER = 0;
@@ -643,7 +685,7 @@ const I18N_NODES = (typeof WeakMap !== 'undefined') ? new WeakMap() : null; // t
 function i18nTranslate(s){
   if(Object.prototype.hasOwnProperty.call(I18N_UR, s)) return I18N_UR[s];
   for(const [p, u] of I18N_UR_PREFIX){ if(s.startsWith(p)) return u + s.slice(p.length); }
-  for(const [re, out] of I18N_UR_RE74){ const m = re.exec(s); if(m) return out.replace(/\$(\d)/g, (_, i)=> m[+i] === undefined ? '' : (I18N_MON74[m[+i]] || m[+i])); }
+  for(const [re, out] of I18N_UR_RE74){ const m = re.exec(s); if(m){ if(typeof out === 'function') return out(m); return out.replace(/\$(\d)/g, (_, i)=> m[+i] === undefined ? '' : (I18N_MON74[m[+i]] || m[+i])); } }
   return null;
 }
 function i18nSkipNode(el){
@@ -751,4 +793,5 @@ function i18nInit(){
   try{ saved = localStorage.getItem(I18N_KEY) === 'ur' ? 'ur' : 'en'; }catch(e){ /* default English */ }
   i18nSetLang(saved);
 }
+if(typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.__i18nConfirm){ const _c = window.confirm.bind(window); window.confirm = m => _c(I18N_LANG === 'ur' ? (i18nTranslate(String(m).replace(/\s+/g, ' ').trim()) || m) : m); window.__i18nConfirm = 1; }
 if(typeof document !== 'undefined' && document.body){ i18nInit(); }
