@@ -1530,6 +1530,34 @@ function orderStats(o, today){
     offRate: rows.filter(r => Number(r.rate) !== Number(o.rate)).length,
     status: o.revoked ? 'revoked' : o.closed ? 'closed' : pct > tol ? 'over' : got > 0 && pct >= -tol ? 'within' : got > 0 ? 'open' : 'new'};
 }
+/* Revoking an order (v3.18.17): both parties cancel the rest of an order on agreed terms. Deliveries already made stay on it. */
+function orderDeliveries(id){ return (DATA.sale || []).filter(s => s.order === id).length; }
+function orderRevoke(id, date, terms){
+  const o = (DATA.orders || []).find(x => x.id === id); if(!o || o.revoked) return null;
+  o.revoked = {date, terms: terms || '', delivered: Math.round(orderStats(o).got), rate: o.rate}; // frozen now: later sale edits must not change the notice
+  o.closed = true; return o;
+}
+// Undo: refused when the replacement made for it already has deliveries; a replacement made with the revoke and still empty goes with it; a linked pre-existing order is only unlinked.
+function orderUndoRevoke(id){
+  const o = (DATA.orders || []).find(x => x.id === id); if(!o || !o.revoked) return {ok: false, reason: 'notRevoked'};
+  const nx = o.revoked.newId ? DATA.orders.find(x => x.id === o.revoked.newId) : null; let removed = '';
+  if(nx && o.revoked.newMade){
+    if(orderDeliveries(nx.id)) return {ok: false, reason: 'replacementHasDeliveries', no: nx.no};
+    DATA.orders = DATA.orders.filter(x => x.id !== nx.id); removed = nx.no || '';
+  } else if(nx) delete nx.replaces;
+  delete o.revoked; o.closed = false; return {ok: true, removed};
+}
+function orderLinkReplacement(oldId, newId){
+  const os = DATA.orders || [], o = os.find(x => x.id === oldId), n = os.find(x => x.id === newId);
+  if(!o || !o.revoked || o.revoked.newId) return {ok: false, reason: 'notLinkable'};
+  if(!n || n.id === o.id || n.revoked || n.closed || n.replaces || n.client !== o.client) return {ok: false, reason: 'badTarget'};
+  o.revoked.newId = n.id; o.revoked.newMade = false; n.replaces = o.id; return {ok: true};
+}
+// What an edit changes, as short lines for the order's history.
+function orderChanges(o, rec){
+  const f = [['qty', 'Meters', v => fmtNum(v)], ['rate', 'Rate Rs', v => v], ['tolerance', 'Tolerance %', v => v === '' || v === undefined ? 'default' : v], ['minBatch', 'Minimum batch', v => v || 'none'], ['weekly', 'Per week', v => v || 'none'], ['date', 'Date', v => v], ['client', 'Client', v => v], ['quality', 'Quality', v => v], ['width', 'Width', v => v]];
+  return f.filter(([k]) => (k !== 'width' || (o.width !== undefined && o.width !== '')) && rec[k] !== undefined && String(rec[k] === undefined ? '' : rec[k]) !== String(o[k] === undefined ? '' : o[k])).map(([k, l, fm]) => l + ' ' + fm(o[k]) + ' to ' + fm(rec[k]));
+}
 function orderSaleWarn(rec){
   const o = (DATA.orders || []).find(x => x.id === rec.order); if(!o) return '';
   const w = []; if(o.revoked) w.push('This order was revoked.'); else if(o.closed) w.push('This order is already marked complete.');
