@@ -1339,6 +1339,7 @@ function cloudKeySig(){ return encEnabled() ? 'e2' : 'p'; }
 // owner's phone may seed a section.
 async function cloudPushNow(force){
   if(!cloudSyncEnabled() || CLOUD_PENDING_PULL) return;
+  if(typeof LEDGER_LOAD_FAILED !== 'undefined' && LEDGER_LOAD_FAILED) return; // the stored ledger could not be read: what is on screen is blank, never send it
   if(cloudViewOnly()) return; // a view-only phone never sends anything to the cloud
   // Encrypting the outgoing payload (encSeal) needs the vault unlocked - on a fresh install
   // this can be tapped (via Sync Now, or the debounced schedule below) before the person has

@@ -543,6 +543,7 @@ async function snapList(){ const all = await snapTx('readonly', s=>s.getAll()); 
 async function snapGet(id){ return snapTx('readonly', s=>s.get(id)); }
 async function snapDelete(id){ return snapTx('readwrite', s=>s.delete(id)); }
 async function snapAdd(reason, json){
+  if(typeof LEDGER_LOAD_FAILED !== 'undefined' && LEDGER_LOAD_FAILED) return; // never let a blank screen push real safety copies out
   let counts = null;
   try{ counts = backupCounts(JSON.parse(json)); }catch(e){ /* counts are just a label */ }
   // While encryption is on the copy is stored encrypted too (h = fingerprint, to tell whether the ledger changed since).
