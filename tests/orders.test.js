@@ -42,3 +42,47 @@ describe('order revoke', () => {
     assert.match(app.orderSaleWarn({order: 'o1', qty: 7000}), /revoked/);
   });
 });
+
+describe('order revoke rules', () => {
+  const two = (extra) => app.setData({orders: [
+    Object.assign({id: 'o1', no: 'ORD-001', client: 'Javed', quality: Q, qty: 20000, rate: 100, closed: false}, extra || {}),
+    {id: 'o2', no: 'ORD-002', client: 'Javed', quality: Q, qty: 9000, rate: 105, closed: false}], sale: [sale('a', '2026-09-01', 6000, 'o1')], production: []});
+  test('revoking freezes the delivered meters and the rate, and closes the order', () => {
+    two(); const o = app.orderRevoke('o1', '2026-09-10', 'Rest cancelled');
+    assert.equal(o.closed, true); assert.equal(o.revoked.delivered, 6000); assert.equal(o.revoked.rate, 100);
+    app.getData().sale[0].qty = 1; assert.equal(app.getData().orders[0].revoked.delivered, 6000);
+    assert.equal(app.orderRevoke('o1', '2026-09-11', 'again'), null);
+  });
+  test('undo is refused when the replacement made with the revoke has deliveries, else it removes the empty replacement', () => {
+    two(); app.orderRevoke('o1', '2026-09-10', ''); const d = app.getData(); d.orders[0].revoked.newId = 'o2'; d.orders[0].revoked.newMade = true; d.orders[1].replaces = 'o1';
+    d.sale.push(sale('b', '2026-09-12', 100, 'o2'));
+    let r = app.orderUndoRevoke('o1'); assert.equal(r.ok, false); assert.equal(r.reason, 'replacementHasDeliveries'); assert.ok(d.orders[0].revoked);
+    d.sale.pop(); r = app.orderUndoRevoke('o1'); assert.equal(r.ok, true); assert.equal(r.removed, 'ORD-002');
+    assert.equal(app.getData().orders.length, 1); assert.equal(app.getData().orders[0].closed, false); assert.equal(app.getData().orders[0].revoked, undefined);
+  });
+  test('undo of a linked pre-existing order only unlinks it', () => {
+    two(); app.orderRevoke('o1', '2026-09-10', ''); assert.equal(app.orderLinkReplacement('o1', 'o2').ok, true);
+    assert.equal(app.orderUndoRevoke('o1').ok, true); const d = app.getData(); assert.equal(d.orders.length, 2); assert.equal(d.orders[1].replaces, undefined);
+  });
+  test('linking later: only an open, same-client, not-yet-replacement order, and only once', () => {
+    two(); assert.equal(app.orderLinkReplacement('o1', 'o2').reason, 'notLinkable');
+    app.orderRevoke('o1', '2026-09-10', ''); const d = app.getData();
+    d.orders[1].client = 'Other'; assert.equal(app.orderLinkReplacement('o1', 'o2').reason, 'badTarget'); d.orders[1].client = 'Javed';
+    assert.equal(app.orderLinkReplacement('o1', 'o1').reason, 'badTarget');
+    assert.equal(app.orderLinkReplacement('o1', 'o2').ok, true); assert.equal(d.orders[0].revoked.newId, 'o2'); assert.equal(d.orders[1].replaces, 'o1');
+    assert.equal(app.orderLinkReplacement('o1', 'o2').reason, 'notLinkable');
+  });
+  test('orderChanges lists what an edit changes and nothing else', () => {
+    const o = {qty: 20000, rate: 100, tolerance: '', minBatch: '', weekly: '', date: '2026-09-01', client: 'Javed', quality: Q};
+    assert.deepEqual(app.orderChanges(o, Object.assign({}, o)), []);
+    assert.deepEqual(app.orderChanges(o, Object.assign({}, o, {rate: 105, minBatch: 6000})), ['Rate Rs 100 to 105', 'Minimum batch none to 6000']);
+  });
+});
+
+describe('order width history', () => {
+  test('an old order without a saved width does not log a width change', () => {
+    const o = {qty: 20000, rate: 100, tolerance: '', minBatch: '', weekly: '', date: 'd', client: 'J', quality: 'Q'};
+    assert.deepEqual(app.orderChanges(o, Object.assign({}, o, {width: 63})), []);
+    assert.deepEqual(app.orderChanges(Object.assign({}, o, {width: 63}), Object.assign({}, o, {width: 58})), ['Width 63 to 58']);
+  });
+});
