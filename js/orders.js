@@ -38,18 +38,18 @@ function orderCompletionHtml(o, lang, pg){
   pg = pg || {};
   const L = ODT[lang] || ODT.en, C = ODC[lang] || ODC.en, biz = DATA.businessInfo || {}, name = biz.name || 'Ibrahim Weaving', k = orderCompletion(o), m = ' ' + L.m;
   const font = lang === 'ur' ? "'Noto Nastaliq Urdu','Noto Naskh Arabic',serif" : "Roboto,'Segoe UI',Arial,sans-serif", rs = x => fmtNum(Math.round(x)) + ' ' + L.rs;
-  const result = k.within ? C.within(k.tol) : k.diff > 0 ? C.over(fmtNum(Math.round(k.diff))) : C.short(fmtNum(Math.round(-k.diff)));
-  const all = k.rows.map(r => { const off = Number(r.rate) !== Number(o.rate); return `<tr><td dir="ltr">${fmtDate(r.date)}</td><td dir="ltr">${escHtml(r.invoice || '-')}</td><td class="n">${fmtNum(r.qty)}</td><td class="n">${r.rate}${off ? ' *' : ''}</td><td class="n">${fmtNum(Math.round(r.amount))}</td></tr>`; });
+  const result = k.within ? C.within(k.tol) : k.diff > 0 ? C.over(fmtQtyMtr(k.diff)) : C.short(fmtQtyMtr(-k.diff));
+  const all = k.rows.map(r => { const off = Number(r.rate) !== Number(o.rate); return `<tr><td dir="ltr">${fmtDate(r.date)}</td><td dir="ltr">${escHtml(r.invoice || '-')}</td><td class="n">${fmtQtyMtr(r.qty)}</td><td class="n">${r.rate}${off ? ' *' : ''}</td><td class="n">${fmtNum(Math.round(r.amount))}</td></tr>`; });
   const from = pg.from || 0, to = pg.to === undefined ? all.length : pg.to, first = from === 0, last = to >= all.length;
   const bal = Math.round(k.balance), balTxt = bal > 0 ? C.due : bal < 0 ? C.cr : C.nb;
   const stamp = `<div class="cpb"><div class="in"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#2F7A58"/><path d="M6.5 12.5l3.8 3.8 7.2-8" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><b>${C.done}</b><em dir="ltr">${fmtDate(k.completedOn)}</em></div></div>`;
   const head = first ? `${agrTop(L, name, biz)}
 <h1>${C.title}</h1><div class="mr"><span>${L.no}</span><b>${escHtml(o.no || '')}</b></div><div class="mr"><span>${L.date}</span><b dir="ltr">${fmtDate(o.date)}</b></div><div class="mr"><span>${C.cd}</span><b dir="ltr">${fmtDate(k.completedOn)}</b></div>
 <div class="pt" style="margin-top:8px"><div><small>${L.seller}</small><b>${escHtml(name)}</b></div><div><small>${L.buyer}</small><b>${escHtml(o.client)}</b></div></div>
-<div class="o"><div class="g"><div><small>${C.ord}</small><b>${fmtNum(o.qty)}${m}</b></div><div><small>${C.del}</small><b>${fmtNum(Math.round(k.got))}${m}</b></div><div><small>${C.diff}</small><b dir="ltr">${k.diff > 0 ? '+' : ''}${fmtNum(Math.round(k.diff))}${m}</b></div></div><table><tr><td>${L.ql}</td><td><span dir="ltr">${escHtml(o.quality)}</span></td></tr><tr><td>${C.st}</td><td>${result}</td></tr><tr><td>${C.ar}</td><td>${o.rate} ${L.pm}</td></tr><tr><td>${C.vr}</td><td>${k.got ? Math.round(k.avg * 10) / 10 : '-'} ${L.pm}</td></tr></table>${stamp}</div>
+<div class="o"><div class="g"><div><small>${C.ord}</small><b>${fmtNum(o.qty)}${m}</b></div><div><small>${C.del}</small><b>${fmtQtyMtr(k.got)}${m}</b></div><div><small>${C.diff}</small><b dir="ltr">${k.diff > 0 ? '+' : ''}${fmtQtyMtr(k.diff)}${m}</b></div></div><table><tr><td>${L.ql}</td><td><span dir="ltr">${escHtml(o.quality)}</span></td></tr><tr><td>${C.st}</td><td>${result}</td></tr><tr><td>${C.ar}</td><td>${o.rate} ${L.pm}</td></tr><tr><td>${C.vr}</td><td>${k.got ? Math.round(k.avg * 10) / 10 : '-'} ${L.pm}</td></tr></table>${stamp}</div>
 <h2>${C.dl}</h2>` : `${receiptWatermarkDiv}
 <h1>${C.title} ${C.cont}</h1><div class="mr"><span>${L.no}</span><b>${escHtml(o.no || '')}</b></div><div class="mr"><span>${L.buyer}</span><b>${escHtml(o.client)}</b></div>`;
-  const tfoot = last ? `<tfoot><tr><td colspan="2">${C.tot}</td><td class="n">${fmtNum(Math.round(k.got))}</td><td></td><td class="n">${fmtNum(Math.round(k.val))}</td></tr></tfoot>` : '';
+  const tfoot = last ? `<tfoot><tr><td colspan="2">${C.tot}</td><td class="n">${fmtQtyMtr(k.got)}</td><td></td><td class="n">${fmtNum(Math.round(k.val))}</td></tr></tfoot>` : '';
   const tail = last ? `<div class="p" style="font-size:11.5px;color:#626B72;margin-top:4px">${C.bn}${k.offRate ? ' ' + C.od : ''}</div>
 <div class="bal"><small>${C.bal} - ${C.asof} <span dir="ltr">${fmtDate(todayStr())}</span></small><b>${bal === 0 ? C.nb : rs(Math.abs(bal))}</b><small>${bal === 0 ? '' : balTxt + '. '}${C.bnote}</small></div>
 <div class="ty">${C.ty(escHtml(o.no || ''))}</div>` : '';
