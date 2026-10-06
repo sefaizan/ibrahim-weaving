@@ -1558,6 +1558,14 @@ function orderChanges(o, rec){
   const f = [['qty', 'Meters', v => fmtNum(v)], ['rate', 'Rate Rs', v => v], ['tolerance', 'Tolerance %', v => v === '' || v === undefined ? 'default' : v], ['minBatch', 'Minimum batch', v => v || 'none'], ['weekly', 'Per week', v => v || 'none'], ['date', 'Date', v => v], ['client', 'Client', v => v], ['quality', 'Quality', v => v], ['width', 'Width', v => v]];
   return f.filter(([k]) => (k !== 'width' || (o.width !== undefined && o.width !== '')) && rec[k] !== undefined && String(rec[k] === undefined ? '' : rec[k]) !== String(o[k] === undefined ? '' : o[k])).map(([k, l, fm]) => l + ' ' + fm(o[k]) + ' to ' + fm(rec[k]));
 }
+// Everything the completion statement of an order shows (v3.18.21). The balance is the client's whole account (all orders), as of today.
+function orderCompletion(o, today){
+  const st = orderStats(o, today), live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned';
+  const rows = (DATA.sale || []).filter(s => s.order === o.id && live(s)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const within = Math.abs(st.pct) <= st.tol;
+  return {rows, got: st.got, val: st.val, avg: st.avg, qty: st.qty, diff: st.diff, pct: st.pct, tol: st.tol, within, offRate: st.offRate,
+    completedOn: o.completedOn || st.last || o.date || '', balance: clientReceivableNow(o.client)};
+}
 function orderSaleWarn(rec){
   const o = (DATA.orders || []).find(x => x.id === rec.order); if(!o) return '';
   const w = []; if(o.revoked) w.push('This order was revoked.'); else if(o.closed) w.push('This order is already marked complete.');
