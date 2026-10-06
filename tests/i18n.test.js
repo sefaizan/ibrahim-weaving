@@ -84,3 +84,20 @@ describe('swapping one piece of text', () => {
     assert.equal(n.nodeValue, 'Riaz');
   });
 });
+
+describe('Orders page in Urdu (v3.18.27)', () => {
+  const ur = s => app.i18nTranslate(s);
+  test('the order form, cards, buttons and messages have Urdu', () => {
+    for(const s of ['Agreement', 'Parties', 'Cloth and price', 'Delivery terms', 'Save order', 'Open orders', 'In progress', 'Mark complete', 'Share image', 'Undo revoke', 'Make replacement', 'Select the client and the quality first.', 'No terms written. Revoke anyway?']) assert.ok(ur(s), s);
+  });
+  test('text that carries numbers or names is translated and keeps them', () => {
+    assert.equal(ur('8,000 m to go'), '8,000 میٹر باقی');
+    assert.equal(ur('of 20,000 m'), 'از 20,000 میٹر');
+    assert.equal(ur('ORD-001 · Q1 · Rs 100/m'), 'ORD-001 · Q1 · Rs 100/میٹر');
+    assert.equal(ur('Over by 10,000 m (+50.0%)'), '10,000 میٹر زائد (+50.0%)');
+    assert.equal(ur('This week 0 of 5,000 m (done)'), 'اس ہفتے 0 از 5,000 میٹر (مکمل)');
+    assert.equal(ur('Revoked 5 Oct 2026, replaced by ORD-002'), 'منسوخ 5 Oct 2026، متبادل ORD-002');
+    assert.equal(ur('Delete order ORD-003?'), 'آرڈر ORD-003 حذف کریں؟');
+    assert.ok(ur('20,000 m at Rs 100, delivered 12,000 m, 8,000 m to go (completed)').includes('(مکمل)'));
+  });
+});
