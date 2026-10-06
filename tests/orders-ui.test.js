@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const root = path.join(__dirname, '..', 'js');
 function load(data){
-  const ctx = {DATA: data, BIZ_LOGO_PNG: 'data:x', fmtNum: x => String(x), fmtDate: x => x, fmtRs: x => 'Rs ' + x, escHtml: x => String(x), todayStr: () => '2026-10-07', costCfg: () => ({widthByReed: {}, width: 63}),
+  const ctx = {DATA: data, BIZ_LOGO_PNG: 'data:x', receiptWatermarkDiv: '<div class="receipt-watermark"></div>', fmtNum: x => String(x), fmtDate: x => x, fmtRs: x => 'Rs ' + x, escHtml: x => String(x), todayStr: () => '2026-10-07', costCfg: () => ({widthByReed: {}, width: 63}),
     field: (l, id, t, ex) => `<input id="${id}" ${ex || ''}>`, textareaField: (l, id) => `<textarea id="${id}"></textarea>`,
     clientSelectField: (l, id, ex) => `<select id="${id}" ${ex || ''}><option value="">—</option><option value="Javed">Javed</option></select>`,
     selectField: (l, id, a, ex) => `<select id="${id}" ${ex || ''}><option value="">—</option>${(a || []).map(x => `<option value="${x.name}">${x.name}</option>`).join('')}</select>`,
@@ -97,5 +97,20 @@ describe('completion statement', () => {
   test('only completed (not revoked) cards offer the completion buttons', () => {
     assert.ok(mk([done]).panel().includes('data-a="cimg"')); assert.ok(!mk([base]).panel().includes('data-a="cimg"'));
     assert.ok(!mk([Object.assign({}, done, {revoked: {date: 'd', delivered: 0, rate: 100}})]).panel().includes('data-a="cimg"'));
+  });
+});
+
+describe('statement watermark and completed badge (v3.18.22)', () => {
+  const done = Object.assign({}, base, {closed: true, completedOn: '2026-10-05'});
+  test('the agreement and the completion statement both carry the receipt watermark', () => {
+    const c = mk([done]);
+    for(const fn of ['orderAgreementHtml', 'orderCompletionHtml']){
+      const h = vm.runInContext(fn + '(DATA.orders[0], "en")', c);
+      assert.ok(h.includes('class="receipt-watermark"'), fn);
+    }
+  });
+  test('the completion statement shows a large Completed banner with a tick', () => {
+    const h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', mk([done]));
+    assert.match(h, /<div class="cpb"><svg[\s\S]*<span>Completed<\/span><\/div>/);
   });
 });
