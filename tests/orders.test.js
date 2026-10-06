@@ -86,3 +86,17 @@ describe('order width history', () => {
     assert.deepEqual(app.orderChanges(Object.assign({}, o, {width: 63}), Object.assign({}, o, {width: 58})), ['Width 63 to 58']);
   });
 });
+
+describe('order completion figures', () => {
+  test('completion date falls back to the last delivery, then the order date; totals and tolerance are worked out', () => {
+    seed([sale('a', '2026-09-01', 12000, 'o1'), sale('b', '2026-09-08', 8300, 'o1', {rate: 102, amount: 8300 * 102})], {date: '2026-08-30'});
+    let k = app.orderCompletion(app.getData().orders[0]); assert.equal(k.completedOn, '2026-09-08'); assert.equal(k.got, 20300); assert.equal(k.within, true); assert.equal(k.offRate, 1); assert.equal(k.rows.length, 2);
+    seed([], {date: '2026-08-30'}); assert.equal(app.orderCompletion(app.getData().orders[0]).completedOn, '2026-08-30');
+    seed([], {date: '2026-08-30', completedOn: '2026-10-01'}); assert.equal(app.orderCompletion(app.getData().orders[0]).completedOn, '2026-10-01');
+    seed([sale('a', '2026-09-01', 15000, 'o1')]); k = app.orderCompletion(app.getData().orders[0]); assert.equal(k.within, false); assert.equal(k.diff, -5000);
+  });
+  test('the balance is the client account (sales less money received), not just this order', () => {
+    seed([sale('a', '2026-09-01', 1000, 'o1'), sale('b', '2026-09-02', 500, '')]); app.getData().recovery = [{id: 'r1', client: 'Javed', date: '2026-09-03', cash: 30000}];
+    const k = app.orderCompletion(app.getData().orders[0]); assert.equal(typeof k.balance, 'number');
+  });
+});

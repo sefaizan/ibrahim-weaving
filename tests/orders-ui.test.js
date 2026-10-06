@@ -13,7 +13,7 @@ function load(data){
   vm.createContext(ctx); vm.runInContext(fs.readFileSync(path.join(root, 'calc.js'), 'utf8') + fs.readFileSync(path.join(root, 'orders.js'), 'utf8') + ';this.panel = ordersPanel; this.agr = orderAgreementHtml;', ctx); return ctx;
 }
 const base = {id: 'o1', no: 'ORD-001', client: 'Javed', quality: 'Q1', qty: 20000, rate: 100, date: '2026-10-01', closed: false, witBuyer: 'Ali', witSeller: 'Umar'};
-const mk = (orders, sale) => load({orders, sale: sale || [], qualities: [{name: 'Q1'}], clients: [{name: 'Javed'}], production: [], businessInfo: {name: 'IW', address: 'Faisalabad', phone: '0300'}});
+const mk = (orders, sale) => load({orders, sale: sale || [], qualities: [{name: 'Q1'}], clients: [{name: 'Javed'}], production: [], recovery: [], businessInfo: {name: 'IW', address: 'Faisalabad', phone: '0300'}});
 describe('orders page', () => {
   test('the form follows the agreement and has the two name boxes; dropdowns start on the dash', () => {
     const h = mk([]).panel();
@@ -79,5 +79,23 @@ describe('sale form order dropdown', () => {
   });
   test('the order of the sale being edited stays listed even when completed', () => {
     assert.equal(ids(c(), 'Ali', 'Q2', 'd'), 'd,b');
+  });
+});
+
+describe('completion statement', () => {
+  const done = Object.assign({}, base, {closed: true, completedOn: '2026-10-06'});
+  const sales = [{id: 's1', order: 'o1', client: 'Javed', date: '2026-10-02', invoice: 'INV-1', qty: 12000, rate: 100, amount: 1200000}, {id: 's2', order: 'o1', client: 'Javed', date: '2026-10-05', invoice: 'INV-2', qty: 8300, rate: 102, amount: 846600}];
+  test('shows dates, deliveries, totals, result and the account balance; has no witness or signature block', () => {
+    const c = mk([done], sales), h = vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', c);
+    for(const t of ['Order Completion Statement', 'Completed', 'Completion date', '2026-10-06', 'INV-1', 'INV-2', '20300', 'Within the agreed tolerance', '102 *', 'Account balance (all orders)', 'not only this order']) assert.ok(h.includes(t), t);
+    assert.ok(h.includes('2046600'), 'balance = all sales less recoveries'); assert.ok(!h.includes('In the presence of') && !h.includes('Ali') && !h.includes('Umar'));
+  });
+  test('Urdu version renders, and a short or over delivery is described as such', () => {
+    const c = mk([done], [sales[0]]); assert.ok(vm.runInContext('orderCompletionHtml(DATA.orders[0], "ur")', c).includes('آرڈر تکمیل کا گوشوارہ'));
+    assert.ok(vm.runInContext('orderCompletionHtml(DATA.orders[0], "en")', c).includes('Short of the order by 8000 m'));
+  });
+  test('only completed (not revoked) cards offer the completion buttons', () => {
+    assert.ok(mk([done]).panel().includes('data-a="cimg"')); assert.ok(!mk([base]).panel().includes('data-a="cimg"'));
+    assert.ok(!mk([Object.assign({}, done, {revoked: {date: 'd', delivered: 0, rate: 100}})]).panel().includes('data-a="cimg"'));
   });
 });
