@@ -34,3 +34,11 @@ describe('order progress', () => {
     seed([], {closed: true}); assert.match(app.orderSaleWarn({order: 'o1', qty: 7000}), /already marked complete/);
   });
 });
+
+describe('order revoke', () => {
+  test('a revoked order reports revoked, keeps its deliveries, and warns on new sales', () => {
+    seed([sale('a', '2026-09-01', 6000, 'o1')], {closed: true, revoked: {date: '2026-09-10', terms: 'Rest cancelled'}});
+    const s = app.orderStats(app.getData().orders[0]); assert.equal(s.status, 'revoked'); assert.equal(s.got, 6000);
+    assert.match(app.orderSaleWarn({order: 'o1', qty: 7000}), /revoked/);
+  });
+});
