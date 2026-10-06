@@ -1528,11 +1528,11 @@ function orderStats(o, today){
   return {got, val, qty, avg: got ? val / got : 0, diff, pct, tol, pending, stock, toWeave: Math.max(0, pending - stock), batches: rows.length,
     last: rows.reduce((m, r) => r.date > m ? r.date : m, ''), weekGot: sum(rows.filter(r => r.date >= mon), r => r.qty),
     offRate: rows.filter(r => Number(r.rate) !== Number(o.rate)).length,
-    status: o.closed ? 'closed' : pct > tol ? 'over' : got > 0 && pct >= -tol ? 'within' : got > 0 ? 'open' : 'new'};
+    status: o.revoked ? 'revoked' : o.closed ? 'closed' : pct > tol ? 'over' : got > 0 && pct >= -tol ? 'within' : got > 0 ? 'open' : 'new'};
 }
 function orderSaleWarn(rec){
   const o = (DATA.orders || []).find(x => x.id === rec.order); if(!o) return '';
-  const w = []; if(o.closed) w.push('This order is already marked complete.');
+  const w = []; if(o.revoked) w.push('This order was revoked.'); else if(o.closed) w.push('This order is already marked complete.');
   if(Number(o.minBatch) > 0 && Number(rec.qty) < Number(o.minBatch)) w.push('This batch is below the order minimum of ' + o.minBatch + ' m.');
   return w.join(' ');
 }
