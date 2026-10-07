@@ -1486,9 +1486,9 @@ function costSaleRate(month, quality){
 }
 // A whole month (v3.18.30): yarn from the use rules at the lot rates in force; wages = what that month's production earned
 // (computeWages, paid or not); electricity = the whole bill you type; every other expense recorded in the month. All of it is
-// spread over the month's meters. Salary/Wages expense entries are skipped when the Wages page already holds staff salaries.
+// spread over the month's meters; the current month only counts wages up to today. Salary/Wages expense entries are skipped when the Wages page already holds staff salaries.
 function costMonth(month, bill){
-  const cfg = costCfg(), from = month + '-01', to = month + '-31', by = {};
+  const cfg = costCfg(), today = todayStr(), partial = month === today.slice(0, 7), from = month + '-01', to = partial ? today : month + '-31', by = {};
   let M = 0, linked = 0;
   (DATA.production || []).filter(r => r.date.slice(0, 7) === month).forEach(r => {
     const q = (DATA.qualities || []).find(x => x.name === r.quality); if(!q) return;
@@ -1501,7 +1501,7 @@ function costMonth(month, bill){
     o.warp += r.qty * costWarpLbs(q.kangi, width, count, cfg) * wr;
     o.weft += r.qty * costWeftLbs(q.picks, width, cfg) * fr;
   });
-  const est = !(bill > 0), power = est ? cfg.elecPerM * M : Number(bill);
+  const est = partial || !(bill > 0), power = est ? cfg.elecPerM * M : Number(bill);   // a running month has no bill yet: never spread a bill over part of a month
   const wr = M ? computeWages(from, to) : [], wages = wr.reduce((s, x) => s + x.totalWages, 0), staff = wr.reduce((s, x) => s + x.salary, 0);
   const inMonth = (DATA.expense || []).filter(e => e.date.slice(0, 7) === month && e.category !== 'Electricity');
   const skip = e => e.category === 'Salary/Wages' && staff > 0, exp = inMonth.filter(e => !skip(e)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -1514,7 +1514,7 @@ function costMonth(month, bill){
   });
   const sum = f => rows.reduce((s, r) => s + f(r), 0), tot = {};
   ['warp', 'weft', 'wage', 'power', 'other'].forEach(k => { tot[k] = M ? sum(r => r.lines[k] * r.m) / M : 0; });
-  return {month, M, linked, est, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), totals: {wages, power, exp, skipped}};
+  return {month, M, linked, est, partial, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), totals: {wages, power, exp, skipped}};
 }
 // Overheads per meter for a quote: the latest month that has a saved electricity bill (else last month, bill estimated).
 function costRefOverhead(){
