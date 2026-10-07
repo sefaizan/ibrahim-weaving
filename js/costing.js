@@ -34,11 +34,11 @@ function cmMonthOut(){
   if(!r.M) return `<div class="card"><p class="note">No production in ${mon}.</p></div>`;
   const rows = r.rows.map(x => `<tr><td>${escHtml(x.quality.split(' (')[0])}<small>${fmtNum(Math.round(x.m))} m</small></td><td>${cmR1(x.cost)}</td><td>${cmR1(x.sale)}</td><td class="${cmTone(x.margin)}">${cmR1(x.margin)}</td><td>${fmtRsShort(x.profit)}</td></tr>`).join('');
   const unl = Math.round((1 - r.linked / r.M) * 100), t = r.totals;
-  return `<div class="card cm-res"><div class="cm-hero ${cmTone(r.sale - r.cost)}"><small>Estimated profit${r.est ? ' (bill not entered)' : ''}</small><strong>${fmtRs(r.profit)}</strong>
+  return `<div class="card cm-res"><div class="cm-hero ${cmTone(r.sale - r.cost)}"><small>Estimated profit${r.partial ? ' (month in progress)' : r.est ? ' (bill not entered)' : ''}</small><strong>${fmtRs(r.profit)}</strong>
     <span>Rs ${cmR1(r.sale - r.cost)} per meter on ${fmtNum(Math.round(r.M))} m. Sold at Rs ${cmR1(r.sale)}, cost Rs ${cmR1(r.cost)}</span></div>
     ${cmMeter(r.cost, r.sale)}${cmBar(r.lines, r.cost)}
     <div class="cm-scroll"><table class="cm-tbl"><thead><tr><th>Quality</th><th>Cost</th><th>Sale</th><th>Margin</th><th>Profit</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="note">Wages ${fmtRs(t.wages)}, electricity ${fmtRs(t.power)}${r.est ? ' (estimate)' : ''}, other expenses ${fmtRs(t.exp)}. Wages and overheads are shared equally per meter.${t.skipped ? ' Salary/Wages expenses of ' + fmtRs(t.skipped) + ' were left out because the Wages page holds staff salaries.' : ''}
+    <p class="note">${r.partial ? '<b class="loss">This month is still running, so this is only its first days.</b> Electricity is an estimate: bills arrive the month after, so pick last month to use a bill. ' : ''}Wages ${fmtRs(t.wages)}, electricity ${fmtRs(t.power)}${r.est ? ' (estimate)' : ''}, other expenses ${fmtRs(t.exp)}. Wages and overheads are shared equally per meter.${t.skipped ? ' Salary/Wages expenses of ' + fmtRs(t.skipped) + ' were left out because the Wages page holds staff salaries.' : ''}
     ${unl > 0 ? ' ' + unl + '% of meters have no beam link, so warp used the lot being woven that day.' : ''}</p></div>`;
 }
 function cmCss(){
@@ -67,6 +67,7 @@ function wireCosting(){
   document.getElementById('cm_mon').onchange = () => { loadBill(); draw(); }; document.getElementById('cm_bill').oninput = draw;
   document.getElementById('cm_savebill').onclick = e => persist(s => { s.bills = Object.assign({}, s.bills || {}); s.bills[document.getElementById('cm_mon').value] = cmV('cm_bill'); }, e.target);
   document.getElementById('cm_saverules').onclick = e => persist(s => { s.warpK = cmV('cm_wk'); s.weftK = cmV('cm_fk'); }, e.target);
+  const sel = document.getElementById('cm_mon'); if(sel.options.length > 1) sel.selectedIndex = 1;   // last full month first: that is the one a bill belongs to
   loadBill(); draw();
 }
 // ---- Grey Cloth Rate page: the live card under the Result (called from renderRateCalcResult) ----
