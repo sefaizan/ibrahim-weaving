@@ -48,3 +48,19 @@ describe('cost per meter and the month estimate', () => {
     seed(); const r = app.costMonth('2026-09'); assert.equal(r.est, true); closeTo(r.lines.power, 4.3, 1e-9);
   });
 });
+
+describe('month profit from the ledger (v3.18.30)', () => {
+  const withExp = () => { seed(); const d = app.getData(); d.employees = d.employees || []; d.expense = [
+    {id: 'e1', date: '2026-09-05', category: 'Rent', amount: 58500}, {id: 'e2', date: '2026-09-11', category: 'Electricity', amount: 99999},
+    {id: 'e3', date: '2026-09-12', category: 'Other', amount: 41500}, {id: 'e4', date: '2026-10-02', category: 'Other', amount: 7777}]; return d; };
+  test('electricity is the whole bill you type; every other expense of the month is added, Electricity entries and other months are not', () => {
+    withExp(); const r = app.costMonth('2026-09', 100000);
+    closeTo(r.totals.power, 100000, 1e-9); closeTo(r.totals.exp, 100000, 1e-9); closeTo(r.lines.power, 50, 1e-9); closeTo(r.lines.other, 50, 1e-9);
+  });
+  test('a live quote uses the real use rules and the overheads of the latest month with a saved bill', () => {
+    const d = withExp(); d.costSettings = {bills: {'2026-09': 100000}};
+    const q = app.costQuote({thread: 62, width: 64, warpCount: 36, picks: 44, warpRate: 275, weftRate: 342}, 100);
+    closeTo(q.lines.warp, 45.3, 0.1); closeTo(q.lines.weft, 35.1, 0.1); assert.equal(q.ref.month, '2026-09'); closeTo(q.lines.power + q.lines.other, 100, 1e-9);
+    closeTo(q.margin, 100 - q.cost, 1e-9);
+  });
+});
