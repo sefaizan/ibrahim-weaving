@@ -552,7 +552,8 @@ function renderRateCalcResult(){
         <button class="primary" id="saveRateCalc">Save This Calculation</button>
         <button class="ghost" id="cancelRateCalc" style="display:none">Cancel Edit</button>
       </div>
-    </div>`;
+    </div><div id="rcpHost"></div>`;
+  rcpRender(inp, r);
 }
 
 function checkpointsPanel(){

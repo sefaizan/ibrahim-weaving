@@ -41,7 +41,7 @@ const TABS = [
   {id:'loans', label:'Loans (Employee)', icon:'account_balance_wallet', group:'Money'},
   {id:'ownerloans', label:'Owner Loans (to Company)', icon:'savings', group:'Money'}, // owner only - see PERM_TAB_SECTIONS (view-only.js)
   {id:'ratecalc', label:'Grey Cloth Rate', icon:'calculate', group:'Money'},
-  {id:'costing', label:'Cost & Margin', icon:'assessment', group:'Money'},
+  {id:'costing', label:'Month Profit', icon:'assessment', group:'Money'},
   {id:'family', label:'Family Expense', icon:'home', group:'Family'},
   {id:'personal', label:'Personal Expense', icon:'receipt_long', group:'Family'},
   {id:'personalloans', label:'Personal Loans (Given)', icon:'account_balance_wallet', group:'Family'},

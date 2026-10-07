@@ -1484,9 +1484,11 @@ function costSaleRate(month, quality){
   const q = rows.reduce((s, x) => s + x.qty, 0);
   return q ? rows.reduce((s, x) => s + x.amount, 0) / q : 0;
 }
-// A whole month: production by quality x the rules x the yarn rate actually in use that day.
+// A whole month (v3.18.30): yarn from the use rules at the lot rates in force; wages = what that month's production earned
+// (computeWages, paid or not); electricity = the whole bill you type; every other expense recorded in the month. All of it is
+// spread over the month's meters. Salary/Wages expense entries are skipped when the Wages page already holds staff salaries.
 function costMonth(month, bill){
-  const cfg = costCfg(), by = {};
+  const cfg = costCfg(), from = month + '-01', to = month + '-31', by = {};
   let M = 0, linked = 0;
   (DATA.production || []).filter(r => r.date.slice(0, 7) === month).forEach(r => {
     const q = (DATA.qualities || []).find(x => x.name === r.quality); if(!q) return;
@@ -1494,22 +1496,41 @@ function costMonth(month, bill){
     const b = (DATA.warpBeams || []).find(x => x.id === r.beam), p = b && (DATA.warp || []).find(x => x.id === b.purchaseId);
     if(p) linked += r.qty;
     const wr = p ? Number(p.rate) : costLastRate(DATA.warp, r.date, q.warpType), fr = costLastRate(DATA.weft, r.date);
-    const o = by[r.quality] || (by[r.quality] = {quality: r.quality, m: 0, warp: 0, weft: 0, wage: 0});
+    const o = by[r.quality] || (by[r.quality] = {quality: r.quality, m: 0, warp: 0, weft: 0});
     o.m += r.qty; M += r.qty;
     o.warp += r.qty * costWarpLbs(q.kangi, width, count, cfg) * wr;
     o.weft += r.qty * costWeftLbs(q.picks, width, cfg) * fr;
-    o.wage += r.qty * costWageRate(r.quality, r.date);
   });
-  const est = !(bill > 0), power = M ? (est ? cfg.elecPerM : bill / M) : 0, rent = costRent(month, cfg), rentM = M ? rent / M : 0, all = costSaleRate(month, null);
+  const est = !(bill > 0), power = est ? cfg.elecPerM * M : Number(bill);
+  const wr = M ? computeWages(from, to) : [], wages = wr.reduce((s, x) => s + x.totalWages, 0), staff = wr.reduce((s, x) => s + x.salary, 0);
+  const inMonth = (DATA.expense || []).filter(e => e.date.slice(0, 7) === month && e.category !== 'Electricity');
+  const skip = e => e.category === 'Salary/Wages' && staff > 0, exp = inMonth.filter(e => !skip(e)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const skipped = inMonth.filter(skip).reduce((s, e) => s + (Number(e.amount) || 0), 0), all = costSaleRate(month, null);
+  const shared = M ? {wage: wages / M, power: power / M, other: exp / M} : {wage: 0, power: 0, other: 0};
   const rows = Object.keys(by).map(k => {
-    const o = by[k], sale = costSaleRate(month, k) || all;
-    const lines = {warp: o.warp / o.m, weft: o.weft / o.m, wage: o.wage / o.m, power, rent: rentM, other: cfg.otherPerM};
+    const o = by[k], sale = costSaleRate(month, k) || all, lines = Object.assign({warp: o.warp / o.m, weft: o.weft / o.m}, shared);
     const cost = Object.keys(lines).reduce((s, x) => s + lines[x], 0);
     return {quality: k, m: o.m, lines, cost, sale, margin: sale - cost, profit: (sale - cost) * o.m};
   });
   const sum = f => rows.reduce((s, r) => s + f(r), 0), tot = {};
-  ['warp', 'weft', 'wage', 'power', 'rent', 'other'].forEach(k => { tot[k] = M ? sum(r => r.lines[k] * r.m) / M : 0; });
-  return {month, M, linked, est, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), rent, power};
+  ['warp', 'weft', 'wage', 'power', 'other'].forEach(k => { tot[k] = M ? sum(r => r.lines[k] * r.m) / M : 0; });
+  return {month, M, linked, est, rows, lines: tot, cost: M ? sum(r => r.cost * r.m) / M : 0, sale: M ? sum(r => r.sale * r.m) / M : 0, profit: sum(r => r.profit), totals: {wages, power, exp, skipped}};
+}
+// Overheads per meter for a quote: the latest month that has a saved electricity bill (else last month, bill estimated).
+function costRefOverhead(){
+  const bills = costCfg().bills || {}, d = new Date(todayStr().slice(0, 7) + '-01T00:00:00'); d.setMonth(d.getMonth() - 1);
+  const prev = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  for(const m of Object.keys(bills).filter(k => bills[k] > 0).sort().reverse().concat([prev])){
+    const r = costMonth(m, bills[m]); if(r.M) return {month: m, est: !(bills[m] > 0), wage: r.lines.wage, power: r.lines.power, other: r.lines.other};
+  }
+  return {month: prev, est: true, wage: 0, power: 0, other: 0};
+}
+// Live profit at a negotiated rate. inp = the Grey Cloth Rate inputs; yarn from the real use rules, overheads from the reference month.
+function costQuote(inp, agreed){
+  const cfg = costCfg(), ref = costRefOverhead(), wl = costWarpLbs(inp.thread, inp.width, inp.warpCount, cfg), fl = costWeftLbs(inp.picks, inp.width, cfg);
+  const lines = {warp: wl * inp.warpRate, weft: fl * inp.weftRate, wage: ref.wage, power: ref.power, other: ref.other};
+  const cost = Object.keys(lines).reduce((s, k) => s + lines[k], 0);
+  return {lines, cost, margin: agreed - cost, ref, warpLbs: wl, weftLbs: fl};
 }
 
 /* ---------------- Client orders (v3.18.12) ----------------
@@ -1529,6 +1550,16 @@ function orderStats(o, today){
     last: rows.reduce((m, r) => r.date > m ? r.date : m, ''), weekGot: sum(rows.filter(r => r.date >= mon), r => r.qty),
     offRate: rows.filter(r => Number(r.rate) !== Number(o.rate)).length,
     status: o.revoked ? 'revoked' : o.closed ? 'closed' : pct > tol ? 'over' : got > 0 && pct >= -tol ? 'within' : got > 0 ? 'open' : 'new'};
+}
+/* How fast an order is being delivered (v3.18.28): meters per week over the last 28 days, the weeks left at that pace, and days since the last delivery. */
+function orderPace(o, today){
+  today = today || todayStr();
+  const live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned', rows = (DATA.sale || []).filter(s => s.order === o.id && live(s));
+  const day = x => Math.round(new Date(x + 'T00:00:00').getTime() / 86400000), t = day(today);
+  const recent = rows.filter(r => r.date && t - day(r.date) >= 0 && t - day(r.date) < 28).reduce((m, r) => m + (Number(r.qty) || 0), 0);
+  const last = rows.reduce((m, r) => r.date > m ? r.date : m, ''), pending = Math.max(0, (Number(o.qty) || 0) - rows.reduce((m, r) => m + (Number(r.qty) || 0), 0));
+  const perWeek = recent / 4;
+  return {perWeek, weeks: perWeek > 0 && pending > 0 ? pending / perWeek : null, last, since: last ? t - day(last) : null, age: o.date ? t - day(o.date) : 0};
 }
 /* Revoking an order (v3.18.17): both parties cancel the rest of an order on agreed terms. Deliveries already made stay on it. */
 function orderDeliveries(id){ return (DATA.sale || []).filter(s => s.order === id).length; }
