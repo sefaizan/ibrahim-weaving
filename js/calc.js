@@ -1606,3 +1606,51 @@ function orderSaleWarn(rec){
   if(Number(o.minBatch) > 0 && Number(rec.qty) < Number(o.minBatch)) w.push('This batch is below the order minimum of ' + o.minBatch + ' m.');
   return w.join(' ');
 }
+
+/* ---------------- Weft stock estimate (v3.18.37) ----------------
+ * Stock = last physical count (or nothing, from the start) + weft bought since - weft the production used since.
+ * Use per entry = meters x weftK x picks x width, with its own constant (WEFT_STOCK_K, fitted to the ledger against a
+ * physical count; the profit pages keep their own, slightly cautious, COST_DEFAULTS.weftK). It is an estimate: a count
+ * ("Count bags") resets it. Cover in days = stock / average use per production day over the last 7 production days, so a
+ * shutdown does not make the pace look tiny. */
+const WEFT_STOCK_K = 0.0000354;
+const WEFT_ALERT_DEFAULT_DAYS = 3;
+function weftAlertDays(){ const n = Number(costCfg().weftAlertDays); return n > 0 ? n : WEFT_ALERT_DEFAULT_DAYS; }
+function weftBagLbs(){
+  const list = (DATA.weft || []).filter(w => Number(w.lbsPerBag) > 0).sort((a, b) => (a.date + (a.time || '')) < (b.date + (b.time || '')) ? -1 : 1);
+  return list.length ? Number(list[list.length - 1].lbsPerBag) : 100;
+}
+// Bags <-> lbs follow each purchase's OWN lbs per bag: the stock on hand is taken to sit in the newest purchases first.
+function weftLots(){
+  return (DATA.weft || []).slice().sort((a, b) => (a.date + (a.time || '')) < (b.date + (b.time || '')) ? 1 : -1).map(w => {
+    const lbs = Number(w.lbs) || 0, per = Number(w.lbsPerBag) > 0 ? Number(w.lbsPerBag) : (Number(w.bags) > 0 ? lbs / Number(w.bags) : 0);
+    return {lbs, per};
+  }).filter(l => l.lbs > 0 && l.per > 0);
+}
+function weftLbsToBags(lbs){
+  const lots = weftLots(); let rest = Math.max(Number(lbs) || 0, 0), bags = 0;
+  for(const l of lots){ if(rest <= 0) break; const t = Math.min(rest, l.lbs); bags += t / l.per; rest -= t; }
+  return bags + (rest > 0 ? rest / (lots.length ? lots[0].per : 100) : 0);
+}
+function weftBagsToLbs(bags){
+  const lots = weftLots(); let rest = Math.max(Number(bags) || 0, 0), lbs = 0;
+  for(const l of lots){ if(rest <= 0) break; const t = Math.min(rest, l.lbs / l.per); lbs += t * l.per; rest -= t; }
+  return lbs + (rest > 0 ? rest * (lots.length ? lots[0].per : 100) : 0);
+}
+function weftStockEstimate(){
+  const cfg = costCfg(), cnt = cfg.weftStockCount || null, from = cnt ? String(cnt.at) : '', key = (d, t) => d + ' ' + (t || '00:00');
+  let lbs = cnt ? Number(cnt.lbs) || 0 : 0;
+  (DATA.weft || []).forEach(w => { if(key(w.date, w.time) > from) lbs += Number(w.lbs) || 0; });
+  const perDate = {};
+  (DATA.production || []).forEach(r => {
+    const q = (DATA.qualities || []).find(x => x.name === r.quality); if(!q) return;
+    const use = (Number(r.qty) || 0) * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: WEFT_STOCK_K});
+    perDate[r.date] = (perDate[r.date] || 0) + use;
+    if(key(r.date, r.time) > from) lbs -= use;
+  });
+  const today = todayStr(), days = Object.keys(perDate).filter(d => d <= today).sort().slice(-7);
+  const perDay = days.length ? days.reduce((s, d) => s + perDate[d], 0) / days.length : 0, bag = weftBagLbs();
+  const cover = perDay > 0 ? Math.max(lbs, 0) / perDay : null, limit = weftAlertDays();
+  const hasData = (DATA.weft || []).length > 0 || !!cnt;
+  return {lbs, bags: weftLbsToBags(lbs), bagLbs: bag, perDay, cover, limit, counted: cnt, hasData, low: hasData && perDay > 0 && (lbs <= 0 || cover <= limit)};
+}

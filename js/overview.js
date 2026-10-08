@@ -103,8 +103,9 @@ function remindersBanner(){
   const overdueCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate < today) : [];
   const dueSoonCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate >= today && c.chequeDate <= soonCutoff) : [];
   const staleClients = clientsOn ? overdueClients(30) : [];
-  if(!overdueCheques.length && !dueSoonCheques.length && !staleClients.length) return '';
-  const signature = `${overdueCheques.length}:${dueSoonCheques.length}:${staleClients.length}`;
+  const wf = ovCardOn('weft_stock') ? weftStockEstimate() : null, weftLow = !!(wf && wf.low);
+  if(!overdueCheques.length && !dueSoonCheques.length && !staleClients.length && !weftLow) return '';
+  const signature = `${overdueCheques.length}:${dueSoonCheques.length}:${staleClients.length}` + (weftLow ? ':w' + Math.floor(wf.cover || 0) : '');
   if(isBannerDismissed('reminders', signature)) return '';
   const rowStyle = 'display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line)';
   const rows = [];
@@ -120,6 +121,7 @@ function remindersBanner(){
     const total = staleClients.reduce((s,c)=>s+c.receivable,0);
     rows.push(`<div style="${rowStyle}"><span>👤 ${staleClients.length} client${staleClients.length>1?'s':''} quiet 30+ days with a balance due</span><b>${fmtRs(total)}</b></div>`);
   }
+  if(weftLow) rows.push(`<div style="${rowStyle}"><span>🧵 Weft running low${wf.lbs <= 0 ? ' - count the bags' : ' - about ' + (Math.round(wf.cover * 10) / 10) + ' days left'}</span><b>${Math.max(Math.round(wf.bags * 10) / 10, 0)} bags</b></div>`);
   return `<div class="card" id="banner-reminders" style="background:var(--warn-bg-1)">
     <div class="card-head"><h2>⚠ Reminders</h2><button type="button" class="dismiss-btn" onclick="dismissBanner('reminders','${signature}')" aria-label="Dismiss" title="Dismiss">✕</button></div>
     ${rows.join('')}
@@ -206,6 +208,31 @@ function beamForecastBasisNote(f){
 // Dismissible like the other Overview warning banners — the signature is the exact set of
 // beams and states being shown, so dismissing it lasts until that changes (a beam moves to a
 // more urgent state, a new one joins the list, etc.), not just until tomorrow.
+// Overview: estimated weft stock (calc.js weftStockEstimate) with a Count bags button that resets the estimate.
+function weftStockCard(){
+  if(!ovCardOn('weft_stock')) return '';
+  const e = weftStockEstimate(); if(!e.hasData) return '';
+  const r1 = n => (Math.round(n * 10) / 10).toLocaleString('en-IN'), canEdit = typeof permsCan !== 'function' || permsCan('tools', 'e');
+  const when = e.counted ? 'Counted ' + String(e.counted.at).slice(0, 10) + ' at ' + r1(weftLbsToBags(e.counted.lbs)) + ' bags, then adjusted.' : 'No physical count yet, so this starts from your first purchase.';
+  return `<div class="card" id="weftStockCard"${e.low ? ' style="background:var(--warn-bg-1)"' : ''}>
+    <div class="card-head"><h2>🧵 Weft stock</h2></div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:22px">${r1(Math.max(e.bags, 0))} bags</b><span class="note" style="margin:0">${r1(Math.max(e.lbs, 0))} lbs</span></div>
+    <p class="note" style="margin:6px 0 0">${e.cover === null ? 'No recent production to measure the pace.' : 'About ' + r1(e.cover) + ' days left at ' + r1(e.perDay) + ' lbs per production day (last 7 days).'} Estimated from production. ${when}</p>
+    ${canEdit ? `<div class="grid cols-2" style="margin-top:10px;align-items:end"><div class="field" style="margin:0"><label for="wf_count_bags">Bags on hand now</label><input id="wf_count_bags" type="number" inputmode="decimal" step="any" min="0"></div>
+      <button type="button" class="primary" style="margin:0" onclick="weftCountSave()">Count bags</button></div>
+      <div class="field" style="margin:10px 0 0"><label for="wf_alert_days">Alert when days left is</label><select id="wf_alert_days" onchange="weftAlertSave(this.value)">${[2, 3, 5, 7].map(n => `<option value="${n}"${n === e.limit ? ' selected' : ''}>${n} or fewer</option>`).join('')}</select></div>` : ''}
+  </div>`;
+}
+async function weftCountSave(){
+  const el = document.getElementById('wf_count_bags'), bags = parseFloat(el && el.value);
+  if(!(bags >= 0)){ showToast('Enter the number of bags on hand'); return; }
+  DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftStockCount: {at: todayStr() + ' ' + nowStr(), lbs: Math.round(weftBagsToLbs(bags) * 100) / 100}});
+  await save(); showToast('Weft stock set to ' + bags + ' bags'); switchTab('overview');
+}
+async function weftAlertSave(v){
+  DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftAlertDays: Number(v)});
+  await save(); switchTab('overview');
+}
 function beamsEndingCard(){
   if(!ovCardOn('beams_ending')) return '';
   const list = computeBeamForecasts(beamAlertDays() || 3).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon');
@@ -269,6 +296,7 @@ function overviewPanel(){
     </div>`}
     ${remindersBanner()}
     ${beamsEndingCard()}
+    ${weftStockCard()}
     ${backupNagBanner()}
     <div class="card ov-period-card">
       <div class="card-head"><h2>Period</h2><span id="monthBadge"></span></div>
