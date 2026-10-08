@@ -10,33 +10,33 @@ function alertNum(n, dec){ return (Number(n) || 0).toLocaleString('en-IN', { max
 function alertMtr(n){ return typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : alertNum(n, 1) + ' m'; }
 function alertAsOf(){ return 'As of ' + new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }); }
 function alertStockText(rows, total){
-  const lines = (rows || []).filter(r => Number(r.stock) > 0.0001).map(r => r.name + ': ' + alertMtr(r.stock));
+  const lines = (rows || []).filter(r => Number(r.stock) > 0.0001).map(r => '▪️ ' + r.name + ': ' + alertMtr(r.stock));
   if(!lines.length) lines.push('No stock in hand.');
-  lines.push('Total: ' + alertMtr(total), alertAsOf());
-  return { title: 'Stock by quality', body: lines.join('\n') };
+  lines.push('*Total: ' + alertMtr(total) + '*', alertAsOf());
+  return { title: '📦 Stock by quality', body: lines.join('\n') };
 }
 function alertWeftText(e){
-  if(!e || !e.hasData) return { title: 'Weft stock', body: 'No weft purchases recorded yet.\n' + alertAsOf() };
+  if(!e || !e.hasData) return { title: '🧵 Weft stock', body: 'No weft purchases recorded yet.\n' + alertAsOf() };
   const lines = [alertNum(Math.max(e.bags, 0), 1) + ' bags (' + alertNum(Math.max(e.lbs, 0)) + ' lbs)'];
   lines.push(e.cover === null ? 'No recent production to measure the pace.' : 'About ' + alertNum(e.cover, 1) + ' days left at ' + alertNum(e.perDay) + ' lbs per day.');
-  if(e.low) lines.push('Weft is running low.');
+  if(e.low) lines.push('🚨 Order weft NOW - stock is running low!');
   lines.push(alertAsOf());
-  return { title: (e.low ? '⚠ ' : '') + 'Weft stock', body: lines.join('\n') };
+  return { title: e.low ? '🚨 WEFT RUNNING LOW 🚨' : '🧵 Weft stock', body: lines.join('\n') };
 }
 function alertBeamText(list, days){
-  const body = (list && list.length) ? list.map(f => beamAlertText(f)).join('\n') : 'No beam is ending within ' + days + ' days.';
-  return { title: list && list.length ? '⚠ Beams ending soon' : 'Warp beams', body: body + '\n' + alertAsOf() };
+  const body = (list && list.length) ? list.map(f => '⏰ ' + beamAlertText(f)).join('\n') : 'No beam is ending within ' + days + ' days.';
+  return { title: list && list.length ? '🚨 BEAMS ENDING SOON 🚨' : '🔧 Warp beams', body: body + '\n' + alertAsOf() };
 }
 function alertChequeText(pending, today, soon){
   const withDate = pending.filter(c => c.chequeDate);
   const over = withDate.filter(c => c.chequeDate < today), due = withDate.filter(c => c.chequeDate >= today && c.chequeDate <= soon);
   const sum = l => l.reduce((s, c) => s + (Number(c.amount) || 0), 0), shown = over.concat(due), lines = [];
-  if(over.length) lines.push(over.length + ' overdue: ' + fmtRs(sum(over)));
-  if(due.length) lines.push(due.length + ' due within 7 days: ' + fmtRs(sum(due)));
-  if(!shown.length) lines.push('No cheques overdue or due within 7 days.');
-  shown.slice(0, 8).forEach(c => lines.push((c.client || '?') + ' - ' + fmtRs(c.amount) + ' - ' + c.chequeDate + (c.chequeDate < today ? ' (overdue)' : '')));
+  if(over.length) lines.push('❌ ' + over.length + ' OVERDUE: ' + fmtRs(sum(over)));
+  if(due.length) lines.push('⏰ ' + due.length + ' due within 7 days: ' + fmtRs(sum(due)));
+  if(!shown.length) lines.push('✅ No cheques overdue or due within 7 days.');
+  shown.slice(0, 8).forEach(c => lines.push((c.chequeDate < today ? '❌ ' : '⏰ ') + (c.client || '?') + ' - ' + fmtRs(c.amount) + ' - ' + c.chequeDate + (c.chequeDate < today ? ' (OVERDUE)' : '')));
   if(shown.length > 8) lines.push('+ ' + (shown.length - 8) + ' more');
-  return { title: shown.length ? 'Cheques: ' + (over.length ? over.length + ' overdue' : due.length + ' due soon') : 'Cheques', body: lines.join('\n') };
+  return { title: over.length ? '🚨 CHEQUES OVERDUE 🚨' : (due.length ? '⏰ Cheques due soon' : '✅ Cheques'), body: lines.join('\n') };
 }
 // kind -> the message as one piece of text, ready for WhatsApp (title in bold).
 function alertBuild(kind){
