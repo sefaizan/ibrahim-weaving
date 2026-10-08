@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v267';
+const CACHE_VERSION = 'v269';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
@@ -52,6 +52,7 @@ const APP_FILES = [
   './js/proposals.js',
   './js/fiscal.js',
   './js/autobackup.js',
+  './js/alert-share.js',
   './js/lock-init.js',
   './jspdf.umd.min.js',
   './icons/icon-192.png',
@@ -181,3 +182,4 @@ self.addEventListener('fetch', (event)=>{
   }
   // Anything else (there shouldn't be any) goes straight to the network.
 });
+

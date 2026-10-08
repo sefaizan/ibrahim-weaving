@@ -320,3 +320,10 @@ WHERE THE LEDGER IS STORED (v3.18.7)
   phone starts, the existing ledger is copied across, read back and only then removed from the old place;
   if anything fails the old copy stays and is used. See js/ledger-store.js for the safety rules. No server,
   Firebase or Netlify change is needed.
+
+SEND ALERTS ON WHATSAPP (v3.18.41)
+  - Settings > Send alerts (owner's phone and any unlimited phone; people with a limited role do not see it). Choose Stock by quality, Weft stock, Warp beams,
+    Cheques or your own message. The text is built from the ledger on that phone and can be edited; "Send in WhatsApp" opens WhatsApp
+    with it ready - pick a person or a group and send. Nothing goes to any server. Keep one WhatsApp group per kind of person (e.g. Stock
+    viewers) so each group gets only what it should see. WhatsApp delivers to a phone that was offline once it is back online.
+  TO GO BACK: put the 3.18.39 copies of index.html, service-worker.js, package.json, js/shell.js, js/wiring.js back and delete js/alert-share.js.
