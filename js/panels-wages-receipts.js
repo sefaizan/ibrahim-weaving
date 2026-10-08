@@ -1505,31 +1505,32 @@ function moveBtns(key,idx,isFirst,isLast){
 function wageReceiptFacts(payId){
   const p = DATA.wagePayments.find(x=>x.id===payId);
   if(!p) return null;
-  const emp = p.employee;
+  const emp = p.employee, per = p.periodFrom && p.periodTo ? {from: p.periodFrom, to: p.periodTo} : null;   // a payment made for a chosen period keeps that period
+  const toD = per ? per.to : p.date, inScope = d => per ? d >= per.from && d <= per.to : true;
   const sett = DATA.wageSettlements.filter(s=>s.employee===emp && s.date<=p.date).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
   const since = sett ? sett.date : null;
-  const carry = sett ? Number(sett.carryForward||0) : 0;
-  const from = since ? nextDayStr(since) : null;
+  const carry = !per && sett ? Number(sett.carryForward||0) : 0;
+  const from = per ? per.from : since ? nextDayStr(since) : null;
   let earned = 0;
-  DATA.qualities.forEach(q=>{ earned += computeWageMeters(emp, q.name, from, p.date).wages; });
-  const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=p.date).reduce((s,b)=>s+(Number(b.amount)||0),0);
-  const list = DATA.wagePayments.filter(x=>x.employee===emp && (!since||x.date>since) && x.date<=p.date);
+  DATA.qualities.forEach(q=>{ earned += computeWageMeters(emp, q.name, from, toD).wages; });
+  const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=toD && inScope(b.date)).reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const list = DATA.wagePayments.filter(x=>x.employee===emp && (per ? x.periodFrom===per.from && x.periodTo===per.to : (!since||x.date>since) && x.date<=p.date));
   const upto = list.slice(0, list.findIndex(x=>x.id===payId)+1);
   const paidTotal = upto.reduce((s,x)=>s+(Number(x.amount)||0),0);
   const paidEarlier = paidTotal - (Number(p.amount)||0);
-  const salary = salaryAccrued(emp, from, p.date);
+  const salary = salaryAccrued(emp, from, toD);
   const salaried = isSalariedEmp(emp) || salary > 0;
-  const bonusRows = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=p.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const bonusRows = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=toD && inScope(b.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const balance = paisaDiff(carry + earned + salary + bonus, paidTotal);
   const loans = DATA.loanPayments.filter(l=>l.employee===emp && l.date<=p.date);
   const given = loans.filter(l=>l.type!=='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
   const repaid = loans.filter(l=>l.type==='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
   const qualityRows = DATA.qualities.map(q=>{
-    const m = computeWageMeters(emp, q.name, from, p.date);
+    const m = computeWageMeters(emp, q.name, from, toD);
     return {quality:q.name, own:m.own, diff:m.diffShare, total:m.total, wages:m.wages, diffWages:m.diffWages, rate: m.total ? m.wages/m.total : 0};
   }).filter(x=>x.total || x.wages);
   const diffWages = qualityRows.reduce((s,x)=>s+x.diffWages,0);
-  const prodDates = DATA.production.filter(r=>r.date && r.date<=p.date && (!from||r.date>=from) && [r.e1,r.e2,r.e3].includes(emp)).map(r=>r.date).sort();
+  const prodDates = DATA.production.filter(r=>r.date && r.date<=toD && (!from||r.date>=from) && [r.e1,r.e2,r.e3].includes(emp)).map(r=>r.date).sort();
   const periodFrom = from || (salaried && salaryFirstDate(emp)) || prodDates[0] || p.date;
   let run = 0;
   const loanRows = loans.map((l,i)=>({l,i})).sort((a,b)=> String(a.l.date).localeCompare(String(b.l.date)) || a.i-b.i).map(({l})=>{
@@ -1537,7 +1538,7 @@ function wageReceiptFacts(payId){
     return {date:l.date, type: rep ? 'Repaid' : 'Given', amount:amt, balance:run};
   });
   const empRec = DATA.employees.find(e=>e.name===emp) || {};
-  return {p, emp, carry, earned, bonus, salary, salaried, weekly: salaryWeeklyOn(emp, p.date), bonusRows, title: empRec.title || '', paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows, qualityRows, diffWages, periodFrom};
+  return {periodTo: toD, p, emp, carry, earned, bonus, salary, salaried, weekly: salaryWeeklyOn(emp, p.date), bonusRows, title: empRec.title || '', paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows, qualityRows, diffWages, periodFrom};
 }
 function buildWageReceiptFields(payId){
   const facts = wageReceiptFacts(payId);
@@ -1564,7 +1565,7 @@ function wageSlipIsUrdu(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_
 function printWageReceipt(payId, opts){
   const f = buildWageReceiptFields(payId);
   if(!f){ if(!(opts && opts.htmlOnly)) showToast('That wage payment could not be found — try refreshing the page.', 5000); return; }
-  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, fileBase, salary, salaried, weekly, bonusRows, title} = f;
+  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, periodTo, fileBase, salary, salaried, weekly, bonusRows, title} = f;
   const ur = wageSlipIsUrdu();
   const T = s => (ur && WAGE_SLIP_UR[s]) || s;
   const V = s => ur ? `<bdi dir="ltr">${s}</bdi>` : s; // numbers and dates keep their left-to-right order inside Urdu text
@@ -1599,7 +1600,7 @@ function printWageReceipt(payId, opts){
   else balLine = `<div class="row total"><span>${T('Balance')}</span><span>${T('Settled')}</span></div>`;
   const payRows = [paidEarlier>0.004 ? row('Paid earlier', fmtRs2(paidEarlier)) : '', row('Paid now', fmtRs2(p.amount)), balLine].join('');
   const loanHtml = loan > 0.004 ? `<div class="balance-summary" style="margin-top:16px">${row('Loan outstanding', fmtRs2(loan), 'total')}</div>` : '';
-  const periodTxt = ur ? V(`${fmtDate(periodFrom)} – ${fmtDate(p.date)}`) : `${fmtDate(periodFrom)} to ${fmtDate(p.date)}`;
+  const periodTxt = ur ? V(`${fmtDate(periodFrom)} – ${fmtDate(periodTo)}`) : `${fmtDate(periodFrom)} to ${fmtDate(periodTo)}`;
   const body = `${ur ? '<div dir="rtl" lang="ur" data-no-i18n style="font-family:\'Noto Naskh Arabic\',\'Geeza Pro\',\'Segoe UI\',Tahoma,sans-serif;line-height:1.7">' : '<div>'}
     <div class="receipt-title">${T('Wage Slip')}</div>
     ${meta('Employee', escHtml(emp))}

@@ -111,6 +111,8 @@ function wagesSheetFill(setAmount){
   const k = s.kind, emp = v('wq_emp'), from = v('wg_from') || null, to = v('wg_to') || null;
   document.querySelectorAll('[data-wq-kind]').forEach(b => b.classList.toggle('on', b.dataset.wqKind === k));
   const save = document.getElementById('wq_save'); if(save) save.textContent = { pay: 'Add Payment', bonus: 'Add Bonus', settle: 'Mark Settled' }[k];
+  const paidUp = k === 'pay' && emp && wagesPeriodPaid(computeEmployeeWageNetForPeriod(emp, from, to));
+  if(save){ save.disabled = !!paidUp; save.title = paidUp ? 'Already paid for this period' : ''; }
   const amt = document.getElementById('wq_amt');
   const lbl = document.getElementById('wq_amtL'); if(lbl) lbl.textContent = k === 'settle' ? 'Carry Forward (Rs)' : k === 'bonus' ? 'Bonus Amount (Rs)' : 'Amount Paid (Rs)';
   if(amt){ if(k === 'settle') amt.removeAttribute('inputmode'); else amt.setAttribute('inputmode', 'decimal'); } // settle may be negative: default number keyboard
@@ -161,9 +163,10 @@ async function wagesSheetSave(){
     [emp, 'Pick an employee first.', 'wq_emp'],
     [k === 'settle' ? raw !== '' : amt > 0, k === 'settle' ? 'Enter the carry forward first (0 if fully settled).' : 'Enter the amount first.', 'wq_amt'],
   ])) return;
+  if(k === 'pay' && wagesPeriodPaid(computeEmployeeWageNetForPeriod(emp, v('wg_from') || null, v('wg_to') || null))){ showToast('Already paid in full for this period.'); return; }
   EDITING = null; // a half-finished Edit on the page's own form must not turn this into an overwrite
   const id = uid(), list = k === 'settle' ? 'wageSettlements' : k === 'bonus' ? 'wageBonuses' : 'wagePayments';
-  DATA[list].push(k === 'settle' ? { id, date, employee: emp, carryForward: amt, remarks: rem } : { id, date, employee: emp, amount: amt, remarks: rem });
+  DATA[list].push(k === 'settle' ? { id, date, employee: emp, carryForward: amt, remarks: rem } : Object.assign({ id, date, employee: emp, amount: amt, remarks: rem }, v('wg_from') && v('wg_to') ? { periodFrom: v('wg_from'), periodTo: v('wg_to') } : {}));
   PAGE[list] = 1;
   await save();
   // A change held for the owner's approval (or refused) leaves the ledger as it was: say nothing false.
@@ -178,6 +181,13 @@ async function wagesSheetSave(){
   const sc = document.getElementById('panels'), y = sc ? sc.scrollTop : 0;
   switchTab('wages');
   if(sc) sc.scrollTop = y;
+}
+
+// Pay is off for a period that is already paid in full (something was earned and nothing is left due).
+function wagesPeriodPaid(n){ return n.earned > 0.004 && n.net <= 0.004; }
+function wagesPayBtn(name, net){
+  const done = wagesPeriodPaid(net);
+  return `<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}"${done ? ' disabled aria-disabled="true" title="Already paid for this period" style="opacity:.55"' : ''}>${done ? 'Paid' : 'Pay'}</button>`;
 }
 
 /* ---------------- Summary tab ---------------- */
@@ -200,7 +210,7 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
        <tfoot><tr><td>Total</td><td>${fmtQtyMtr(own)}</td><td>${row.totalDiffMeters ? fmtQtyMtr(row.totalDiffMeters) : '–'}</td><td></td><td>${fmtRs2(row.totalWagesNoBonus).replace('Rs ', '')}</td></tr></tfoot></table></div>${changed ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}`
     : `<div class="wg-fine">No production in this period.</div>`;
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}">Pay</button></div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net)}</div>
     <div class="wg-mini"><span>Meters <b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></span><span>Earned <b>${fmtRs2(net.earned)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '—'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
     <div class="wg-det">${detail}
       <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
@@ -216,7 +226,7 @@ function wagesSalCardHtml(d, from, to, asOf){
   const weekly = salaryWeeklyOn(name, asOf);
   const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}">Pay</button></div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net)}</div>
     ${emp.title ? `<div class="wg-fine" style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
     <div class="wg-mini"><span>Weekly <b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></span><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : ''}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : ''}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
     <div class="wg-det"><div class="wg-lines"><span>Salary earned <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
