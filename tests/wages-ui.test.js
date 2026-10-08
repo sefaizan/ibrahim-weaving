@@ -171,6 +171,13 @@ describe('quick-entry sheet', () => {
     assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 400, net: 600})"), /disabled/);
     assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 0, paid: 0, net: 0})"), /disabled/, 'nothing earned: not a paid period');
   });
+  test('a paid card offers the receipt of its period\'s newest payment right there; an unpaid card does not', () => {
+    const t = setup('pay');
+    t.run("DATA.wagePayments.push({ id: 'p7', date: '2026-10-01', employee: 'Ali', amount: 10, remarks: '' }, { id: 'p8', date: '2026-10-20', employee: 'Ali', amount: 10, remarks: '' })");
+    const paid = t.run("wagesPayBtn('Ali', {earned: 1000, paid: 1000, net: 0}, '2026-09-28', '2026-10-02')");
+    assert.match(paid, /data-wage-share="p7"/);            // p8 is outside the period, p1 is older
+    assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 400, net: 600}, '2026-09-28', '2026-10-02')"), /data-wage-share/);
+  });
   test('when nobody else is due the sheet closes; Bonus and Settle land in their own lists and stay open', async () => {
     const t = setup('pay'); Object.assign(t.vals, { wq_emp: 'Bilal', wq_date: '2026-10-02', wq_amt: '1485' });
     t.run("DATA.wagePayments.push({ id: 'p9', date: '2026-10-01', employee: 'Ali', amount: 650, remarks: '' })"); // Ali already square
