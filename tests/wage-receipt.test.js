@@ -18,7 +18,7 @@ function load(extra, lang) {
   const data = Object.assign(emptyData(), {
     qualities: [{ name: 'A' }], employees: [{ id: 'e1', name: 'Ali' }, { id: 'e2', name: 'Riaz' }],
     wageRateHistory: { A: [{ date: '2026-01-01', rate: 10 }] },
-    production: [prod({ date: '2026-10-01', quality: 'A', qty: 849, e1: 'Ali', e1m: 849 })], // Ali earns 8490
+    production: [prod({ date: '2026-10-02', quality: 'A', qty: 849, e1: 'Ali', e1m: 849 })], // Ali earns 8490, in the wage week (Fri 2 Oct to Thu 8 Oct) of the 3 Oct payment
     wageBonuses: [{ id: 'b1', date: '2026-10-02', employee: 'Ali', amount: 500 }],
     wagePayments: [{ id: 'p1', date: '2026-10-03', employee: 'Ali', amount: 9000, remarks: '' }],
     loanPayments: [], businessInfo: {},
@@ -71,8 +71,8 @@ describe('wage slip breakdown', () => {
     qualities: [{ name: 'A' }, { name: 'B' }], employees: [{ id: 'e1', name: 'Ali' }, { id: 'e2', name: 'Bilal' }],
     wageRateHistory: { A: [{ date: '2026-01-01', rate: 10 }], B: [{ date: '2026-01-01', rate: 5 }] },
     production: [
-      prod({ date: '2026-10-01', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }),                               // 100 x 10
-      prod({ date: '2026-10-01', quality: 'B', qty: 50, e1: 'Ali', e1m: 40, e2: 'Bilal', e2m: 0 }),            // 40 own + 10 diff (all to Ali: Bilal has 0 own but shares diff 5/5)
+      prod({ date: '2026-10-02', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }),                               // 100 x 10
+      prod({ date: '2026-10-02', quality: 'B', qty: 50, e1: 'Ali', e1m: 40, e2: 'Bilal', e2m: 0 }),            // 40 own + 10 diff (all to Ali: Bilal has 0 own but shares diff 5/5)
     ],
   });
   test('quality rows show own meters, diff meters, rate and wages; they add up to the total', () => {
@@ -176,5 +176,19 @@ describe('wage slip period (v3.18.32)', () => {
     assert.equal(f.periodFrom, '2026-09-25'); assert.equal(f.periodTo, '2026-10-01');
     assert.equal(f.earned, 8490); assert.equal(f.bonus, 0); assert.equal(f.balance, 0);
     assert.match(html('p2'), /2026-09-25 to 2026-10-01/);
+  });
+});
+
+describe('wage slip for a payment with no saved period (v3.18.34)', () => {
+  test("a Thursday payment covers that week only; last week's payment and wages are not pulled in", () => {
+    const { facts } = load({
+      wageSettlements: [{ id: 's1', date: '2026-09-24', employee: 'Ali', carryForward: 0 }], wageBonuses: [],
+      production: [prod({ date: '2026-09-28', quality: 'A', qty: 500, e1: 'Ali', e1m: 500 }), prod({ date: '2026-10-05', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 })],
+      wagePayments: [{ id: 'p0', date: '2026-10-01', employee: 'Ali', amount: 5000, remarks: '' }, { id: 'p1', date: '2026-10-08', employee: 'Ali', amount: 1000, remarks: '' }],
+    });
+    const f = facts('p1'), g = facts('p0');
+    assert.equal(f.periodFrom, '2026-10-02'); assert.equal(f.periodTo, '2026-10-08');
+    assert.equal(f.earned, 1000); assert.equal(f.paidEarlier, 0); assert.equal(f.balance, 0);
+    assert.equal(g.periodFrom, '2026-09-25'); assert.equal(g.earned, 5000); assert.equal(g.balance, 0);   // the week before still shows its own wages
   });
 });
