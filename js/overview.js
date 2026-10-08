@@ -103,9 +103,8 @@ function remindersBanner(){
   const overdueCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate < today) : [];
   const dueSoonCheques = chequesOn ? pendingCheques.filter(c=> c.chequeDate >= today && c.chequeDate <= soonCutoff) : [];
   const staleClients = clientsOn ? overdueClients(30) : [];
-  const wf = ovCardOn('weft_stock') ? weftStockEstimate() : null, weftLow = !!(wf && wf.low);
-  if(!overdueCheques.length && !dueSoonCheques.length && !staleClients.length && !weftLow) return '';
-  const signature = `${overdueCheques.length}:${dueSoonCheques.length}:${staleClients.length}` + (weftLow ? ':w' + Math.floor(wf.cover || 0) : '');
+  if(!overdueCheques.length && !dueSoonCheques.length && !staleClients.length) return '';
+  const signature = `${overdueCheques.length}:${dueSoonCheques.length}:${staleClients.length}`;
   if(isBannerDismissed('reminders', signature)) return '';
   const rowStyle = 'display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid var(--line)';
   const rows = [];
@@ -121,7 +120,6 @@ function remindersBanner(){
     const total = staleClients.reduce((s,c)=>s+c.receivable,0);
     rows.push(`<div style="${rowStyle}"><span>👤 ${staleClients.length} client${staleClients.length>1?'s':''} quiet 30+ days with a balance due</span><b>${fmtRs(total)}</b></div>`);
   }
-  if(weftLow) rows.push(`<div style="${rowStyle}"><span>🧵 Weft running low${wf.lbs <= 0 ? ' - count the bags' : ' - about ' + (Math.round(wf.cover * 10) / 10) + ' days left'}</span><b>${Math.max(Math.round(wf.bags * 10) / 10, 0)} bags</b></div>`);
   return `<div class="card" id="banner-reminders" style="background:var(--warn-bg-1)">
     <div class="card-head"><h2>⚠ Reminders</h2><button type="button" class="dismiss-btn" onclick="dismissBanner('reminders','${signature}')" aria-label="Dismiss" title="Dismiss">✕</button></div>
     ${rows.join('')}
@@ -227,11 +225,11 @@ async function weftCountSave(){
   const el = document.getElementById('wf_count_bags'), bags = parseFloat(el && el.value);
   if(!(bags >= 0)){ showToast('Enter the number of bags on hand'); return; }
   DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftStockCount: {at: todayStr() + ' ' + nowStr(), lbs: Math.round(weftBagsToLbs(bags) * 100) / 100}});
-  await save(); showToast('Weft stock set to ' + bags + ' bags'); switchTab('overview');
+  await save(); showToast('Weft stock set to ' + bags + ' bags'); SETTINGS_OPEN = 'stock'; switchTab('settings');
 }
 async function weftAlertSave(v){
   DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftAlertDays: Number(v)});
-  await save(); switchTab('overview');
+  await save(); SETTINGS_OPEN = 'stock'; switchTab('settings');
 }
 function beamsEndingCard(){
   if(!ovCardOn('beams_ending')) return '';
@@ -296,7 +294,6 @@ function overviewPanel(){
     </div>`}
     ${remindersBanner()}
     ${beamsEndingCard()}
-    ${weftStockCard()}
     ${backupNagBanner()}
     <div class="card ov-period-card">
       <div class="card-head"><h2>Period</h2><span id="monthBadge"></span></div>
@@ -685,6 +682,10 @@ function ovAttention(){
   if(ovCardOn('pending_l')){
     const n = (DATA.sale || []).filter(r => r.lStatus === 'awaiting').length; if(n) out.push({key: 'awaiting-l-ail', text: n + ' sale' + (n > 1 ? 's' : '') + ' awaiting L (AIL)', tone: ''});
   }
+  if(ovCardOn('weft_stock') && typeof weftStockEstimate === 'function'){
+    const w = weftStockEstimate();
+    if(w.low) out.push({key: 'weft-stock', text: '🧵 Weft low · ' + (w.lbs <= 0 ? 'count the bags' : 'about ' + (Math.round(w.cover * 10) / 10) + ' days left'), tone: 'warn'});
+  }
   return out;
 }
 function wireFoldCards(root){
@@ -736,6 +737,7 @@ function wireFoldCards(root){
   }
   // 4. Attention chips jump to their card, opening its group and the card first.
   strip.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => {
+    if(b.dataset.jump === 'weft-stock'){ SETTINGS_OPEN = 'stock'; switchTab('settings'); return; }   // the weft card lives in Settings > Stock
     const x = info.find(i => i.slug === b.dataset.jump); if(!x) return;
     const s = secs.find(g => g.mem.includes(x)); if(s && s.isFolded()) s.set(false);
     if(x.c.classList.contains('folded')){ x.c.classList.remove('folded'); st[x.key] = 0; put('ov_folded', st); label(); }
