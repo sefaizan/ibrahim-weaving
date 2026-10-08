@@ -111,12 +111,13 @@ describe('Summary tab', () => {
     assert.match(hero, /<span class="q">B<\/span><span class="m">50<\/span>/);    // 40 own + 10 unassigned shared
     assert.match(hero, /Total production<\/span><span class="m">230<\/span>/);
   });
-  test('Diff share is shown on its own and still counted once', () => {
+  test('the employee card shows one Meters column (own + Diff share together) and no Diff column; it still counts the share once', () => {
     const t = load(ledger());
     t.vals.wg_from = '2026-09-28'; t.vals.wg_to = '2026-10-02';
     t.run('renderWages()');
     const aliCard = t.el('wagesWrap').innerHTML.match(/data-wg-emp="Ali"[^]*?data-wg-emp="Bilal"/)[0];
-    assert.match(aliCard, /<td>B<\/td><td>40<\/td><td>5<\/td>/); // own 40, Diff share 5 (the 10 m is split between Ali and Bilal)
+    assert.match(aliCard, /<td>B<\/td><td>45<\/td>/); // own 40 + Diff share 5 (the 10 m is split between Ali and Bilal)
+    assert.doesNotMatch(aliCard, /Diff m|Own m/); assert.match(aliCard, /<span>Bonus <b>/);   // Bonus sits in the card's summary line
   });
   test('a person with earnings in the period is never left out, and with nothing set up the page says so', () => {
     const d = ledger(); d.employees.push(emp('Zahid', { active: false }));
@@ -219,5 +220,16 @@ describe('new buttons follow the same permission rules as the old ones', () => {
     ['wp_emp', 'wp_amt', 'wb_emp', 'ws_emp', 'ws_carry', 'rc_quality', 'saveRateChange', 'wg_rateRowsBody', 'wg_rateHistoryWrap', 'addWagePayment', 'addWageBonus', 'addWageSettlement', 'settleAllEmployees', 'saveOpeningBalances']
       .forEach((id) => assert.ok(pw.includes(`id="${id}"`) || pw.includes(`'${id}'`) || pw.includes(`"${id}"`), id));
     assert.ok(read('js/wages-ui.js').includes('id="wg_from"') && read('js/wages-ui.js').includes('id="wg_to"'));
+  });
+});
+
+describe('salaried staff card (v3.18.35)', () => {
+  test('earnings for the period come first and large, with the weekly salary beside them and the breakdown below', () => {
+    const t = load(ledger());
+    const h = t.run("wagesSalCardHtml({name: 'Ali', row: {salary: 4000, bonus: 500, totalWages: 4500, totalWagesNoBonus: 0}, bal: {balance: 0, carryForward: 0}, net: {earned: 4500, paid: 0, net: 4500}}, '2026-09-28', '2026-10-02', '2026-10-02')");
+    assert.match(h, /wg-sal-big[^]*Earned this period[^]*<strong>Rs 4500\.00<\/strong>/);
+    assert.match(h, /Salary <b>Rs 4000\.00<\/b>/); assert.match(h, /Bonus <b>Rs 500\.00<\/b>/); assert.doesNotMatch(h, /Wages <b>/, 'no piece wages, so no Wages item');
+    const w = t.run("wagesSalCardHtml({name: 'Ali', row: {salary: 4000, bonus: 0, totalWages: 4600, totalWagesNoBonus: 600}, bal: {balance: 0, carryForward: 0}, net: {earned: 4600, paid: 0, net: 4600}}, '', '', '2026-10-02')");
+    assert.match(w, /Wages <b>Rs 600\.00<\/b>/);
   });
 });
