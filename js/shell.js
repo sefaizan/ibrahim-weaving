@@ -305,7 +305,7 @@ function pinLockSection(){
   return `<div class="card">
     <div class="card-head"><h2>PIN Lock</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>${infoNote}</p>
-    <p class="note" style="margin:0 0 12px">Enabled. ${hasRec ? 'Recovery question is set.' : '<b>No recovery question yet</b> — set one below so a forgotten PIN can be recovered.'}</p>
+    <p class="note" style="margin:0 0 12px">Enabled. ${(typeof encEnabled==='function' && !encEnabled()) ? '<span style="color:var(--rust)"><b>Encryption is off:</b> the PIN only hides the screen; someone who copies the phone\'s storage could guess it quickly. Turn on Encryption for real protection.</span> ' : ''}${hasRec ? 'Recovery question is set.' : '<b>No recovery question yet</b> — set one below so a forgotten PIN can be recovered.'}</p>
     <button class="primary" id="pinLockNowBtn" type="button" style="margin:0 0 10px;width:100%">Lock now</button>
     <div class="grid cols-2">
       <button class="ghost" id="pinShowChange" data-cancel="pinChange">Change PIN</button>

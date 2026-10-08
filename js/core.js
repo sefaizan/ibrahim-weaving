@@ -288,7 +288,7 @@ const STORAGE_KEY = 'khata-data-v3'; // bumped so this file's seeded data always
 // navigator.vibrate is widely supported on Android/Chrome (including inside a TWA); iOS
 // Safari has never supported it, so this always no-ops safely there instead of erroring.
 function haptic(pattern){
-  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){ /* not supported — no-op */ }
+  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){ typeof logErr==='function' && logErr('core', e); /* not supported — no-op */ }
 }
 // Small on-screen message (bottom of the screen) so Share buttons always show what happened.
 let _toastTimer = null;
@@ -297,7 +297,7 @@ let _toastTimer = null;
 let _lastGesture = 0, _tickTimer = null;
 try{
   ['pointerdown','keydown'].forEach(ev=> document.addEventListener(ev, ()=>{ _lastGesture = Date.now(); }, true));
-}catch(e){ /* no DOM events here (tests) -- the tick simply never shows */ }
+}catch(e){ typeof logErr==='function' && logErr('core', e); /* no DOM events here (tests) -- the tick simply never shows */ }
 function showSaveTick(){
   try{
     if(Date.now() - _lastGesture > 2500) return;
@@ -306,7 +306,7 @@ function showSaveTick(){
     el.innerHTML = '<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Saved</span>';
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(_tickTimer); _tickTimer = setTimeout(()=> el.classList.remove('show'), 1400);
-  }catch(e){ /* cosmetic only */ }
+  }catch(e){ typeof logErr==='function' && logErr('core', e); /* cosmetic only */ }
 }
 function showToast(msg, ms){
   let el = document.getElementById('appToast');
@@ -343,7 +343,7 @@ function receiptRenderer(html){
   const W = 640;
   let css = '*,*::before,*::after{box-sizing:border-box;}\n';
   for(const ss of Array.from(document.styleSheets)){
-    try{ for(const rule of Array.from(ss.cssRules)){ if(rule.type === 1 && rule.cssText.indexOf('.receipt') !== -1) css += rule.cssText + '\n'; } }catch(e){ /* cross-origin sheet */ }
+    try{ for(const rule of Array.from(ss.cssRules)){ if(rule.type === 1 && rule.cssText.indexOf('.receipt') !== -1) css += rule.cssText + '\n'; } }catch(e){ typeof logErr==='function' && logErr('core', e); /* cross-origin sheet */ }
   }
   const holder = document.createElement('div');
   holder.innerHTML = html;
@@ -512,7 +512,7 @@ function currentEntryCount(){
 }
 function entriesSinceLastBackup(){
   let raw = null;
-  try{ raw = localStorage.getItem(LAST_BACKUP_COUNT_KEY); }catch(e){}
+  try{ raw = localStorage.getItem(LAST_BACKUP_COUNT_KEY); }catch(e){ typeof logErr==='function' && logErr('core', e);  }
   if(raw === null || raw === '' || isNaN(Number(raw))) return null; // backup predates this counter
   return Math.max(0, currentEntryCount() - Number(raw));
 }
@@ -520,7 +520,7 @@ function recordBackupTaken(){
   try{
     localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
     localStorage.setItem(LAST_BACKUP_COUNT_KEY, String(currentEntryCount()));
-  }catch(e){ /* best effort only */ }
+  }catch(e){ typeof logErr==='function' && logErr('core', e); /* best effort only */ }
   if(typeof refreshBackupStrip === 'function') refreshBackupStrip();
   haptic([15,60,15]); // distinct double-pulse — a bigger "done" moment than a routine save
   const line = document.getElementById('lastBackupLine');
@@ -529,7 +529,7 @@ function recordBackupTaken(){
 // Whole days since the last recorded backup, or null if none has ever been taken on this device.
 function daysSinceLastBackup(){
   let raw = null;
-  try{ raw = localStorage.getItem(LAST_BACKUP_KEY); }catch(e){ /* no storage available */ }
+  try{ raw = localStorage.getItem(LAST_BACKUP_KEY); }catch(e){ typeof logErr==='function' && logErr('core', e); /* no storage available */ }
   if(!raw) return null;
   const then = new Date(raw);
   if(isNaN(then.getTime())) return null;
@@ -540,7 +540,7 @@ function daysSinceLastBackup(){
 // one was taken right under the buttons, so it's never out of sight.
 function lastBackupStatusText(){
   let raw = null;
-  try{ raw = localStorage.getItem(LAST_BACKUP_KEY); }catch(e){ /* no storage available */ }
+  try{ raw = localStorage.getItem(LAST_BACKUP_KEY); }catch(e){ typeof logErr==='function' && logErr('core', e); /* no storage available */ }
   const then = raw ? new Date(raw) : null;
   if(!then || isNaN(then.getTime())) return 'No backup taken yet on this device.';
   const days = Math.floor((Date.now() - then.getTime()) / 86400000);
@@ -656,7 +656,7 @@ async function save(){
   if(typeof proposalsWouldHold === 'function'){ const held = proposalsWouldHold(); if(held && await proposalsHold(held)) return false; } // a person who needs approval (proposals.js): the change is kept as a proposal, the ledger is not touched
   if(typeof viewOnlySaveBlocked === 'function' && viewOnlySaveBlocked()) return false; // view-only phone (view-only.js): nothing may be saved
   document.getElementById('statusLine').textContent = 'Saving…';
-  if(typeof tombRecordDeletions === 'function'){ try{ tombRecordDeletions(); }catch(e){ /* best effort — never block a save */ } } // notes deleted records so a cloud merge can't bring them back
+  if(typeof tombRecordDeletions === 'function'){ try{ tombRecordDeletions(); }catch(e){ typeof logErr==='function' && logErr('core', e); /* best effort — never block a save */ } } // notes deleted records so a cloud merge can't bring them back
   if(typeof auditCommit === 'function'){ try{ await auditCommit(); }catch(e){ console.error(e); } } // the audit entries are kept on this phone BEFORE the ledger change is stored (js/audit.js)
   const json = JSON.stringify(DATA);
   let changed = null; // 'removed' | 'updated' | null — also read below to decide the save haptic
@@ -664,7 +664,7 @@ async function save(){
   let curParts = null;
   try{ curParts = undoParts(); }catch(e){ curParts = null; }
   if(UNDO_PREV_PARTS && curParts && !UNDO_SUPPRESS){
-    try{ changed = recordUndoEntry(UNDO_PREV_PARTS, curParts); }catch(e){ /* best effort only — never let this block an actual save */ }
+    try{ changed = recordUndoEntry(UNDO_PREV_PARTS, curParts); }catch(e){ typeof logErr==='function' && logErr('core', e); /* best effort only — never let this block an actual save */ }
   }
   NEXT_UNDO_LABEL = null;
   // Light "saved" buzz for everything except deletes, which already got their own firmer one
@@ -748,7 +748,7 @@ async function load(){
       // production record). Previously this only overwrote non-empty lists, which
       // meant a fully-emptied category silently reverted to the old seed data.
       Object.assign(DATA, saved);
-    }catch(e){ /* corrupted snapshot, keep seed data */ }
+    }catch(e){ typeof logErr==='function' && logErr('core', e); /* corrupted snapshot, keep seed data */ }
   }
   if(await ensureDataDefaults()) await save();
   document.getElementById('statusLine').textContent = '';

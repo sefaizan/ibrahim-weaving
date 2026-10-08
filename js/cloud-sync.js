@@ -218,7 +218,7 @@ function cloudStoredUser(){ try{ const u = JSON.parse(localStorage.getItem(CLOUD
 function cloudUserNow(){ return CLOUD_USER || cloudStoredUser(); }
 function cloudSetUser(u){
   CLOUD_USER = u ? { email: u.email || '', verified: !!u.emailVerified } : null;
-  try{ if(CLOUD_USER) localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(CLOUD_USER)); else localStorage.removeItem(CLOUD_USER_KEY); }catch(e){}
+  try{ if(CLOUD_USER) localStorage.setItem(CLOUD_USER_KEY, JSON.stringify(CLOUD_USER)); else localStorage.removeItem(CLOUD_USER_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   if(typeof viewOnlyNoteUser === 'function') viewOnlyNoteUser(u); // a verified non-owner account makes this phone view-only (view-only.js)
 }
 function cloudCanSync(){ const u = cloudUserNow(); return !!(u && u.verified); }
@@ -250,14 +250,14 @@ async function cloudAuthRestore(){
   if(!CLOUD_AUTH_KNOWN){
     await new Promise(resolve=>{
       let off = null, done = false;
-      const finish = ()=>{ if(done) return; done = true; try{ if(off) off(); }catch(e){} resolve(); };
+      const finish = ()=>{ if(done) return; done = true; try{ if(off) off(); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } resolve(); };
       off = auth.onAuthStateChanged(finish);
       setTimeout(finish, 8000);
     });
     CLOUD_AUTH_KNOWN = true;
   }
   let user = auth.currentUser;
-  if(user && user.isAnonymous){ try{ await auth.signOut(); }catch(e){} user = null; }
+  if(user && user.isAnonymous){ try{ await auth.signOut(); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } user = null; }
   return user;
 }
 // The Firestore handle for a signed-in, email-verified account — otherwise throws an error carrying
@@ -266,7 +266,7 @@ async function cloudSdkReady(){
   let user = await cloudAuthRestore();
   if(user && !user.emailVerified && !cloudOffline()){
     // The person may have just tapped the link in their email — pick that up (and a fresh token) now.
-    try{ await user.reload(); await user.getIdToken(true); user = firebase.auth().currentUser; }catch(e){}
+    try{ await user.reload(); await user.getIdToken(true); user = firebase.auth().currentUser; }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   }
   cloudSetUser(user);
   if(!user) throw cloudErr('signedout', 'not signed in — sign in under Settings > Cloud Sync');
@@ -558,7 +558,7 @@ async function cloudAccessEdit(mutate){
     out = mutate(snap.exists ? snap.data() : cloudAccessNewRecord());
     await ref.set(out.record);
   }
-  try{ localStorage.setItem(CLOUD_ACCESS_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){}
+  try{ localStorage.setItem(CLOUD_ACCESS_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   // Keep the small note that tells that person's phone about its own edit access in step (write-access.js).
   // The record above is the truth; if only the note fails, the caller is told (out.mirrorError).
   if(typeof waMirrorGrant === 'function'){
@@ -1010,7 +1010,7 @@ function updateSyncBadge(){
 }
 function setCloudStatus(status, err){
   CLOUD_STATUS = status; CLOUD_LAST_ERROR = err || '';
-  if(status === 'synced'){ try{ localStorage.setItem(CLOUD_LAST_OK_KEY, String(Date.now())); }catch(e){} }
+  if(status === 'synced'){ try{ localStorage.setItem(CLOUD_LAST_OK_KEY, String(Date.now())); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } }
   const el = document.getElementById('cloudSyncStatus');
   if(el) el.textContent = cloudStatusText();
   updateSyncBadge();
@@ -1027,7 +1027,7 @@ function cloudStatusText(){
   if(CLOUD_STATUS === 'unverified') return 'Email not verified yet — open the link we emailed you, then tap "I\'ve verified" below.';
   const ok = cloudLastOkMs();
   if(ok) return 'Synced ' + cloudAgoText(ok) + (cloudViewOnly() ? ' (view only)' : '');
-  let t = null; try{ t = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){}
+  let t = null; try{ t = localStorage.getItem(CLOUD_LAST_SEEN_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   return t ? ('Last synced ' + new Date(t).toLocaleString()) : 'Not synced yet';
 }
 // Keeps \"Synced 2 min ago\" (Settings card) and the header pill ticking while the app is open.
@@ -1177,7 +1177,7 @@ function cloudSplit(data){
       parts.stock.stockSummary = { total: Math.round(st.stock * 100) / 100,
         byQuality: (st.stockByQuality || []).map(r=>({ name: r.name, stock: Math.round(r.stock * 100) / 100 })) };
     }
-  }catch(e){}
+  }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   const tomb = src.deletedIds;
   if(tomb && typeof tomb === 'object' && !Array.isArray(tomb)){
     Object.keys(tomb).forEach(list=>{
@@ -1221,7 +1221,7 @@ function cloudMapGet(key){
   try{ const m = JSON.parse(localStorage.getItem(key) || 'null'); return m && typeof m === 'object' && !Array.isArray(m) ? m : {}; }
   catch(e){ return {}; }
 }
-function cloudMapSet(key, m){ try{ localStorage.setItem(key, JSON.stringify(m)); }catch(e){} }
+function cloudMapSet(key, m){ try{ localStorage.setItem(key, JSON.stringify(m)); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } }
 
 // What this account may do with each section. The owner: everything. Anyone else: what the owner allowed
 // (letters v = view, a = add, e = edit, d = delete), once this phone has been told; until then a phone
@@ -1239,14 +1239,14 @@ function cloudPermsChanged(){
   }catch(e){ console.error(e); }
 }
 function cloudPermsSave(perms){
-  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){}
+  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   const next = JSON.stringify(cloudPermsClean(perms));
-  try{ localStorage.setItem(CLOUD_PERMS_KEY, next); }catch(e){}
+  try{ localStorage.setItem(CLOUD_PERMS_KEY, next); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   if(before !== next) cloudPermsChanged();
 }
 function cloudPermsClear(){
-  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){}
-  try{ localStorage.removeItem(CLOUD_PERMS_KEY); }catch(e){}
+  let before = null; try{ before = localStorage.getItem(CLOUD_PERMS_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
+  try{ localStorage.removeItem(CLOUD_PERMS_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   cloudApprovalClear();
   if(before !== null) cloudPermsChanged();
 }
@@ -1257,8 +1257,8 @@ function cloudApprovalKnown(){
   try{ const p = JSON.parse(localStorage.getItem(CLOUD_APPROVAL_KEY) || 'null'); return p && typeof p === 'object' && !Array.isArray(p) ? cloudNeedsApprovalClean(p) : {}; }
   catch(e){ return {}; }
 }
-function cloudApprovalSave(map){ try{ localStorage.setItem(CLOUD_APPROVAL_KEY, JSON.stringify(cloudNeedsApprovalClean(map))); }catch(e){} }
-function cloudApprovalClear(){ try{ localStorage.removeItem(CLOUD_APPROVAL_KEY); }catch(e){} }
+function cloudApprovalSave(map){ try{ localStorage.setItem(CLOUD_APPROVAL_KEY, JSON.stringify(cloudNeedsApprovalClean(map))); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } }
+function cloudApprovalClear(){ try{ localStorage.removeItem(CLOUD_APPROVAL_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } }
 function cloudNeedsApproval(sec){ return !cloudIsOwner() && cloudApprovalKnown()[sec] === true; }
 // ---- Sections wiped from THIS phone because another (limited) account signed in on it ---------------------
 // permsPurgeHidden (view-only.js) empties the sections a limited account may not see. If the owner then signs in
@@ -1267,7 +1267,7 @@ function cloudNeedsApproval(sec){ return !cloudIsOwner() && cloudApprovalKnown()
 // brings them back from the cloud (cloudSectionsCheck), which also takes them off the list.
 const CLOUD_PURGED_KEY = 'khata-purged-sections';
 function cloudPurgedList(){ try{ const a = JSON.parse(localStorage.getItem(CLOUD_PURGED_KEY) || '[]'); return Array.isArray(a) ? a.filter(x=> typeof x === 'string') : []; }catch(e){ return []; } }
-function cloudPurgedSave(a){ try{ if(a.length) localStorage.setItem(CLOUD_PURGED_KEY, JSON.stringify(a)); else localStorage.removeItem(CLOUD_PURGED_KEY); }catch(e){} }
+function cloudPurgedSave(a){ try{ if(a.length) localStorage.setItem(CLOUD_PURGED_KEY, JSON.stringify(a)); else localStorage.removeItem(CLOUD_PURGED_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } }
 function cloudPurgedAdd(sec){ const a = cloudPurgedList(); if(a.indexOf(sec) < 0){ a.push(sec); cloudPurgedSave(a); } }
 function cloudPurgedClear(secs){ cloudPurgedSave(cloudPurgedList().filter(s=> secs.indexOf(s) < 0)); }
 function cloudSectionPerm(sec){
@@ -1300,7 +1300,7 @@ async function cloudMarkSynced(newestSavedAt){
     if((await cloudUnsyncedSections()).length) return;
     localStorage.setItem(CLOUD_LAST_HASH_KEY, await cloudCurrentHash());
     if(newestSavedAt) localStorage.setItem(CLOUD_LAST_SEEN_KEY, newestSavedAt);
-  }catch(e){ /* storage unavailable: the next check simply compares again */ }
+  }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e); /* storage unavailable: the next check simply compares again */ }
 }
 
 let CLOUD_PUSH_TIMER = null;
@@ -1358,7 +1358,7 @@ async function cloudPushNow(force){
     // via joinEncryptedSync (encryption.js) instead of generating its own.
     const meta = encEnabled() ? encMeta() : null;
     const sig = cloudKeySig();
-    let lastSig = null; try{ lastSig = localStorage.getItem(CLOUD_KEYSIG_KEY); }catch(e){}
+    let lastSig = null; try{ lastSig = localStorage.getItem(CLOUD_KEYSIG_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     const all = force === true || sig !== lastSig;
     if(owner && encEnabled() && typeof skOwnerPrepare === 'function') await skOwnerPrepare(db); // keys made and backed up in the vault BEFORE anything is sealed
     if(typeof auditFlush === 'function') await auditFlush(db); // the audit entries go first: a change never reaches the cloud ahead of its log entry (a connection failure stops the push here)
@@ -1380,10 +1380,10 @@ async function cloudPushNow(force){
     }
     // The owner marks the section layout as in use once every section has been written.
     if(owner && all && !denied.length){
-      let ok = null; try{ ok = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){}
+      let ok = null; try{ ok = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
       if(ok !== CLOUD_OWNER_EMAIL){
         await db.collection('ledger').doc(CLOUD_MANIFEST_ID).set({ version: 3, sections: cloudSectionIds(), migratedAt: new Date().toISOString(), by: who });
-        try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){}
+        try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
       }
     }
     CLOUD_PENDING_REMOTE = null;
@@ -1392,7 +1392,7 @@ async function cloudPushNow(force){
       setCloudStatus('error', 'the cloud refused changes to: ' + denied.join(', ') + ' \u2014 ask the owner to allow editing there');
       return;
     }
-    try{ localStorage.setItem(CLOUD_KEYSIG_KEY, sig); }catch(e){}
+    try{ localStorage.setItem(CLOUD_KEYSIG_KEY, sig); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     await cloudMarkSynced(newest);
     setCloudStatus('synced');
   }catch(e){ cloudFail(e); }
@@ -1501,7 +1501,7 @@ function recStampEdits(){
         Object.keys(base).forEach(id=>{ if(now[k][id] === undefined) auditNoteSafe('delete', k, JSON.parse(base[id]), null); }); // removed since the previous save
       });
     }
-    if(typeof auditObjectsCompare === 'function'){ try{ auditObjectsCompare(); }catch(e){ /* the log must never block a save */ } }
+    if(typeof auditObjectsCompare === 'function'){ try{ auditObjectsCompare(); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e); /* the log must never block a save */ } }
     REC_BASE = now;
   }finally{ REC_APPROVAL_NOW = null; }
 }
@@ -1514,7 +1514,7 @@ function tombRebaseline(){ try{ TOMB_BASE = tombIdsNow(); REC_BASE = recSigsNow(
 // that vanish then are not "deleted by the person", so they must not be noted as deletions.
 function tombResetBaseline(){ TOMB_BASE = null; REC_BASE = null; if(typeof auditResetBaseline === 'function') auditResetBaseline(); }
 function tombRecordDeletions(){
-  try{ recStampEdits(); }catch(e){ /* best effort */ }
+  try{ recStampEdits(); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e); /* best effort */ }
   const now = tombIdsNow();
   const t = (DATA.deletedIds && typeof DATA.deletedIds === 'object' && !Array.isArray(DATA.deletedIds)) ? DATA.deletedIds : null;
   let tomb = t;
@@ -1649,9 +1649,9 @@ function showSyncNotice(msg, onUndo){
 // undoing can never overwrite the other device's newer data.
 async function cloudTakeSafetyPoint(){
   const json = JSON.stringify(DATA);
-  try{ if(typeof snapAdd === 'function') await snapAdd('before-sync', json); }catch(e){ /* best effort — Undo still works from memory */ }
+  try{ if(typeof snapAdd === 'function') await snapAdd('before-sync', json); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e); /* best effort — Undo still works from memory */ }
   let seen = null, hash = null;
-  try{ seen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); hash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
+  try{ seen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); hash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   return { json, seen, hash, secSeen: cloudMapGet(CLOUD_SEC_SEEN_KEY), secHash: cloudMapGet(CLOUD_SEC_HASH_KEY) };
 }
 async function cloudUndoApply(pt, remote, mode){
@@ -1665,7 +1665,7 @@ async function cloudUndoApply(pt, remote, mode){
     try{
       if(pt.seen == null) localStorage.removeItem(CLOUD_LAST_SEEN_KEY); else localStorage.setItem(CLOUD_LAST_SEEN_KEY, pt.seen);
       if(pt.hash == null) localStorage.removeItem(CLOUD_LAST_HASH_KEY); else localStorage.setItem(CLOUD_LAST_HASH_KEY, pt.hash);
-    }catch(e){}
+    }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     setCloudStatus('waiting');
     switchTab(CURRENT_TAB || 'overview');
     showSyncNotice('Undone. Cloud data is still waiting — tap Sync Now to review it.');
@@ -1683,7 +1683,7 @@ async function cloudApplyRemote(remote){
   Object.assign(DATA, parsed);
   tombResetBaseline(); // whole ledger replaced — don't read the swap as deletions
   await save();
-  try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(json)); }catch(e){}
+  try{ localStorage.setItem(CLOUD_LAST_SEEN_KEY, remote.savedAt); localStorage.setItem(CLOUD_LAST_HASH_KEY, await sha256Hex(json)); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   CLOUD_PENDING_REMOTE = null;
   switchTab(CURRENT_TAB || 'overview');
   showSyncNotice('New data synced from the cloud', ()=> cloudUndoApply(pt, remote, 'pull'));
@@ -1710,7 +1710,7 @@ async function cloudUndoSections(pt, items){
     try{
       if(pt.seen == null) localStorage.removeItem(CLOUD_LAST_SEEN_KEY); else localStorage.setItem(CLOUD_LAST_SEEN_KEY, pt.seen);
       if(pt.hash == null) localStorage.removeItem(CLOUD_LAST_HASH_KEY); else localStorage.setItem(CLOUD_LAST_HASH_KEY, pt.hash);
-    }catch(e){}
+    }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     setCloudStatus('waiting');
     switchTab(CURRENT_TAB || 'overview');
     showSyncNotice('Undone. Cloud data is still waiting \u2014 tap Sync Now to review it.');
@@ -1781,7 +1781,7 @@ async function cloudMigrateToSections(db){
   setCloudStatus('syncing');
   try{
     const man = await db.collection('ledger').doc(CLOUD_MANIFEST_ID).get();
-    if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){} return 'done'; } // already moved
+    if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } return 'done'; } // already moved
     try{ await snapAdd('before-sections', JSON.stringify(DATA)); }
     catch(e){ console.error(e); setCloudStatus('error', 'could not file the safety copy first, so nothing was moved \u2014 try again'); return 'failed'; }
     const parts = cloudSplit(DATA), meta = encEnabled() ? encMeta() : null, who = recEditorEmail();
@@ -1800,7 +1800,7 @@ async function cloudMigrateToSections(db){
       cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); cloudMapSet(CLOUD_SEC_HASH_KEY, hashes);
     }
     await db.collection('ledger').doc(CLOUD_MANIFEST_ID).set({ version: 3, sections: cloudSectionIds(), migratedAt: new Date().toISOString(), by: who, wrote });
-    try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); localStorage.setItem(CLOUD_KEYSIG_KEY, cloudKeySig()); }catch(e){}
+    try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); localStorage.setItem(CLOUD_KEYSIG_KEY, cloudKeySig()); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     return 'done';
   }catch(e){ cloudFail(e); return 'failed'; }
 }
@@ -1847,7 +1847,7 @@ function cloudAskToApply(items, mode){
     : 'New data from another device is available.';
   el.innerHTML = '<span style="flex:1">' + msg + '</span><button type="button" id="cloudAskGo" style="background:#fff;color:#B5541E;border:0;border-radius:8px;padding:10px 18px;font-weight:800;font-size:15px">' + (mode === 'merge' ? 'Merge' : 'Update') + '</button><button type="button" id="cloudAskLater" aria-label="Later" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 8px">\u2715</button>';
   document.body.appendChild(el);
-  try{ el.animate([{transform:'translateY(-120%)',opacity:0},{transform:'translateY(0)',opacity:1}], {duration:280, easing:'ease-out'}); }catch(_){}
+  try{ el.animate([{transform:'translateY(-120%)',opacity:0},{transform:'translateY(0)',opacity:1}], {duration:280, easing:'ease-out'}); }catch(_){ typeof logErr==='function' && logErr('cloud-sync', _);  }
   el.querySelector('#cloudAskLater').onclick = ()=> el.remove();
   el.querySelector('#cloudAskGo').onclick = async ()=>{
     el.remove();
@@ -1866,14 +1866,14 @@ function cloudAskToApply(items, mode){
 // with this check. If the old whole-ledger copy has newer changes, they are applied first (asking, as always);
 // otherwise the one-time move (cloudMigrateToSections) runs.
 async function cloudMigrationCheck(db){
-  let flag = null; try{ flag = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){}
+  let flag = null; try{ flag = localStorage.getItem(CLOUD_MANIFEST_OK_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   if(flag === CLOUD_OWNER_EMAIL) return false;
   const man = await db.collection('ledger').doc(CLOUD_MANIFEST_ID).get();
-  if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){} return false; }
+  if(man.exists){ try{ localStorage.setItem(CLOUD_MANIFEST_OK_KEY, CLOUD_OWNER_EMAIL); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  } return false; }
   const snap = await cloudDocRef(db).get();
   const remote = snap.exists ? snap.data() : null;
   let lastSeen = null, lastHash = null;
-  try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); lastHash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){}
+  try{ lastSeen = localStorage.getItem(CLOUD_LAST_SEEN_KEY); lastHash = localStorage.getItem(CLOUD_LAST_HASH_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
   if(remote && remote.savedAt && remote.savedAt !== lastSeen){ // the old copy has changes this phone hasn't seen: apply them first (asking, as always)
     const mode = lastHash !== await cloudCurrentHash() ? 'merge' : 'pull';
     cloudAskToApply([{ legacy: true, remote, mode }], mode);
@@ -2175,7 +2175,7 @@ function wireCloudSyncCard(){
   if(typeof proposalsWire === 'function') proposalsWire();
   const toggle = document.getElementById('cloudSyncToggle');
   if(toggle) toggle.onchange = async ()=>{
-    try{ localStorage.setItem(CLOUD_SYNC_ON_KEY, toggle.checked ? '1' : '0'); }catch(e){}
+    try{ localStorage.setItem(CLOUD_SYNC_ON_KEY, toggle.checked ? '1' : '0'); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     if(toggle.checked) await cloudSyncCheckOnStart(); else setCloudStatus('idle');
     switchTab('settings');
   };

@@ -1,3 +1,6 @@
+function escHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 /* Money calculations and other pure logic: wages and rate history, shortfall shares, receivables,
  * cheques, client statement, Overview figures (Receivable, Cash Position), loans.
  *

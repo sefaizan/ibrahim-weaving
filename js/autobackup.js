@@ -39,7 +39,7 @@ function autoBackupConfig(){
   try{
     const c = JSON.parse(localStorage.getItem(AUTO_BACKUP_CFG_KEY) || 'null');
     if(c && typeof c === 'object') return {on: !!c.on, url: String(c.url || ''), key: String(c.key || ''), pw: String(c.pw || ''), at: autoBackupCleanAt(c.at)};
-  }catch(e){ /* unreadable settings = off */ }
+  }catch(e){ typeof logErr==='function' && logErr('autobackup', e); /* unreadable settings = off */ }
   return {on: false, url: '', key: '', pw: '', at: AUTO_BACKUP_DEFAULT_AT};
 }
 function autoBackupSetConfig(cfg){
@@ -49,11 +49,11 @@ function autoBackupState(){
   try{
     const s = JSON.parse(localStorage.getItem(AUTO_BACKUP_STATE_KEY) || 'null');
     if(s && typeof s === 'object') return s;
-  }catch(e){ /* start fresh */ }
+  }catch(e){ typeof logErr==='function' && logErr('autobackup', e); /* start fresh */ }
   return {};
 }
 function autoBackupSetState(patch){
-  try{ localStorage.setItem(AUTO_BACKUP_STATE_KEY, JSON.stringify(Object.assign(autoBackupState(), patch))); }catch(e){ /* best effort */ }
+  try{ localStorage.setItem(AUTO_BACKUP_STATE_KEY, JSON.stringify(Object.assign(autoBackupState(), patch))); }catch(e){ typeof logErr==='function' && logErr('autobackup', e); /* best effort */ }
 }
 function autoBackupReady(){
   const c = autoBackupConfig();
@@ -171,7 +171,7 @@ async function autoBackupSend(force){
       try{
         localStorage.setItem(LAST_BACKUP_KEY, nowIso);
         localStorage.setItem(LAST_BACKUP_COUNT_KEY, String(currentEntryCount()));
-      }catch(e){ /* best effort */ }
+      }catch(e){ typeof logErr==='function' && logErr('autobackup', e); /* best effort */ }
       if(typeof refreshBackupStrip === 'function') refreshBackupStrip();
       const line = document.getElementById('lastBackupLine');
       if(line) line.textContent = lastBackupStatusText();
@@ -238,7 +238,7 @@ async function autoBackupRefreshFabState(){
   try{
     const hash = await autoBackupHash(JSON.stringify(DATA));
     setFabNeedsBackup(hash !== autoBackupState().lastHash);
-  }catch(e){ /* leave the button as it was */ }
+  }catch(e){ typeof logErr==='function' && logErr('autobackup', e); /* leave the button as it was */ }
 }
 if(typeof document !== 'undefined' && document.addEventListener){
   document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') setTimeout(autoBackupOnWake, 3000); });
@@ -285,6 +285,7 @@ function autoBackupCardHtml(){
       <div class="grid cols-2">
         <button class="primary" id="ab_save" type="button" style="margin-top:0">Save &amp; send a test backup</button>
         <button class="ghost" id="ab_now" type="button" style="margin-top:0">Send a backup now</button>
+        <button class="ghost" id="diag_copy" type="button" style="margin-top:8px">Copy diagnostics</button>
       </div>
       <p class="note" id="ab_status" style="margin:10px 0 0">${autoBackupEsc(autoBackupStatusText())}</p>
     </div>`;
