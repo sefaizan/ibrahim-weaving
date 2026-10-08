@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v263';
+const CACHE_VERSION = 'v264';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
@@ -29,6 +29,7 @@ const APP_FILES = [
   './',
   './index.html',
   './manifest.json',
+  './js/errorlog.js',
   './js/calc.js',
   './js/ledger-store.js',
   './js/core.js',
@@ -113,17 +114,17 @@ self.addEventListener('activate', (event)=>{
   })());
 });
 
-// Answer from the cache immediately if we have it, and refresh the cached copy in the background.
+// The app's files are one versioned set, filled only at install time, so a phone can never hold a mix of old and
+// new files. A new version arrives by bumping CACHE_VERSION (a new service worker installs a whole new set).
 async function staleWhileRevalidate(event, cacheKey){
   const cache = await caches.open(CACHE);
   const cached = await cache.match(cacheKey);
-  const refresh = fetch(event.request.mode === 'navigate' ? cacheKey : event.request)
-    .then(async (res)=>{ if(res && res.ok) await cache.put(cacheKey, await clean(res)); return res; })
-    .catch(()=>null);
-  event.waitUntil(refresh);
   if(cached) return cached;
-  const fresh = await refresh;
-  return fresh || Response.error();
+  try{
+    const res = await fetch(event.request.mode === 'navigate' ? cacheKey : event.request);
+    if(res && res.ok) await cache.put(cacheKey, await clean(res.clone()));
+    return res;
+  }catch(e){ return Response.error(); }
 }
 
 // Cross-origin helpers (fonts, the Firebase scripts): the cached copy wins; otherwise fetch it and keep it.

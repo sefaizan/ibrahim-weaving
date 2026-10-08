@@ -1,7 +1,7 @@
 {
   "name": "Ibrahim Weaving — Power Loom Ledger",
   "short_name": "Ibrahim Weaving",
-  "description": "Power loom ledger: production, sales, recovery, wages and cash position. All data stays on this device.",
+  "description": "Power loom ledger: production, sales, recovery, wages and cash position. Data is kept on this device; optional cloud sync and email backup.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

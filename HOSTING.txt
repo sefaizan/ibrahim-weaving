@@ -1,7 +1,7 @@
 Ibrahim Weaving - Power Loom Ledger (installable app)
 
 Files (keep them together, in one folder, keeping the same folder layout):
-  index.html   manifest.json   service-worker.js   icons/   js/   jspdf.umd.min.js   _headers
+  index.html   manifest.json   service-worker.js   icons/   js/   jspdf.umd.min.js (loaded a moment after start)   _headers
 
 SET UP
 1. Upload the whole folder to any HTTPS static host (Netlify Drop, Cloudflare Pages,

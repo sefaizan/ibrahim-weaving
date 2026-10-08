@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https: wss: blob:; frame-src 'self' blob: https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
@@ -21,7 +22,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.35-release3-wage-cards">
+<meta name="app-build" content="v3.18.36-release3-hardening">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -34,7 +35,7 @@
     if(localStorage.getItem('khata-logs') === 'table') document.documentElement.setAttribute('data-logs', 'table');
   }catch(e){}
 </script>
-<meta name="description" content="Ibrahim Weaving — power loom ledger: production, sales, recovery, wages and cash position. All data stays on this device.">
+<meta name="description" content="Ibrahim Weaving — power loom ledger: production, sales, recovery, wages and cash position. Data is kept on this device; optional cloud sync and email backup, if you turn them on.">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
@@ -1374,7 +1375,7 @@
   #graphs_root .gx-flash{ animation:gxFlash 1.4s ease-out; }
   @keyframes gxFlash{ 0%,40%{ box-shadow:0 0 0 3px var(--gold); } 100%{ box-shadow:var(--elev-1); } }
 </style>
-<script src="./jspdf.umd.min.js"></script>
+<script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
 </head>
 <body>
 
@@ -1403,7 +1404,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.35</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.36</span></span>
     </div>
   </header>
 
@@ -1424,6 +1425,7 @@
 <div id="receiptPrintArea" aria-hidden="true"></div>
 
 <script src="./js/calc.js"></script>
+<script src="./js/errorlog.js"></script>
 <script src="./js/ledger-store.js"></script>
 <script src="./js/core.js"></script>
 <script src="./js/shell.js"></script>
