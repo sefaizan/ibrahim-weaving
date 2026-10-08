@@ -1505,22 +1505,25 @@ function moveBtns(key,idx,isFirst,isLast){
 function wageReceiptFacts(payId){
   const p = DATA.wagePayments.find(x=>x.id===payId);
   if(!p) return null;
-  const emp = p.employee, per = p.periodFrom && p.periodTo ? {from: p.periodFrom, to: p.periodTo} : null;   // a payment made for a chosen period keeps that period
-  const toD = per ? per.to : p.date, inScope = d => per ? d >= per.from && d <= per.to : true;
-  const sett = DATA.wageSettlements.filter(s=>s.employee===emp && s.date<=p.date).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
+  const emp = p.employee;
+  const sett = DATA.wageSettlements.filter(s=>s.employee===emp && s.date<p.date).sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
   const since = sett ? sett.date : null;
-  const carry = !per && sett ? Number(sett.carryForward||0) : 0;
-  const from = per ? per.from : since ? nextDayStr(since) : null;
+  // The period a slip covers: the one saved with the payment. Older payments have none, so they get the wage week
+  // (Friday to Thursday) of the pay date, up to that date, and never start before the day after a settlement.
+  const wk = currentWageWeek(p.date), wkFrom = since && nextDayStr(since) > wk.from ? nextDayStr(since) : wk.from;
+  const per = p.periodFrom && p.periodTo ? {from: p.periodFrom, to: p.periodTo} : {from: wkFrom, to: p.date};
+  const toD = per.to, from = per.from, inScope = d => d >= per.from && d <= per.to;
+  const carry = sett && (new Date(per.from + 'T00:00:00Z') - new Date(sett.date + 'T00:00:00Z')) / 86400000 <= 7 ? Number(sett.carryForward||0) : 0;   // a settlement in the week before the period hands its balance to it
   let earned = 0;
   DATA.qualities.forEach(q=>{ earned += computeWageMeters(emp, q.name, from, toD).wages; });
-  const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=toD && inScope(b.date)).reduce((s,b)=>s+(Number(b.amount)||0),0);
-  const list = DATA.wagePayments.filter(x=>x.employee===emp && (per ? x.periodFrom===per.from && x.periodTo===per.to : (!since||x.date>since) && x.date<=p.date));
+  const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && inScope(b.date)).reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const list = DATA.wagePayments.filter(x=>x.employee===emp && (x.periodFrom ? x.periodFrom===per.from && x.periodTo===per.to : inScope(x.date)));
   const upto = list.slice(0, list.findIndex(x=>x.id===payId)+1);
   const paidTotal = upto.reduce((s,x)=>s+(Number(x.amount)||0),0);
   const paidEarlier = paidTotal - (Number(p.amount)||0);
   const salary = salaryAccrued(emp, from, toD);
   const salaried = isSalariedEmp(emp) || salary > 0;
-  const bonusRows = DATA.wageBonuses.filter(b=>b.employee===emp && (!since||b.date>since) && b.date<=toD && inScope(b.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const bonusRows = DATA.wageBonuses.filter(b=>b.employee===emp && inScope(b.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const balance = paisaDiff(carry + earned + salary + bonus, paidTotal);
   const loans = DATA.loanPayments.filter(l=>l.employee===emp && l.date<=p.date);
   const given = loans.filter(l=>l.type!=='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
@@ -1530,8 +1533,7 @@ function wageReceiptFacts(payId){
     return {quality:q.name, own:m.own, diff:m.diffShare, total:m.total, wages:m.wages, diffWages:m.diffWages, rate: m.total ? m.wages/m.total : 0};
   }).filter(x=>x.total || x.wages);
   const diffWages = qualityRows.reduce((s,x)=>s+x.diffWages,0);
-  const prodDates = DATA.production.filter(r=>r.date && r.date<=toD && (!from||r.date>=from) && [r.e1,r.e2,r.e3].includes(emp)).map(r=>r.date).sort();
-  const periodFrom = from || (salaried && salaryFirstDate(emp)) || prodDates[0] || p.date;
+  const periodFrom = from;
   let run = 0;
   const loanRows = loans.map((l,i)=>({l,i})).sort((a,b)=> String(a.l.date).localeCompare(String(b.l.date)) || a.i-b.i).map(({l})=>{
     const rep = l.type==='Loan Repaid'; const amt = Number(l.amount)||0; run += rep ? -amt : amt;
