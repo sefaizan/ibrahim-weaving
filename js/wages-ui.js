@@ -185,9 +185,14 @@ async function wagesSheetSave(){
 
 // Pay is off for a period that is already paid in full (something was earned and nothing is left due).
 function wagesPeriodPaid(n){ return n.earned > 0.004 && n.net <= 0.004; }
-function wagesPayBtn(name, net){
-  const done = wagesPeriodPaid(net);
-  return `<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}"${done ? ' disabled aria-disabled="true" title="Already paid for this period" style="opacity:.55"' : ''}>${done ? 'Paid' : 'Pay'}</button>`;
+// The newest payment of the period (same date rule as the Paid figure), so a paid card can share its receipt from here.
+function wagesPeriodPayment(name, from, to){
+  return (DATA.wagePayments || []).filter(p => p.employee === name && (!from || p.date >= from) && (!to || p.date <= to)).reduce((a, p) => !a || p.date >= a.date ? p : a, null);
+}
+function wagesPayBtn(name, net, from, to){
+  const done = wagesPeriodPaid(net), last = done ? wagesPeriodPayment(name, from, to) : null;
+  const share = last ? `<button type="button" class="ghost wg-pay" data-wage-share="${escHtml(last.id)}" aria-label="Share receipt" title="Share the wage receipt" style="padding-inline:12px;min-width:0">${typeof ICON_SHARE !== 'undefined' ? ICON_SHARE : 'Share'}</button>` : '';
+  return share + `<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}"${done ? ' disabled aria-disabled="true" title="Already paid for this period" style="opacity:.55"' : ''}>${done ? 'Paid' : 'Pay'}</button>`;
 }
 
 /* ---------------- Summary tab ---------------- */
@@ -210,7 +215,7 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
        <tfoot><tr><td>Total</td><td>${fmtQtyMtr(own)}</td><td>${row.totalDiffMeters ? fmtQtyMtr(row.totalDiffMeters) : '–'}</td><td></td><td>${fmtRs2(row.totalWagesNoBonus).replace('Rs ', '')}</td></tr></tfoot></table></div>${changed ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}`
     : `<div class="wg-fine">No production in this period.</div>`;
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net)}</div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
     <div class="wg-mini"><span>Meters <b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></span><span>Earned <b>${fmtRs2(net.earned)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '—'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
     <div class="wg-det">${detail}
       <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
@@ -226,7 +231,7 @@ function wagesSalCardHtml(d, from, to, asOf){
   const weekly = salaryWeeklyOn(name, asOf);
   const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net)}</div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
     ${emp.title ? `<div class="wg-fine" style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
     <div class="wg-mini"><span>Weekly <b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></span><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : ''}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : ''}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
     <div class="wg-det"><div class="wg-lines"><span>Salary earned <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
@@ -331,6 +336,8 @@ function wagesUiWire(){
       root.querySelectorAll('[data-wsub]').forEach(s => s.classList.toggle('on', s.dataset.wsub === WAGES_UI.logKind));
       return;
     }
+    const sh = t.closest('[data-wage-share]');
+    if(sh){ shareWageReceipt(sh.dataset.wageShare); return; }
     const add = t.closest('[data-wage-add]');
     if(add){ wagesSheetOpen(add.dataset.wageAdd, add.dataset.wageEmp || ''); return; }
     const head = t.closest('[data-wg-toggle]');
