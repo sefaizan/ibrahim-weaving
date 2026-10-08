@@ -89,7 +89,7 @@ describe('switching pay basis', () => {
 describe('wage slip for salaried staff', () => {
   test('slip facts include salary, so the balance matches the Wages page', () => {
     const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'panels-wages-receipts.js'), 'utf8');
-    assert.match(src, /salaryAccrued\(emp, from, p\.date\)/);
+    assert.match(src, /salaryAccrued\(emp, from, toD\)/);
     assert.match(src, /carry \+ earned \+ salary \+ bonus/);
   });
   test('helpers: salaried flag, weekly rate on a date, first date', () => {

@@ -153,11 +153,23 @@ describe('quick-entry sheet', () => {
     await t.run('wagesSheetSave()');
     const pays = JSON.parse(t.run('JSON.stringify(DATA.wagePayments)'));
     assert.equal(pays.length, 2);
-    assert.deepEqual({ ...pays[1], id: 'x' }, { id: 'x', date: '2026-10-02', employee: 'Ali', amount: 650, remarks: 'cash' });
+    assert.deepEqual({ ...pays[1], id: 'x' }, { id: 'x', date: '2026-10-02', employee: 'Ali', amount: 650, remarks: 'cash', periodFrom: '2026-09-28', periodTo: '2026-10-02' }); // plus the period the page was showing
     assert.equal(t.run('EDITING'), null, 'a half-finished edit on the old form is dropped');
     assert.match(t.log.toasts[0], /Paid Rs 650\.00 · Ali/);
     assert.equal(t.run('WAGES_UI.sheet.emp'), 'Bilal');     // Bilal is the next one still due
     assert.equal(t.log.tabs, 1);
+  });
+  test('a payment saved for a chosen period keeps that period', async () => {
+    const t = setup('pay'); Object.assign(t.vals, { wq_emp: 'Ali', wq_date: '2026-10-02', wq_amt: '650', wg_from: '2026-09-25', wg_to: '2026-10-01' });
+    await t.run('wagesSheetSave()');
+    const p = JSON.parse(t.run('JSON.stringify(DATA.wagePayments)'))[1];
+    assert.equal(p.periodFrom, '2026-09-25'); assert.equal(p.periodTo, '2026-10-01');
+  });
+  test('Pay is off for a period that is already paid in full, and on while anything is still due', () => {
+    const t = setup('pay');
+    assert.match(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 1000, net: 0})"), /disabled[^>]*>Paid</);
+    assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 400, net: 600})"), /disabled/);
+    assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 0, paid: 0, net: 0})"), /disabled/, 'nothing earned: not a paid period');
   });
   test('when nobody else is due the sheet closes; Bonus and Settle land in their own lists and stay open', async () => {
     const t = setup('pay'); Object.assign(t.vals, { wq_emp: 'Bilal', wq_date: '2026-10-02', wq_amt: '1485' });

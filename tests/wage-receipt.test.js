@@ -165,3 +165,16 @@ describe('Urdu wage slip', () => {
     assert.match(h, /حساب برابر/);
   });
 });
+
+describe('wage slip period (v3.18.32)', () => {
+  test('a payment made for a chosen period shows exactly that period and its figures, not everything up to the pay date', () => {
+    const { facts, html } = load({
+      production: [prod({ date: '2026-10-01', quality: 'A', qty: 849, e1: 'Ali', e1m: 849 }), prod({ date: '2026-10-08', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 })],
+      wagePayments: [{ id: 'p2', date: '2026-10-09', employee: 'Ali', amount: 8490, remarks: '', periodFrom: '2026-09-25', periodTo: '2026-10-01' }],
+    });
+    const f = facts('p2');
+    assert.equal(f.periodFrom, '2026-09-25'); assert.equal(f.periodTo, '2026-10-01');
+    assert.equal(f.earned, 8490); assert.equal(f.bonus, 0); assert.equal(f.balance, 0);
+    assert.match(html('p2'), /2026-09-25 to 2026-10-01/);
+  });
+});
