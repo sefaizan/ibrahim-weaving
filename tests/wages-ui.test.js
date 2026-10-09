@@ -93,8 +93,9 @@ describe('Summary tab', () => {
     t.run('renderWages()');
     const html = t.el('wagesWrap').innerHTML;
     const bal = (n) => JSON.parse(t.run(`JSON.stringify(computeEmployeeWageBalance('${n}'))`)).balance;
-    const owed = ['Ali', 'Bilal'].reduce((s, n) => s + Math.max(0, bal(n)), 0);
-    assert.ok(html.includes(`<div class="wg-hero-big">Rs ${Math.round(owed)}</div>`), 'hero shows the running balance owed');
+    const net = (n) => JSON.parse(t.run(`JSON.stringify(computeEmployeeWageNetForPeriod('${n}', '2026-09-28', '2026-10-02'))`)).net;
+    const owed = ['Ali', 'Bilal'].reduce((s, n) => s + Math.max(0, net(n)), 0);
+    assert.ok(html.includes(`<div class="wg-hero-big">Rs ${Math.round(owed)}</div>`), 'hero shows what is still owed for the selected period');
     // Ali: A 100 x 10 = 1000, B (40 own + 5 of the 10 unassigned) x 5 = 225, paid 600 -> balance 625
     closeTo(bal('Ali'), 625, 'Ali balance');
     // Bilal: A 80 x 12 = 960 + his 5 of the unassigned B meters x 5 = 25 + bonus 500 = 1485
