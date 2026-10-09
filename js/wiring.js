@@ -425,7 +425,7 @@ function wirePanel(id){
       };
       const calc = ()=>{
         let T=0, A=0, bad=0;
-        const bu = computeWarpBeamUsage();
+        const bu = computeBeamForecasts(beamAlertDays() || 3);
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
           q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu);

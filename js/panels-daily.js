@@ -844,12 +844,14 @@ function beamsForLoom(loomName){
 // beam after the quantity being typed (extra = typed qty not yet saved). Empty when the beam has plenty left,
 // or the loom has no active beam. usage = optional computeWarpBeamUsage() result, to reuse across looms.
 const BEAM_NEAR_END_METERS = 100;
-function beamLeftBadge(loom, extra, usage){
+function beamLeftBadge(loom, extra, forecasts){
   if(!loom) return '';
-  usage = usage || computeWarpBeamUsage();
-  const b = DATA.warpBeams.filter(x=>x.loom===loom && usage[x.id] && usage[x.id].isActive).sort((a,c)=> dtOf(c)-dtOf(a))[0];
-  if(!b) return '';
-  const left = (Number(b.length)||0) - usage[b.id].woven - (Number(extra)||0);
+  // Same figure as the Beam Forecast card ("~738 m left"): length x expected yield minus meters woven so far.
+  forecasts = forecasts || computeBeamForecasts(beamAlertDays() || 3);
+  const f = forecasts.find(x=> String(x.loom) === String(loom));
+  if(!f) return '';
+  const b = DATA.warpBeams.find(x=> x.id === f.id) || {};
+  const left = f.expectedRemaining - (Number(extra)||0);
   if(left >= BEAM_NEAR_END_METERS) return '';
   return `<button type="button" class="beam-left-badge" data-loom="${escHtml(loom)}" data-left="${Math.round(left)}" data-date="${escHtml(b.date||'')}" style="display:inline-block;margin:4px 0;padding:6px 12px;min-height:32px;border:0;border-radius:999px;font-size:12px;font-weight:700;background:var(--warn-bg-2);color:var(--rust);cursor:pointer">\u26A0\uFE0F ${left <= 0 ? 'Beam fully woven' : 'Beam about to finish \u2014 ~' + fmtNum(Math.round(left)) + ' m left'}</button>`;
 }
