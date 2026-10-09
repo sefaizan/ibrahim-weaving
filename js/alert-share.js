@@ -8,43 +8,49 @@
  */
 function alertNum(n, dec){ return (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: dec == null ? 0 : dec }); }
 function alertMtr(n){ return typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : alertNum(n, 1) + ' m'; }
-function alertAsOf(){ return '🕒 _As of ' + new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }) + '_'; }
+function alertAsOf(){ return '_As of ' + new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/i, m => m.toUpperCase()) + '_'; }
 function alertBar(p){ const n = Math.max(0, Math.min(10, Math.round((Number(p) || 0) * 10))); return '▓'.repeat(n) + '░'.repeat(10 - n); }
 // Order bar: ▓ already delivered, ▒ covered by the stock in hand, ░ still to weave (10 blocks = the whole order).
-function alertOrderBar(donePct, stockPct){
-  const d = Math.max(0, Math.min(10, Math.round(donePct / 10))), c = Math.max(0, Math.min(10 - d, Math.round(stockPct / 10)));
+function alertOrderBar(sentPct, stockPct){
+  const d = Math.max(0, Math.min(10, Math.round(sentPct / 10))), c = Math.max(0, Math.min(10 - d, Math.round(stockPct / 10)));
   return '▓'.repeat(d) + '▒'.repeat(c) + '░'.repeat(10 - d - c);
 }
-// orders: open orders [{quality, client, no, date, qty, got}]. One quality's stock is shared out oldest order first, so it is never counted twice.
+// "62/44 (Micro 150.144)" -> "62/44", like the Orders page; two qualities that would look the same keep their full name.
+function alertShortNames(names){
+  const short = n => String(n || '').split(' (')[0], count = {};
+  names.forEach(n => { count[short(n)] = (count[short(n)] || 0) + 1; });
+  const map = {}; names.forEach(n => { map[n] = count[short(n)] > 1 ? String(n) : short(n); });
+  return map;
+}
+// orders: open orders [{quality, no, date, qty, got}]. One quality's stock is shared out oldest order first, so it is never counted twice.
 function alertOrderLines(quality, stock, orders){
   let left = Number(stock) || 0;
   const mine = (orders || []).filter(o => o.quality === quality && Number(o.qty) > 0).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true }));
-  const lines = [];
-  mine.slice(0, 3).forEach(o => {
+  const out = [];
+  mine.slice(0, 3).forEach((o, i) => {
     const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), take = Math.min(left, Math.max(0, qty - got));
     left -= take;
-    const doneP = got / qty * 100, stockP = take / qty * 100, total = Math.min(100, Math.round(doneP + stockP));
-    lines.push('    👤 ' + (o.client || '?') + (o.no ? ' (' + o.no + ')' : ''), '    ' + alertOrderBar(doneP, stockP) + ' *' + total + '%*  ' + Math.round(doneP) + '% sent + ' + Math.round(stockP) + '% from stock');
+    const sent = Math.round(got / qty * 100), stk = Math.round(take / qty * 100), total = Math.min(100, sent + stk);
+    if(i) out.push('');
+    out.push((o.no || 'Order') + ' ' + alertOrderBar(sent, stk) + ' *' + total + '%*' + (total >= 100 ? ' ✅' : ''));
+    if(sent > 0 || stk > 0) out.push('↳ ' + sent + '% sent + ' + stk + '% from stock');
   });
-  if(mine.length > 3) lines.push('    + ' + (mine.length - 3) + ' more orders');
-  return lines;
+  if(mine.length > 3) out.push('', '+ ' + (mine.length - 3) + ' more orders');
+  return out;
 }
 function alertStockText(rows, total, orders){
   const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
-  if(!list.length) lines.push('No stock in hand.');
-  else{
-    lines.push('🟢 *Total: ' + alertMtr(t) + '*', '');
-    let anyOrder = false;
-    list.slice(0, 8).forEach(r => {
-      lines.push('▪️ *' + r.name + '*: ' + alertMtr(r.stock));
-      const ol = alertOrderLines(r.name, r.stock, orders);
-      if(ol.length){ anyOrder = true; lines.push(...ol); }
-      else{ const share = t > 0 ? r.stock / t : 0; lines.push('    ' + alertBar(share) + ' ' + Math.round(share * 100) + '% of stock'); }
-    });
-    if(list.length > 8) lines.push('+ ' + (list.length - 8) + ' more');
-    if(anyOrder) lines.push('', '_▓ sent  ▒ stock in hand  ░ still to weave_');
-  }
-  lines.push('', alertAsOf());
+  if(!list.length){ lines.push('No stock in hand.', '', alertAsOf()); return { title: '📦 STOCK BY QUALITY', body: lines.join('\n') }; }
+  const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name));
+  const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), mW = Math.max(...mtrs.map(x => x.length));
+  const block = shown.map((r, i) => nm[r.name].padEnd(nameW) + '   ' + mtrs[i].padStart(mW));
+  if(list.length > 8) block.push('+ ' + (list.length - 8) + ' more');
+  lines.push('🟢 *Total: ' + alertMtr(t) + '*', '', '```' + block.join('\n') + '```');
+  const og = [];
+  shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length) og.push('*' + nm[r.name] + '*', '', ...ol, ''); });
+  if(og.length) lines.push('', '📋 *ORDERS*', ...og, '_▓ sent  ▒ stock  ░ to weave_');
+  else lines.push('');
+  lines.push(alertAsOf());
   return { title: '📦 STOCK BY QUALITY', body: lines.join('\n') };
 }
 function alertWeftText(e){
