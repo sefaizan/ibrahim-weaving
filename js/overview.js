@@ -155,7 +155,7 @@ function takeBeamAlert(onlyLoom){
   const seen = beamAlertsSeen(), today = todayStr();
   const fresh = computeBeamForecasts(days).filter(f =>
     (f.state === 'ending' || f.state === 'full') &&
-    (onlyLoom == null || String(f.loom) === String(onlyLoom)) &&
+    (onlyLoom == null || (Array.isArray(onlyLoom) ? onlyLoom.map(String).includes(String(f.loom)) : String(f.loom) === String(onlyLoom))) &&
     seen[f.id] !== `${today}:${f.state}`);
   if(!fresh.length) return '';
   fresh.forEach(f => { seen[f.id] = `${today}:${f.state}`; });

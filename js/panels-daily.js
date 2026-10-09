@@ -145,6 +145,7 @@ function mbCardHtml(name){
   const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr"></div>`;
   return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
+    <div class="mb-bm"></div>
     <label>Gzana (meters and sixteenths)</label>
     <div class="mb-rw"><input class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
     ${row(1,'Employee 1',a.e1)}${row(2,'Employee 2',a.e2)}
@@ -189,6 +190,7 @@ function productionPanel(){
       ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16')}
     </div>
     <div id="p_beamToggleWrap"></div>
+    <div id="p_beamLeft"></div>
     <input type="hidden" id="p_beam" value="">
     <div class="group-label">Employees & Their Meters</div>
     <div class="grid cols-2">
@@ -838,6 +840,30 @@ function weftPanel(){
 function beamsForLoom(loomName){
   return DATA.warpBeams.filter(b=>b.loom===loomName).slice().sort((a,b)=> dtOf(b)-dtOf(a));
 }
+// "Beam about to finish" badge shown while typing production for a loom: meters left on the loom's active
+// beam after the quantity being typed (extra = typed qty not yet saved). Empty when the beam has plenty left,
+// or the loom has no active beam. usage = optional computeWarpBeamUsage() result, to reuse across looms.
+const BEAM_NEAR_END_METERS = 100;
+function beamLeftBadge(loom, extra, usage){
+  if(!loom) return '';
+  usage = usage || computeWarpBeamUsage();
+  const b = DATA.warpBeams.filter(x=>x.loom===loom && usage[x.id] && usage[x.id].isActive).sort((a,c)=> dtOf(c)-dtOf(a))[0];
+  if(!b) return '';
+  const left = (Number(b.length)||0) - usage[b.id].woven - (Number(extra)||0);
+  if(left >= BEAM_NEAR_END_METERS) return '';
+  return `<button type="button" class="beam-left-badge" data-loom="${escHtml(loom)}" data-left="${Math.round(left)}" data-date="${escHtml(b.date||'')}" style="display:inline-block;margin:4px 0;padding:6px 12px;min-height:32px;border:0;border-radius:999px;font-size:12px;font-weight:700;background:var(--warn-bg-2);color:var(--rust);cursor:pointer">\u26A0\uFE0F ${left <= 0 ? 'Beam fully woven' : 'Beam about to finish \u2014 ~' + fmtNum(Math.round(left)) + ' m left'}</button>`;
+}
+// Tap the badge to see what it means (one listener for every badge, wherever it is drawn).
+document.addEventListener('click', e=>{
+  const bt = e.target.closest && e.target.closest('.beam-left-badge'); if(!bt) return;
+  e.preventDefault();
+  const left = Number(bt.dataset.left) || 0, loom = bt.dataset.loom;
+  const msg = left <= 0
+    ? `\u26A0\uFE0F Loom ${loom}'s beam is fully woven \u2014 please check, and chain the next beam or mark it finished.`
+    : `\u26A0\uFE0F Loom ${loom}'s beam is about to finish \u2014 only ~${fmtNum(left)} m left (beam chained ${bt.dataset.date ? fmtDate(bt.dataset.date) : 'earlier'}). Please check.`;
+  if(typeof haptic === 'function') haptic([30,40,30]);
+  showActionToast(msg, 'Beams', ()=> switchTab('warpbeams'), 9000);
+});
 // Builds the "This entry is from: New beam / Previous beam" toggle on the Production form,
 // scoped to the entry's own Date (p_date) rather than just "whichever beam was logged most
 // recently overall" — a backdated entry shouldn't be asked to choose between two beams that

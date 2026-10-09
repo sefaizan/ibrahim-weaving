@@ -121,6 +121,14 @@ function wirePanel(id){
       beamAlertToast(takeBeamAlert(rec.loom)); // the loom's beam may now be about to end
     };
     document.getElementById('p_loom').addEventListener('change', ()=> renderBeamToggle(true));
+    // Live "beam about to finish" badge under the beam choice (same rule as Multiple Entries)
+    const updBeamLeft = ()=>{
+      const el = document.getElementById('p_beamLeft'); if(!el) return;
+      const loom = v('p_loom'), old = (EDITING && EDITING.key==='production') ? DATA.production.find(r=>r.id===EDITING.id) : null;
+      el.innerHTML = beamLeftBadge(loom, combineMtr16(v('p_qty'), v('p_qty_16')) - (old && old.loom===loom ? Number(old.qty)||0 : 0));
+    };
+    ['p_loom','p_date','p_qty','p_qty_16'].forEach(i=>{ const e = document.getElementById(i); if(e){ e.addEventListener('input', updBeamLeft); e.addEventListener('change', updBeamLeft); } });
+    updBeamLeft();
     // Date drives which beam(s) are even relevant (see renderBeamToggle) — recompute on
     // every date change, but preserve an existing valid choice rather than resetting it.
     document.getElementById('p_date').addEventListener('change', ()=> renderBeamToggle(false));
@@ -276,7 +284,7 @@ function wirePanel(id){
     wireEditGeneric('production','addProduction','cancelProduction',
       {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
       (rec)=>{
-        renderBeamToggle(false); syncE2(); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
+        renderBeamToggle(false); updBeamLeft(); syncE2(); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
         document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
@@ -417,8 +425,10 @@ function wirePanel(id){
       };
       const calc = ()=>{
         let T=0, A=0, bad=0;
+        const bu = computeWarpBeamUsage();
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
+          q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu);
           if(!(t>0)){ d.textContent='Diff: —'; d.style.color=''; return; }
           const diff = Math.round((t-a)*16)/16;
           d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
@@ -488,7 +498,10 @@ function wirePanel(id){
         recs.forEach(r=>DATA.production.push({id:uid(), ...r}));
         PAGE.production = 1;
         await save(); switchTab('production');
-        showToast(`Saved ${recs.length} production entr${recs.length===1?'y':'ies'}.`);
+        const savedMsg = `Saved ${recs.length} production entr${recs.length===1?'y':'ies'}.`;
+        const beamMsg = takeBeamAlert(recs.map(r=>r.loom)); // any of these looms' beams may now be about to end
+        if(beamMsg){ haptic([30,40,30]); showActionToast(`${savedMsg} · ${beamMsg}`, 'View', ()=> switchTab('warpbeams'), 9000); }
+        else showToast(savedMsg);
       };
     }
   }
