@@ -232,10 +232,9 @@ function wagesSalCardHtml(d, from, to, asOf){
   const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
     <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
-    ${emp.title ? `<div class="wg-fine" style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
-    <div class="wg-sal-big"><div><small>Earned this period</small><strong>${fmtRs2(row ? row.totalWages : 0)}</strong></div><div><small>Weekly salary</small><b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></div></div>
-    <div class="wg-mini"><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span>${row && row.totalWagesNoBonus > 0 ? `<span>Wages <b>${fmtRs2(row.totalWagesNoBonus)}</b></span>` : ''}<span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
-    <div class="wg-det"><div class="wg-lines"><span>Salary earned <b>${fmtRs2(row ? row.salary : 0)}</b></span><span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
+    ${emp.title ? `<div class="wg-fine" data-wg-toggle style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
+    <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(row ? row.totalWages : 0)}</strong></div><div><small>Weekly salary</small><b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></div></div>
+    <div class="wg-det"><div class="wg-lines"><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span>${row && row.totalWagesNoBonus > 0 ? `<span>Wages <b>${fmtRs2(row.totalWagesNoBonus)}</b></span>` : ''}<span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry || '\u2013'}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
 }
 function renderWages(){
