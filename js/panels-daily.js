@@ -855,6 +855,37 @@ function beamLeftBadge(loom, extra, forecasts){
   if(left >= BEAM_NEAR_END_METERS) return '';
   return `<button type="button" class="beam-left-badge" data-loom="${escHtml(loom)}" data-left="${Math.round(left)}" data-date="${escHtml(b.date||'')}" style="display:inline-block;margin:4px 0;padding:6px 12px;min-height:32px;border:0;border-radius:999px;font-size:12px;font-weight:700;background:var(--warn-bg-2);color:var(--rust);cursor:pointer">\u26A0\uFE0F ${left <= 0 ? 'Beam fully woven' : 'Beam about to finish \u2014 ~' + fmtNum(Math.round(left)) + ' m left'}</button>`;
 }
+// Production sanity badges (never block saving): same loom + date + quality already logged (opts.dup), and
+// meters far from this loom's recent average. Tap a badge to read the explanation.
+function prodCheckBadges(loom, date, quality, qty, opts){
+  opts = opts || {}; qty = Number(qty) || 0;
+  if(!loom) return '';
+  const mk = (label, msg)=> `<button type="button" class="chk-badge" data-msg="${escHtml(msg)}" style="display:inline-block;margin:4px 6px 4px 0;padding:6px 12px;min-height:32px;border:0;border-radius:999px;font-size:12px;font-weight:700;background:var(--warn-bg-2);color:var(--rust);cursor:pointer">\u26A0\uFE0F ${escHtml(label)}</button>`;
+  const same = r=> r.loom === loom && r.id !== opts.skipId;
+  const out = [];
+  if(opts.dup && date && quality){
+    const ex = DATA.production.filter(r=> same(r) && r.date === date && r.quality === quality);
+    if(ex.length){
+      const tot = ex.reduce((s,r)=> s + (Number(r.qty)||0), 0);
+      out.push(mk('Already logged for this date', `Loom ${loom} already has ${fmtQtyMtr(tot)} m logged for ${fmtDate(date)} (${quality}). Saving adds another entry and wages count both. Check you are not entering the same day twice.`));
+    }
+  }
+  if(qty > 0){
+    const recent = DATA.production.filter(r=> same(r) && (Number(r.qty)||0) > 0 && r.date !== date)
+      .sort((a,b)=> String(b.date).localeCompare(String(a.date)) || String(b.time||'').localeCompare(String(a.time||''))).slice(0, 10);
+    if(recent.length >= 3){
+      const avg = recent.reduce((s,r)=> s + Number(r.qty), 0) / recent.length;
+      if(qty > avg * 1.5 || qty < avg * 0.5)
+        out.push(mk(`Unusual meters \u2014 usually ~${fmtNum(Math.round(avg))} m`, `Loom ${loom}: ${fmtQtyMtr(qty)} m is ${qty > avg ? 'much higher' : 'much lower'} than its recent average of ~${fmtNum(Math.round(avg))} m (last ${recent.length} entries). Please check the meters for a typing mistake.`));
+    }
+  }
+  return out.join('');
+}
+document.addEventListener('click', e=>{
+  const bt = e.target.closest && e.target.closest('.chk-badge'); if(!bt) return;
+  e.preventDefault(); if(typeof haptic === 'function') haptic([30,40,30]);
+  showToast('\u26A0\uFE0F ' + (bt.dataset.msg || ''), 9000);
+});
 // Tap the badge to see what it means (one listener for every badge, wherever it is drawn).
 document.addEventListener('click', e=>{
   const bt = e.target.closest && e.target.closest('.beam-left-badge'); if(!bt) return;

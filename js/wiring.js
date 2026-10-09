@@ -125,9 +125,10 @@ function wirePanel(id){
     const updBeamLeft = ()=>{
       const el = document.getElementById('p_beamLeft'); if(!el) return;
       const loom = v('p_loom'), old = (EDITING && EDITING.key==='production') ? DATA.production.find(r=>r.id===EDITING.id) : null;
-      el.innerHTML = beamLeftBadge(loom, combineMtr16(v('p_qty'), v('p_qty_16')) - (old && old.loom===loom ? Number(old.qty)||0 : 0));
+      const typed = combineMtr16(v('p_qty'), v('p_qty_16'));
+      el.innerHTML = beamLeftBadge(loom, typed - (old && old.loom===loom ? Number(old.qty)||0 : 0)) + prodCheckBadges(loom, v('p_date'), v('p_quality'), typed, {skipId: old ? old.id : null});
     };
-    ['p_loom','p_date','p_qty','p_qty_16'].forEach(i=>{ const e = document.getElementById(i); if(e){ e.addEventListener('input', updBeamLeft); e.addEventListener('change', updBeamLeft); } });
+    ['p_loom','p_date','p_quality','p_qty','p_qty_16'].forEach(i=>{ const e = document.getElementById(i); if(e){ e.addEventListener('input', updBeamLeft); e.addEventListener('change', updBeamLeft); } });
     updBeamLeft();
     // Date drives which beam(s) are even relevant (see renderBeamToggle) — recompute on
     // every date change, but preserve an existing valid choice rather than resetting it.
@@ -428,7 +429,7 @@ function wirePanel(id){
         const bu = computeBeamForecasts(beamAlertDays() || 3);
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
-          q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu);
+          q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu) + prodCheckBadges(c.dataset.loom, v('mb_date'), v('mb_quality'), t, {dup:true});
           if(!(t>0)){ d.textContent='Diff: —'; d.style.color=''; return; }
           const diff = Math.round((t-a)*16)/16;
           d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
@@ -437,6 +438,7 @@ function wirePanel(id){
         document.getElementById('mb_totals').textContent = `Total Gzana: ${fmtQtyMtr(T)} · Assigned: ${fmtQtyMtr(A)} · Diff: ${fmtQtyMtr(Math.round((T-A)*16)/16)}`;
         document.getElementById('mb_err').textContent = bad ? `Employees exceed Gzana on ${bad} loom(s). Check the meters.` : '';
       };
+      ['mb_date','mb_quality'].forEach(id=>{ const e = document.getElementById(id); if(e){ e.addEventListener('change', calc); e.addEventListener('input', calc); } });
       const setPicks = fn=>{
         document.querySelectorAll('.mb_pk').forEach(p=>{ p.checked = fn(p.value); });
         cards().forEach(c=>{ c.style.display = document.querySelector(`.mb_pk[value="${CSS.escape(c.dataset.loom)}"]`).checked ? 'block' : 'none'; });
@@ -1979,7 +1981,7 @@ function runInlineChecks(){
     const val = id => { const e = document.getElementById(id); return e ? e.value : ''; };
     // Dates far from today (more than a week ahead or two months back)
     document.querySelectorAll('input[type="date"][id$="_date"]').forEach(inp=>{
-      if(!/^(s|r|p|ex|f|pex|ol|pl|w|wf|wb|wp|ws|lp|cp)_date$/.test(inp.id)) return;
+      if(!/^(s|r|p|mb|ex|f|pex|ol|pl|w|wf|wb|wp|ws|lp|cp)_date$/.test(inp.id)) return;
       let m = '';
       if(inp.value){
         const days = Math.round((new Date(inp.value+'T00:00:00') - new Date(new Date().toDateString())) / 86400000);
