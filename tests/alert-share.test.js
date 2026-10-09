@@ -16,7 +16,7 @@ describe('alert texts', () => {
   test('stock: total, then the qualities in one monospace block (short names, meters aligned), biggest first', () => {
     const t = app.alertStockText([{ name: '52 Picks', stock: 300.4 }, { name: '60/52 (Micro 150.144)', stock: 0 }, { name: '62/44 (Micro 150.144)', stock: 1240 }], 1540.4);
     assert.equal(t.title, '📦 STOCK BY QUALITY');
-    assert.equal(t.body.split('\n').slice(0, 4).join('\n'), '🟢 *Total: 1,540 m*\n\n```62/44      1,240 m\n52 Picks     300 m```');
+    assert.equal(t.body.split('\n').slice(0, 4).join('\n'), '🟢 *Total: 1,540 m*\n\n```62/44    → 1,240 m\n52 Picks →   300 m```');
     assert.ok(!t.body.includes('60/52') && !t.body.includes('ORDERS'));
     assert.ok(/^_As of .+ (AM|PM)_$/.test(t.body.split('\n').pop()));
   });
@@ -52,7 +52,7 @@ describe('alert texts', () => {
   test('the stock message is built from the ledger and the WhatsApp link carries it', () => {
     const a = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] });`);
     const msg = a.alertBuild('stock');
-    assert.ok(msg.startsWith('*📦 STOCK BY QUALITY*\n━━━━━━━━━━━━━━\n🟢 *Total: 1,500 m*\n\n```Q1   1,500 m```'));
+    assert.ok(msg.startsWith('*📦 STOCK BY QUALITY*\n━━━━━━━━━━━━━━\n🟢 *Total: 1,500 m*\n\n```Q1 → 1,500 m```'));
     assert.equal(a.alertBuild('custom'), '');
     const url = a.alertWhatsAppUrl('Q1: 1500 m\nTotal');
     assert.ok(url.startsWith('https://wa.me/?text=') && decodeURIComponent(url.split('text=')[1]) === 'Q1: 1500 m\nTotal');
@@ -91,8 +91,8 @@ describe('alert texts', () => {
   test('Urdu: every message is worded in Urdu when the app language is Urdu, data stays as typed', () => {
     const u = load(`var I18N_LANG = 'ur'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44 (Micro)', stock: 1240 }], receivable: 250000, profitMonth: 84500, cash: 3000 }); var DATA = { orders: [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 600 });`);
     const st = u.alertJoin(u.alertStockText([{ name: '62/44 (Micro)', stock: 1240 }], 1540, [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000, got: 600 }]));
-    assert.ok(st.startsWith('*📦 کوالٹی کے لحاظ سے اسٹاک*\n━━━━━━━━━━━━━━\n🟢 *کل اسٹاک: 1,540 میٹر*'));
-    assert.ok(st.includes('\u200E62/44   1,240 میٹر') && st.includes('📋 *آرڈرز*') && st.includes('ORD-12 ▓▓▓▒▒▒▒▒▒░ *92%*') && st.includes('↳ 30% بھیجا گیا + 62% اسٹاک سے'));
+    assert.ok(st.startsWith('*📦 کوالٹی کے لحاظ سے اسٹاک*\n━━━━━━━━━━━━━━\n🟢 *کل اسٹاک: \u202A1,540\u202C میٹر*'));
+    assert.ok(st.includes('\u200E62/44 → \u202A1,240\u202C میٹر') && st.includes('📋 *آرڈرز*') && st.includes('ORD-12 ▓▓▓▒▒▒▒▒▒░ *92%*') && st.includes('↳ 30% بھیجا گیا + 62% اسٹاک سے'));
     assert.ok(st.includes('_▓ بھیجا گیا  ▒ اسٹاک  ░ بننا باقی_') && /_تازہ ترین: \d+ \S+، \d+:\d\d \S+_$/.test(st));
     assert.ok(!/[A-Za-z]{4}/.test(st.replace('Micro', '')), 'no English words left: ' + st);
     const w = u.alertJoin(u.alertWeftText({ hasData: true, bags: 12.3, lbs: 1234, cover: 4.2, perDay: 300, low: true }));
@@ -104,7 +104,7 @@ describe('alert texts', () => {
     assert.ok(c.body.includes('❌ *1 چیک کی میعاد گزر چکی:* 1000 روپے') && c.body.includes('⏰ *1 چیک 7 دن کے اندر واجب الادا:* 500 روپے') && c.body.includes('Ali - 1000 روپے - 2026-10-01 (میعاد گزر چکی)') && c.body.includes('آج ہی رابطہ کریں'));
     assert.ok(u.alertBuild('receivable').includes('گاہکوں سے *250000 روپے* وصول ہونے ہیں'));
     assert.ok(u.alertBuild('profit').includes('منافع ') && u.alertBuild('profit').includes('نقد موجود: 3000 روپے'));
-    assert.ok(u.alertBuild('orders').includes('↳ 2,000 میٹر میں سے 600 میٹر ڈیلیور'));
+    assert.ok(u.alertBuild('orders').includes('↳ \u202A2,000\u202C میٹر میں سے \u202A600\u202C میٹر ڈیلیور'));
     assert.ok(u.shareBuild({ stock: true, note: 'آج کی رپورٹ' }).startsWith('آج کی رپورٹ\n\n*📦'));
     assert.equal(u.al('shChoose'), 'پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔');
   });
