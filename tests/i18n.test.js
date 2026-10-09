@@ -100,4 +100,11 @@ describe('Orders page in Urdu (v3.18.27)', () => {
     assert.equal(ur('Delete order ORD-003?'), 'آرڈر ORD-003 حذف کریں؟');
     assert.ok(ur('20,000 m at Rs 100, delivered 12,000 m, 8,000 m to go (completed)').includes('(مکمل)'));
   });
+  test('the unreadable-section sync messages and the repair notice are translated (section names too)', () => {
+    const u = t => app.i18nTranslate(t);
+    assert.match(u('Sync error: the wages section could not be decrypted \u2014 its key does not match'), /اجرت.*کھولا نہیں جا سکا/);
+    assert.match(u('the wages section could not be decrypted \u2014 its key does not match'), /اجرت/);
+    assert.match(u("The sales section in the cloud could not be read (its key did not match), so it was replaced with this phone's copy. A Safety copy was saved first."), /فروخت.*سیف ٹی کاپی/);
+    assert.match(u("Sync error: the production section could not be opened with this phone's keys \u2014 ask the owner to open the app and tap Sync Now once, then tap Sync Now here"), /پیداوار.*مالک سے کہیں/);
+  });
 });

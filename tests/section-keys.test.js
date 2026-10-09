@@ -533,3 +533,112 @@ describe('files stay in step', () => {
     assert.ok(sw.includes("'./js/section-keys.js'"));
   });
 });
+
+// ---- Unreadable sections repair themselves (no more deleting a section in the Firebase console) ----------------------
+describe('a section nobody can read is repaired automatically', () => {
+  // The cloud copy of a section, sealed with a key that exists nowhere (what a "key does not match" error is).
+  async function sealWithStranger(owner, sec, kv){
+    const doc = secDoc(sec);
+    doc.payload = await owner.run(`(async()=>{ const k = await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt','decrypt']); return encSealWith(k, JSON.stringify([{ id: 'lost' }])); })()`);
+    if(kv === undefined) delete doc.kv; else doc.kv = kv;
+    doc.savedAt = new Date(Date.now() + 5000).toISOString();
+    cloud.set('ledger/' + sec, doc);
+  }
+  const ring = o => o.get('skRingLoad()');
+
+  test('the error from the bug report: the owner\'s phone replaces the section with its own copy and re-keys it', async () => {
+    const owner = await ownerWorld();
+    await sealWithStranger(owner, 'wages', 1);
+    assert.match(await opens(owner, 'wages'), /could not be decrypted/, 'this is the message people saw');
+    await owner.run('cloudSectionsCheck(__db)');
+    assert.equal(secDoc('wages').kv, 2, 'sealed again with a new key version');
+    assert.match(await opens(owner, 'wages'), /"rate":9/, 'readable again, with this phone\'s data');
+    assert.equal((await ring(owner)).s.wages.v, 2);
+    const vault = JSON.parse(await owner.run(`encOpen(${JSON.stringify(cloud.get('keys/' + OWNER).vault)})`));
+    assert.equal(vault.s.wages.v, 2, 'the new key is backed up in the vault');
+    assert.equal(await owner.run('CLOUD_STATUS'), 'synced');
+  });
+  test('it happens once: the next check changes nothing', async () => {
+    const owner = await ownerWorld();
+    await sealWithStranger(owner, 'wages', 1);
+    await owner.run('cloudSectionsCheck(__db)');
+    writes.length = 0;
+    await owner.run('cloudSectionsCheck(__db)');
+    assert.deepEqual(writes, []);
+  });
+  test('the other sections are not touched', async () => {
+    const owner = await ownerWorld();
+    const before = secDoc('sales');
+    await sealWithStranger(owner, 'wages', 1);
+    await owner.run('cloudSectionsCheck(__db)');
+    assert.deepEqual(secDoc('sales'), before);
+  });
+  test('a person who may view the section receives the new key and reads it again', async () => {
+    const { owner, v } = await (async () => {
+      const o = await ownerWorld(); await approve(o, VIEWER, 'business_viewer');
+      const vp = await phone(VIEWER); assert.equal(await vp.run(`skJoinWithCode('${await codeFor(o, VIEWER)}')`), '');
+      return { owner: o, v: vp };
+    })();
+    await sealWithStranger(owner, 'production', 1);
+    await owner.run('cloudSectionsCheck(__db)');
+    assert.equal(secDoc('production').kv, 2);
+    v.run('SK_LAST_REFRESH = 0;');
+    assert.match(await opens(v, 'production'), /"meters":120/);
+  });
+  test('Use cloud / applying a change also repairs it, then carries on with the other sections', async () => {
+    const owner = await ownerWorld();
+    await sealWithStranger(owner, 'wages', 1);
+    const items = ['wages', 'sales'].map(sec => ({ sec, remote: secDoc(sec), mode: 'pull' }));
+    assert.notEqual(await owner.run(`cloudApplySections(${JSON.stringify(items)}, {})`), false);
+    assert.match(await opens(owner, 'wages'), /"rate":9/);
+    assert.notEqual(await owner.run('CLOUD_STATUS'), 'error');
+  });
+  test('a section from the older single-key layout that cannot be opened is repaired too', async () => {
+    const owner = await ownerWorld();
+    await sealWithStranger(owner, 'wages', undefined);
+    await owner.run('cloudSectionsCheck(__db)');
+    assert.equal(secDoc('wages').kv, 2);
+    assert.match(await opens(owner, 'wages'), /"rate":9/);
+  });
+  test('a stale key on this phone is put right from the vault - nothing is replaced', async () => {
+    const owner = await ownerWorld();
+    const before = secDoc('wages');
+    await owner.run(`(async()=>{ const r = await skRingLoad(); r.s.wages = { v: 1, k: await skNewKeyB64() }; await skRingSave(r); })()`);
+    assert.match(await opens(owner, 'wages'), /"rate":9/, 'the vault held the right key');
+    assert.deepEqual(secDoc('wages'), before);
+    owner.run('CLOUD_SEC_SEEN = 0;');
+  });
+  test('a second phone with its own keys never overwrites the owner\'s vault (that is what Join Encrypted Sync is for)', async () => {
+    const owner = await ownerWorld();
+    const second = await phone(OWNER, { pin: '2222' });
+    await sealWithStranger(owner, 'wages', 1);
+    const vaultBefore = j(cloud.get('keys/' + OWNER)), docBefore = secDoc('wages');
+    assert.equal(await second.run(`skHealUnreadable('wages', ${JSON.stringify(docBefore)})`), false);
+    assert.deepEqual(j(cloud.get('keys/' + OWNER)), vaultBefore);
+    assert.deepEqual(secDoc('wages'), docBefore);
+  });
+  test('a person\'s phone cannot repair the cloud: it is told what to do and the cloud is left alone', async () => {
+    const owner = await ownerWorld(); await approve(owner, VIEWER, 'business_viewer');
+    const v = await phone(VIEWER); assert.equal(await v.run(`skJoinWithCode('${await codeFor(owner, VIEWER)}')`), '');
+    await sealWithStranger(owner, 'production', 1);
+    const before = secDoc('production'); writes.length = 0; v.run('SK_LAST_REFRESH = 0;');
+    assert.match(await opens(v, 'production'), /ask the owner to open the app and tap Sync Now/);
+    assert.deepEqual(secDoc('production'), before); assert.deepEqual(writes.filter(w => w.path.startsWith('ledger/')), []);
+  });
+  test('a person\'s phone holding an old key of the same version takes the newest keys and opens it', async () => {
+    const owner = await ownerWorld(); await approve(owner, VIEWER, 'business_viewer');
+    const v = await phone(VIEWER); assert.equal(await v.run(`skJoinWithCode('${await codeFor(owner, VIEWER)}')`), '');
+    await v.run(`(async()=>{ const r = await skRingLoad(); r.s.production = { v: 1, k: await skNewKeyB64() }; await skRingSave(r); })()`);
+    v.run('SK_LAST_REFRESH = 0;');
+    assert.match(await opens(v, 'production'), /"meters":120/);
+  });
+  test('a phone with an empty ledger (new or reinstalled) never replaces anything', async () => {
+    const owner = await ownerWorld();
+    await sealWithStranger(owner, 'wages', 1);
+    const fresh = await phone(OWNER);
+    fresh.run('DATA = {};');
+    const docBefore = secDoc('wages'), vaultBefore = j(cloud.get('keys/' + OWNER));
+    assert.equal(await fresh.run(`skHealUnreadable('wages', ${JSON.stringify(docBefore)})`), false);
+    assert.deepEqual(secDoc('wages'), docBefore); assert.deepEqual(j(cloud.get('keys/' + OWNER)), vaultBefore);
+  });
+});
