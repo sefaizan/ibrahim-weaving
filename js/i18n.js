@@ -722,6 +722,14 @@ Object.assign(I18N_UR, {
   "Send alerts": "الرٹس بھیجیں",
   "Floating button": "فلوٹنگ بٹن"
 });
+// v3.18.48: the sync messages about a section that could not be opened, and the repair notice (section names in Urdu)
+const I18N_SEC_UR = { production: 'پیداوار', reference: 'فہرستیں', sales: 'فروخت', recovery: 'وصولی', expenses: 'اخراجات', wages: 'اجرت', loans: 'قرض', family: 'گھر', materials: 'مال', business: 'کاروبار', stock: 'اسٹاک', tools: 'ٹولز' };
+const i18nSec = n => I18N_SEC_UR[n] || n;
+[
+  [new RegExp("^The (\\w+) section in the cloud could not be read \\(its key did not match\\), so it was replaced with this phone's copy\\. A Safety copy was saved first\\.$"), m => 'کلاؤڈ میں «' + i18nSec(m[1]) + '» سیکشن پڑھا نہیں جا سکا (اس کی کلید نہیں ملی)، اس لیے اسے اس فون کی کاپی سے بدل دیا گیا۔ پہلے ایک سیف ٹی کاپی محفوظ کر لی گئی تھی۔'],
+  [/^(?:Sync error: )?the (\w+) section could not be decrypted \u2014 its key does not match$/, m => 'سنک میں خرابی: «' + i18nSec(m[1]) + '» سیکشن کھولا نہیں جا سکا — اس کی کلید نہیں ملتی'],
+  [/^(?:Sync error: )?the (\w+) section could not be opened with this phone's keys \u2014 ask the owner to open the app and tap Sync Now once, then tap Sync Now here$/, m => 'سنک میں خرابی: «' + i18nSec(m[1]) + '» سیکشن اس فون کی کلیدوں سے نہیں کھل سکا — مالک سے کہیں کہ ایپ کھول کر ایک بار «ابھی سنک کریں» دبائیں، پھر یہاں بھی دبائیں'],
+].forEach(p => I18N_UR_RE74.push(p));
 const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
 let I18N_LANG = 'en';
 let I18N_TIMER = 0;

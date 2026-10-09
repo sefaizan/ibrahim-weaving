@@ -1361,6 +1361,7 @@ async function cloudPushNow(force){
     let lastSig = null; try{ lastSig = localStorage.getItem(CLOUD_KEYSIG_KEY); }catch(e){ typeof logErr==='function' && logErr('cloud-sync', e);  }
     const all = force === true || sig !== lastSig;
     if(owner && encEnabled() && typeof skOwnerPrepare === 'function') await skOwnerPrepare(db); // keys made and backed up in the vault BEFORE anything is sealed
+    else if(!owner && encEnabled() && typeof skRefreshKeys === 'function'){ try{ await skRefreshKeys(true); }catch(e){ console.error(e); } } // a person's phone seals with the newest keys the owner gave it
     if(typeof auditFlush === 'function') await auditFlush(db); // the audit entries go first: a change never reaches the cloud ahead of its log entry (a connection failure stops the push here)
     const who = recEditorEmail();
     const denied = []; let newest = null;
@@ -1412,7 +1413,7 @@ async function cloudDecryptRemote(remote){
   }
   if(!remote.encrypted) return { json: remote.payload };
   try{ return { json: await encOpen(remote.payload) }; }
-  catch(e){ return { error: "could not decrypt this device's data — its encryption key doesn't match the device that saved it. Use \"Join Encrypted Sync\" below to adopt the same key." }; }
+  catch(e){ return { unreadable: !!(remote.section && cloudIsOwner()), section: remote.section, error: "could not decrypt this device's data — its encryption key doesn't match the device that saved it. Use \"Join Encrypted Sync\" below to adopt the same key." }; }
 }
 // Per-record merge: unions each array by id (never drops an entry either side added) instead of
 // picking one whole device's copy wholesale — this is what lets both-sides-changed resolve
@@ -1724,13 +1725,18 @@ async function cloudUndoSections(pt, items){
 // Everything is decrypted and read BEFORE the ledger is touched, so one unreadable section changes nothing.
 async function cloudApplySections(items, opts){
   opts = opts || {};
-  const dec = [];
+  const dec = []; let healed = 0;
   for(const it of items){
     const d = await cloudDecryptRemote(it.remote);
-    if(d.error){ setCloudStatus('error', d.error); return false; }
+    if(d.error){
+      // Owner's phone: a section nobody can read is replaced by this phone's copy (js/section-keys.js), then the rest carries on.
+      if(d.unreadable && cloudIsOwner() && typeof skHealUnreadable === 'function' && await skHealUnreadable(it.sec || d.section, it.remote)){ healed++; continue; }
+      setCloudStatus('error', d.error); return false;
+    }
     let part; try{ part = JSON.parse(d.json); }catch(e){ setCloudStatus('error', 'part of the cloud copy could not be read'); return false; }
     dec.push({ it, part });
   }
+  if(healed && !dec.length){ CLOUD_PENDING_REMOTE = null; await cloudPushNow(); return true; }
   const pt = opts.viewer ? null : await cloudTakeSafetyPoint();
   const merges = [];
   dec.forEach(({ it, part })=>{
@@ -1911,6 +1917,10 @@ async function cloudSectionsCheck(db){
     if(!r.snap.exists){ if(mine && cloudIsOwner()) push = true; continue; } // owner: seed a section the cloud does not have yet
     const remote = r.snap.data();
     const remoteChanged = !!remote.savedAt && remote.savedAt !== seen[sec];
+    if(remoteChanged && remote.encrypted && cloudIsOwner() && typeof skHealUnreadable === 'function'){
+      const probe = await cloudDecryptRemote(remote); // can this phone read the cloud copy at all?
+      if(probe.unreadable && await skHealUnreadable(sec, remote)){ push = true; continue; } // no: replace it with this phone's copy (nothing to ask about)
+    }
     if(!mine){ if(remoteChanged) silent.push({ sec, remote, mode: 'pull' }); continue; }
     const localChanged = hashes[sec] !== await sha256Hex(JSON.stringify(parts[sec]));
     if(remoteChanged && !localChanged) ask.push({ sec, remote, mode: 'pull' });

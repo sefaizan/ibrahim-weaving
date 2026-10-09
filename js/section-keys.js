@@ -151,7 +151,44 @@ function skNoKeyText(sec){
     ? 'this phone does not hold the key for the ' + sec + ' section \u2014 use "Join Encrypted Sync" below to adopt the keys'
     : 'the ' + sec + ' section is encrypted \u2014 enter your access code under Settings > Cloud Sync (ask the owner to send it)';
 }
+// Every key this phone holds for a section, the one matching the document's key version first, then the
+// others (a key version number can be the same on two phones while the key itself differs - for example after
+// keys were made again). The owner's phone also tries the older single key and the plain keyring it kept
+// while encryption was off. Returns the opened text, or null when none of them opens it.
+async function skTryKeys(sec, remote){
+  const ring = await skRingLoad(), e = ring.s[sec], list = [];
+  const add = k => { if(k && list.indexOf(k) < 0) list.push(k); };
+  if(e){ if(e.v === remote.kv) add(e.k); if(e.p && e.p.v === remote.kv) add(e.p.k); add(e.k); if(e.p) add(e.p.k); }
+  for(const k of list){ try{ return await encOpenWith(await skImport(k), remote.payload); }catch(err){ /* next key */ } }
+  if(cloudIsOwner()){
+    try{ return await encOpenWith(ENC_DEK, remote.payload); }catch(err){ /* not the single-key layout */ }
+    try{
+      const plain = localStorage.getItem(SK_RING_PLAIN_KEY), pe = plain ? skRingClean(JSON.parse(plain)).s[sec] : null;
+      for(const k of [pe && pe.k, pe && pe.p && pe.p.k]){ if(k){ try{ return await encOpenWith(await skImport(k), remote.payload); }catch(err){ /* next key */ } } }
+    }catch(err){ /* no plain keyring */ }
+  }
+  return null;
+}
+// Owner: the backup of the keys in the cloud (the vault) may hold the key this phone lost or never got. Only that
+// section's key is taken over, so nothing newer on this phone is thrown away. Returns the opened text or null.
+async function skVaultTry(sec, remote){
+  if(!cloudIsOwner()) return null;
+  const db = await cloudSdkReady(), snap = await skOwnerVaultRef(db).get();
+  if(!snap.exists || !snap.data() || !snap.data().vault) return null;
+  let v; try{ v = skRingClean(JSON.parse(await encOpen(snap.data().vault))); }catch(err){ return null; }
+  const e = v.s[sec]; if(!e) return null;
+  for(const c of [e.k, e.p && e.p.k]){
+    if(!c) continue;
+    let json; try{ json = await encOpenWith(await skImport(c), remote.payload); }catch(err){ continue; }
+    const ring = await skRingLoad(), cur = ring.s[sec];
+    ring.s[sec] = (cur && cur.v > e.v) ? { v: cur.v, k: cur.k, p: { v: e.v, k: c } } : e;
+    await skRingSave(ring);
+    return json;
+  }
+  return null;
+}
 // Opens a section document. Returns { json } or { error } (never throws), like cloudDecryptRemote.
+// { unreadable: true } in the answer means no key that can be reached opens it (see skHealUnreadable).
 async function skOpenSection(remote){
   const sec = remote.section || '';
   skNoteEncrypted(sec);
@@ -161,11 +198,48 @@ async function skOpenSection(remote){
       : 'the ' + sec + ' section is encrypted \u2014 turn on Encrypt Data in Settings on this phone, then enter your access code under Cloud Sync' };
   }
   if(!ENC_DEK) return { error: 'app is locked \u2014 unlock with your PIN first, then try Sync Now' };
-  let key = await skKeyFor(sec, remote.kv);
-  if(!key){ try{ await skRefreshKeys(); }catch(e){ console.error(e); } key = await skKeyFor(sec, remote.kv); }
-  if(!key) return { error: skNoKeyText(sec) };
-  try{ return { json: await encOpenWith(key, remote.payload) }; }
-  catch(e){ return { error: 'the ' + sec + ' section could not be decrypted \u2014 its key does not match' }; }
+  let json = await skTryKeys(sec, remote);
+  if(json === null && !cloudIsOwner()){ try{ if(await skRefreshKeys(true)) json = await skTryKeys(sec, remote); }catch(e){ console.error(e); } }
+  if(json === null){ try{ json = await skVaultTry(sec, remote); }catch(e){ console.error(e); } }
+  if(json === null && cloudIsOwner() && !(await skKeyFor(sec, remote.kv))){ try{ await skRefreshKeys(); json = await skTryKeys(sec, remote); }catch(e){ console.error(e); } }
+  if(json !== null) return { json };
+  const hasKey = !!(await skKeyFor(sec, remote.kv));
+  if(!hasKey) return { error: skNoKeyText(sec), unreadable: true, section: sec };
+  return { unreadable: true, section: sec, error: cloudIsOwner()
+    ? 'the ' + sec + ' section could not be decrypted \u2014 its key does not match'
+    : 'the ' + sec + ' section could not be opened with this phone\'s keys \u2014 ask the owner to open the app and tap Sync Now once, then tap Sync Now here' };
+}
+// Owner: the cloud copy of a section is sealed with a key that no key reachable from this phone opens (keys made
+// again, a second phone, a half-finished re-key ...). Nobody could read it, so it is replaced: the section gets a
+// NEW key (version one higher, backed up in the vault first), the people who may view it get that key, and this
+// phone's own copy of the section goes up on the next send. A Safety copy is filed first. Whatever other phones
+// still hold is merged back by record when they next sync. Never done on a phone whose ledger is empty, and never when the vault in the cloud was made by
+// another phone (that would overwrite its keys): then "Join Encrypted Sync" is the right step. Returns true when
+// the section was re-keyed here and is waiting to be sent.
+async function skHealUnreadable(sec, remote){
+  if(!sec || !cloudIsOwner() || !encEnabled() || !ENC_DEK) return false;
+  try{
+    const db = await cloudSdkReady();
+    const vs = await skOwnerVaultRef(db).get();
+    if(vs.exists && vs.data() && vs.data().vault){ try{ await encOpen(vs.data().vault); }catch(e){ return false; } }
+    // A phone with nothing in its ledger (new, reinstalled, not yet joined) must never replace anything: the data may still be recoverable.
+    const have = cloudSplit(DATA); if(!Object.keys(have).some(k => cloudSectionCount(have[k]) > 0)) return false;
+    await skOwnerPrepare(db);
+    try{ if(typeof cloudTakeSafetyPoint === 'function') await cloudTakeSafetyPoint(); }catch(e){ console.error(e); }
+    const ring = await skRingLoad(), cur = ring.s[sec];
+    const entry = { v: Math.max(cur ? cur.v : 0, Number(remote && remote.kv) || 0) + 1, k: await skNewKeyB64() };
+    if(cur) entry.p = { v: cur.v, k: cur.k };
+    ring.s[sec] = entry;
+    await skRingSave(ring);
+    await skVaultPublish(db, ring); // the new key is backed up in the cloud BEFORE anything is sealed with it
+    skDirtyClear(sec);
+    const hashes = cloudMapGet(CLOUD_SEC_HASH_KEY), seen = cloudMapGet(CLOUD_SEC_SEEN_KEY);
+    hashes[sec] = ''; seen[sec] = (remote && remote.savedAt) || seen[sec] || new Date().toISOString();
+    cloudMapSet(CLOUD_SEC_HASH_KEY, hashes); cloudMapSet(CLOUD_SEC_SEEN_KEY, seen); // "changed here, cloud copy already seen": the next send replaces it
+    try{ await skReconcileQuiet(db); }catch(e){ console.error(e); } // the people who may view it receive the new key
+    if(typeof showSyncNotice === 'function') showSyncNotice('The ' + sec + ' section in the cloud could not be read (its key did not match), so it was replaced with this phone\'s copy. A Safety copy was saved first.');
+    return true;
+  }catch(e){ console.error(e); return false; }
 }
 
 // ---- Owner: who holds which keys, rotation ------------------------------------------------------------
@@ -290,10 +364,10 @@ async function skJoinWithCode(rawCode){
   }catch(e){ return e && e.message ? e.message : 'Something went wrong. Try again.'; }
 }
 // Fetches newer keys: the owner's phone from its vault, everyone else with the code kept on this phone.
-// At most once every 30 seconds. Returns true when the keyring was updated.
-async function skRefreshKeys(){
+// At most once every 30 seconds (every 3 seconds when forced because a section would not open). Returns true when the keyring was updated.
+async function skRefreshKeys(force){
   if(!encEnabled() || !ENC_DEK) return false;
-  if(Date.now() - SK_LAST_REFRESH < 30000) return false;
+  if(Date.now() - SK_LAST_REFRESH < (force === true ? 3000 : 30000)) return false;
   SK_LAST_REFRESH = Date.now();
   const ring = await skRingLoad();
   if(cloudIsOwner()){
