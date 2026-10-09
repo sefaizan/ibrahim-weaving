@@ -491,11 +491,11 @@ function wireScrollAwareFab(fabBackup){
     const fabMenu = document.getElementById('fabMenu');
     const closeFabMenu = ()=>{ if(fabMenu) fabMenu.hidden = true; };
     const menuOn = ()=> !!fabMenu && typeof shareFabNow === 'function' && !(typeof permsLimited === 'function' && permsLimited());
-    fabBackup.onclick = ()=>{
-      if(!menuOn()){ fabBackupAction(); return; }
+    if(!menuOn()){ const ic = fabBackup.querySelector('.icon'); if(ic) ic.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; fabBackup.title = fabBackup.ariaLabel = 'Backup & Restore'; }
+    fabBackup.onclick = ()=>{      if(!menuOn()){ fabBackupAction(); return; }
       if(!fabMenu.hidden){ closeFabMenu(); return; }
       const lbl = document.getElementById('fabMenuBackupLabel');
-      if(lbl) lbl.textContent = (AUTO_BACKUP_DIRTY && autoBackupReady()) ? 'Email a backup now' : 'Backup & Restore';
+      if(lbl) lbl.textContent = (AUTO_BACKUP_DIRTY && autoBackupReady()) ? 'Email a backup now' : 'Backup';
       const r = fabBackup.getBoundingClientRect(), rtl = document.documentElement.getAttribute('dir') === 'rtl';
       fabMenu.style.bottom = (window.innerHeight - r.top + 10) + 'px';
       if(rtl){ fabMenu.style.left = Math.max(8, r.left) + 'px'; fabMenu.style.right = 'auto'; }

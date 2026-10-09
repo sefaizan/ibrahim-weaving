@@ -222,13 +222,14 @@ function autoBackupOnWake(){
 
 /* ---------------- Floating Backup button: "needs backup" indicator ---------------- */
 // Toggles the badge on #fabBackup and what a tap does (see fabBackup.onclick in lock-init.js).
+function FAB_IDLE_LABEL(){ return (typeof shareFabNow === 'function' && !(typeof permsLimited === 'function' && permsLimited())) ? 'Backup / Share' : 'Backup & Restore'; }
 function setFabNeedsBackup(needs){
   AUTO_BACKUP_DIRTY = !!needs;
   const fab = document.getElementById('fabBackup');
   if(!fab) return;
   fab.classList.toggle('needs-backup', AUTO_BACKUP_DIRTY);
-  fab.setAttribute('title', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : 'Backup & Restore');
-  fab.setAttribute('aria-label', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : 'Backup & Restore');
+  fab.setAttribute('title', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : FAB_IDLE_LABEL());
+  fab.setAttribute('aria-label', AUTO_BACKUP_DIRTY ? 'Unsent changes — tap to email a backup now' : FAB_IDLE_LABEL());
 }
 // Recomputes whether the ledger differs from the last emailed backup, and updates the button
 // to match. Best-effort and silent: if hashing fails for some reason, the button just keeps

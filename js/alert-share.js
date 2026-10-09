@@ -43,7 +43,9 @@ function al(k, a, b){
 // Meters: the app's own formatter gives a bare number ("1240" or "1240-8" in sixteenths); the message adds commas and the unit.
 function alertMtr(n){
   const base = typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : alertNum(n, 1);
-  return String(base).replace(/^(-?)(\d+)/, (m, sg, d) => sg + Number(d).toLocaleString('en-IN')) + (alertUr() ? ' میٹر' : ' m');
+  const num = String(base).replace(/^(-?)(\d+)/, (m, sg, d) => sg + Number(d).toLocaleString('en-IN'));
+  // Urdu: the quantity is forced left-to-right so 123-12 never flips to 12-123; only the unit word is Urdu.
+  return alertUr() ? '\u202A' + num + '\u202C ' + 'میٹر' : num + ' m';
 }
 function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + alertNum(n); return alertUr() ? t.replace(/^Rs\s*/, '') + ' روپے' : t; }
 function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + d.getFullYear() : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
@@ -87,9 +89,9 @@ function alertStockText(rows, total, orders){
   const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
   if(!list.length){ lines.push(al('noStock'), '', alertAsOf()); return { title: al('stockTitle'), body: lines.join('\n') }; }
   const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name));
-  const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), mW = Math.max(...mtrs.map(x => x.length));
+  const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), vis = x => x.replace(/[\u200E\u202A\u202C]/g, ''), mW = Math.max(...mtrs.map(x => vis(x).length));
   const lrm = alertUr() ? '\u200E' : '';   // keeps the name-then-meters columns left to right even though the unit is Urdu
-  const block = shown.map((r, i) => lrm + nm[r.name].padEnd(nameW) + '   ' + mtrs[i].padStart(mW));
+  const block = shown.map((r, i) => lrm + nm[r.name].padEnd(nameW) + ' → ' + ' '.repeat(mW - vis(mtrs[i]).length) + mtrs[i]);
   if(list.length > 8) block.push('+ ' + (list.length - 8) + ' ' + al('more'));
   lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', '```' + block.join('\n') + '```');
   const og = [];
