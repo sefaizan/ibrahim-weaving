@@ -21,10 +21,10 @@ function selectField(label, id, arr, extra=''){
 // for Stock Position on the Overview page). Kept as two plain number inputs for now — the two
 // values are combined into one decimal number when the form is read (see combineMtr16 in
 // core.js); the stored record itself is unchanged.
-function meterFracField(label, idWhole, idSixteenth, extra=''){
+function meterFracField(label, idWhole, idSixteenth, extra='', wholePh='Whole'){
   return `<div class="field"><label>${label}</label>
     <div style="display:flex;gap:8px">
-      <input id="${idWhole}" type="number" inputmode="decimal" placeholder="Whole" ${extra} style="flex:2;min-width:0">
+      <input id="${idWhole}" type="number" inputmode="decimal" placeholder="${wholePh}" ${extra} style="flex:2;min-width:0">
       <input id="${idSixteenth}" type="number" inputmode="numeric" placeholder="/16" min="0" max="15" style="flex:1;min-width:0">
     </div>
   </div>`;
@@ -147,7 +147,7 @@ function mbCardHtml(name){
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
     <div class="mb-bm"></div>
     <label>Gzana (meters and sixteenths)</label>
-    <div class="mb-rw"><input class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
+    <div class="mb-rw"><input placeholder="Total meters" class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
     ${row(1,'Employee 1',a.e1)}${row(2,'Employee 2',a.e2)}
     <div class="mb-e3" style="display:none">${row(3,'Employee 3','')}</div>
     <button type="button" class="ghost mb-tg" tabindex="-1">+ Add a third employee</button></div>`;
@@ -187,7 +187,7 @@ function productionPanel(){
       ${selectField('Loom','p_loom',DATA.looms)}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
-      ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16')}
+      ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16','','Total meters')}
     </div>
     <div id="p_beamToggleWrap"></div>
     <div id="p_beamLeft"></div>
