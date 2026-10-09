@@ -477,7 +477,7 @@ function wireScrollAwareFab(fabBackup){
     // Normal state: same as always — open Backup & Restore. "Needs backup" state (badge showing,
     // see setFabNeedsBackup in autobackup.js): email a backup right from here instead, so the one
     // thing the badge is asking for is one tap away without leaving whatever screen you're on.
-    fabBackup.onclick = async ()=>{
+    const fabBackupAction = async ()=>{
       if(!AUTO_BACKUP_DIRTY || !autoBackupReady()){ switchTab('backup'); return; }
       fabBackup.classList.add('fab-busy');
       showToast('Sending backup…', 60000);
@@ -486,6 +486,32 @@ function wireScrollAwareFab(fabBackup){
       showToast(r.ok ? 'Backup emailed ✓' : r.message);
       autoBackupRefreshFabState();
     };
+    // v3.18.46: with the Share feature the button opens a small menu: Backup (as before) or Share on WhatsApp.
+    // People with a limited role have no Share, so for them the button stays a plain Backup shortcut.
+    const fabMenu = document.getElementById('fabMenu');
+    const closeFabMenu = ()=>{ if(fabMenu) fabMenu.hidden = true; };
+    const menuOn = ()=> !!fabMenu && typeof shareFabNow === 'function' && !(typeof permsLimited === 'function' && permsLimited());
+    fabBackup.onclick = ()=>{
+      if(!menuOn()){ fabBackupAction(); return; }
+      if(!fabMenu.hidden){ closeFabMenu(); return; }
+      const lbl = document.getElementById('fabMenuBackupLabel');
+      if(lbl) lbl.textContent = (AUTO_BACKUP_DIRTY && autoBackupReady()) ? 'Email a backup now' : 'Backup & Restore';
+      const r = fabBackup.getBoundingClientRect(), rtl = document.documentElement.getAttribute('dir') === 'rtl';
+      fabMenu.style.bottom = (window.innerHeight - r.top + 10) + 'px';
+      if(rtl){ fabMenu.style.left = Math.max(8, r.left) + 'px'; fabMenu.style.right = 'auto'; }
+      else{ fabMenu.style.right = Math.max(8, window.innerWidth - r.right) + 'px'; fabMenu.style.left = 'auto'; }
+      fabMenu.hidden = false;
+    };
+    if(fabMenu){
+      fabMenu.addEventListener('click', (e)=>{
+        const b = e.target.closest('[data-fab-act]'); if(!b) return;
+        closeFabMenu();
+        if(b.dataset.fabAct === 'share') shareFabNow(); else fabBackupAction();
+      });
+      document.addEventListener('click', (e)=>{ if(!fabMenu.hidden && !fabMenu.contains(e.target) && !fabBackup.contains(e.target)) closeFabMenu(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeFabMenu(); });
+      window.addEventListener('scroll', closeFabMenu, true);
+    }
     wireScrollAwareFab(fabBackup);
   }
   const menuBtn = document.getElementById('menuBtn');

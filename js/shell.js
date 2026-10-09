@@ -264,7 +264,7 @@ function settingsPanel(){
     + settingsGroup('people', 'People', ['Clients','Employees','Family Members'],
       section('Clients','clients','e.g. Ali Textiles',true,true) + section('Employees','employees','e.g. Nasir Ahmed',true,true) + section('Family Members','familyMembers','e.g. Uncle Rafiq',true,true))
     + settingsGroup('stock', 'Stock', ['Total Stock','By Quality','Weft Stock'], stockCard + (typeof weftStockCard === 'function' ? weftStockCard() : ''))
-    + (typeof alertShareCardHtml === 'function' && alertShareCardHtml() ? settingsGroup('alerts', 'Send alerts', ['WhatsApp'], alertShareCardHtml()) : '')
+    + (typeof alertShareCardHtml === 'function' && alertShareCardHtml() ? settingsGroup('alerts', 'Send alerts', ['WhatsApp', 'Floating button'], alertShareCardHtml() + (typeof shareFabCardHtml === 'function' ? shareFabCardHtml() : '')) : '')
     + settingsGroup('looms', 'Looms & materials', ['Looms','Loom Assignments','Qualities','Warp Types','Weft Types','Dyeing Units','Beam Alerts'],
       section('Looms','looms','e.g. 9',false) + loomAssignmentsSection() + section('Qualities','qualities','e.g. 44 Picks',false)
       + section('Warp Types','warpTypes','e.g. 150.144 Micro',false) + section('Weft Types','weftTypes','e.g. 20/1 Carded',false)

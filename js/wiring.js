@@ -1791,6 +1791,7 @@ function wirePanel(id){
     wireCloudSyncCard();
     wireBeamAlertSettings();
     if(typeof alertShareWire === 'function') alertShareWire();
+    if(typeof shareFabWire === 'function') shareFabWire();
     const pinDisableSaveBtn = document.getElementById('pinDisableSaveBtn');
     if(pinDisableSaveBtn) pinDisableSaveBtn.onclick = async ()=>{
       const errEl = document.getElementById('pinDisableError');

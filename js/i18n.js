@@ -685,6 +685,43 @@ I18N_UR_RE_ORD.push(
   [/^About (.+) m\/week( · under a week to finish| · ~(\d+) weeks to finish)?$/, m => 'تقریباً ' + m[1] + ' میٹر فی ہفتہ' + (m[3] ? ' · مکمل ہونے میں ~' + m[3] + ' ہفتے' : m[2] ? ' · ایک ہفتے سے کم میں مکمل' : '')]
 );
 I18N_UR_RE_ORD.forEach(p => I18N_UR_RE74.push(p));
+// v3.18.46: Share button, its Settings card and the alert card (the message text itself is worded in js/alert-share.js)
+Object.assign(I18N_UR, {
+  "Floating Share button": "فلوٹنگ شیئر بٹن",
+  "Tap the round button at the bottom of any screen, then Share. WhatsApp opens with the message below, built fresh from the ledger. Tick what to include. These choices are kept on this phone only.": "کسی بھی اسکرین پر نیچے گول بٹن دبائیں، پھر شیئر چنیں۔ نیچے والا پیغام کھاتے سے تازہ بنتا ہے اور واٹس ایپ کھل جاتا ہے۔ جو شامل کرنا ہو اس پر نشان لگائیں۔ یہ انتخاب صرف اسی فون پر محفوظ رہتے ہیں۔",
+  "Stock by quality": "کوالٹی کے لحاظ سے اسٹاک",
+  "with how much of each open order it covers": "ہر کھلے آرڈر کا کتنا حصہ پورا ہو سکتا ہے",
+  "how much of each is delivered": "ہر آرڈر کا کتنا ڈیلیور ہو چکا",
+  "Warp beams": "تانا بیم",
+  "beams ending soon": "جلد ختم ہونے والے بیم",
+  "Weft stock": "بانا اسٹاک",
+  "bags and days left": "بیگ اور باقی دن",
+  "Cheques": "چیک",
+  "overdue and due within 7 days": "میعاد گزرے اور 7 دن میں واجب الادا",
+  "Money to receive": "وصول ہونے والی رقم",
+  "total owed by clients": "گاہکوں کی طرف کل بقایا",
+  "Profit and cash": "منافع اور نقد",
+  "this month, and cash in hand": "اس مہینے کا، اور نقد موجود",
+  "Your own line on top (optional)": "اوپر اپنی لکھی ہوئی سطر (اختیاری)",
+  "e.g. Today's update": "مثلاً آج کی تازہ صورتحال",
+  "Send to this number (optional)": "اس نمبر پر بھیجیں (اختیاری)",
+  "03xx xxxxxxx - leave empty to choose in WhatsApp": "03xx xxxxxxx - خالی چھوڑیں تاکہ واٹس ایپ میں خود چنیں",
+  "A number opens that chat directly. A WhatsApp group cannot be opened from a link, so leave this empty and pick the group in WhatsApp.": "نمبر دینے سے وہی چیٹ سیدھی کھلتی ہے۔ واٹس ایپ گروپ لنک سے نہیں کھل سکتا، اس لیے گروپ کے لیے اسے خالی چھوڑیں اور واٹس ایپ میں گروپ چنیں۔",
+  "Preview": "پیش منظر",
+  "Share now": "ابھی شیئر کریں",
+  "Refresh preview": "پیش منظر تازہ کریں",
+  "Email a backup now": "ابھی بیک اپ ای میل کریں",
+  "Share on WhatsApp": "واٹس ایپ پر شیئر کریں",
+  "Send an alert": "الرٹ بھیجیں",
+  "Builds the message from the ledger on this phone and opens WhatsApp with it ready. Choose a person or a group and send. Keep one WhatsApp group per kind of person (for example Stock viewers) so each group gets only what it should see.": "پیغام اسی فون پر کھاتے سے بنتا ہے اور واٹس ایپ تیار پیغام کے ساتھ کھل جاتا ہے۔ کوئی شخص یا گروپ چن کر بھیج دیں۔ ہر قسم کے افراد کے لیے الگ واٹس ایپ گروپ رکھیں (مثلاً اسٹاک دیکھنے والے) تاکہ ہر گروپ کو صرف وہی ملے جو اسے دیکھنا چاہیے۔",
+  "What to send": "کیا بھیجنا ہے",
+  "My own message": "میرا اپنا پیغام",
+  "Message (you can edit it)": "پیغام (آپ ترمیم کر سکتے ہیں)",
+  "Send in WhatsApp": "واٹس ایپ میں بھیجیں",
+  "Refresh figures": "اعداد و شمار تازہ کریں",
+  "Send alerts": "الرٹس بھیجیں",
+  "Floating button": "فلوٹنگ بٹن"
+});
 const I18N_ATTRS = ['placeholder', 'title', 'aria-label'];
 let I18N_LANG = 'en';
 let I18N_TIMER = 0;
@@ -774,6 +811,7 @@ function i18nSetLang(l){
   try{ localStorage.setItem(I18N_KEY, I18N_LANG); }catch(e){ /* the choice just will not be remembered */ }
   document.documentElement.setAttribute('lang', I18N_LANG);
   i18nButtonLabel();
+  if(typeof setTimeout === 'function') setTimeout(()=>{ if(typeof alertLangRefresh === 'function') alertLangRefresh(); }, 80); // rebuild any WhatsApp message on screen in the new language
   if(I18N_LANG === 'ur') i18nRun();
   else {
     if(I18N_OBS) I18N_OBS.disconnect();
