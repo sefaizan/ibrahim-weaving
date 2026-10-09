@@ -22,7 +22,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.55-release3-wages-period-owed">
+<meta name="app-build" content="v3.18.57-release3-wages-grand-prominent">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -880,6 +880,8 @@
   .wg-hero-l{ font-size:13px; opacity:.9; } .wg-hero-big{ font-size:30px; font-weight:900; margin:2px 0 4px; }
   .wg-hero-row3{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:12px; margin-top:10px; }
   .wg-hero-row3 span{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .wg-hero-grand{ display:flex; flex-direction:column; gap:2px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,.22); font-size:13px; }
+  .wg-hero-grand b{ font-size:30px; line-height:1.1; letter-spacing:-.3px; }
   .wg-hero-row3 b{ font-size:14px; white-space:nowrap; }
   .wg-hero-row{ display:flex; justify-content:space-between; gap:8px; font-size:13px; margin-top:8px; flex-wrap:wrap; }
   .wg-hero-sub{ font-size:12px; opacity:.85; margin-top:6px; }
@@ -1414,7 +1416,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.55</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.57</span></span>
     </div>
   </header>
 
