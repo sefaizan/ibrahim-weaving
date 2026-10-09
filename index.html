@@ -22,7 +22,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.45-release3-whatsapp-stock-final">
+<meta name="app-build" content="v3.18.47-release3-share-urdu">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -753,6 +753,12 @@
   .fab-backup .icon{ font-size:24px; }
   .fab-backup:hover{ background:#D98A4B; }
   .fab-backup:active{ transform:scale(0.94); }
+  /* v3.18.46: the round button opens this two-choice menu (Backup / Share on WhatsApp); placed by lock-init.js */
+  .fab-menu{ position:fixed; z-index:950; display:flex; flex-direction:column; min-width:210px; padding:6px; background:var(--card); color:var(--ink); border-radius:16px; box-shadow:var(--elev-3); }
+  .fab-menu[hidden]{ display:none; }
+  .fab-menu button{ display:flex; align-items:center; gap:12px; min-height:48px; padding:0 14px; border:0; border-radius:12px; background:transparent; color:inherit; font:inherit; font-weight:600; text-align:start; cursor:pointer; }
+  .fab-menu button:active{ background:rgba(128,128,128,0.18); }
+  .fab-menu .fm-ico{ font-size:20px; line-height:1; }
   /* "Needs backup" badge (see setFabNeedsBackup, js/autobackup.js): a dot rather than
      recoloring the whole button, so it reads as a notification ("something's waiting") rather
      than a warning ("something's wrong") — but it pulses continuously (see fabBackupPulse
@@ -1404,7 +1410,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.45</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.47</span></span>
     </div>
   </header>
 
@@ -1419,6 +1425,10 @@
   <button id="fabBackup" class="fab-backup" type="button" title="Backup & Restore" aria-label="Backup & Restore">
     <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   </button>
+  <div id="fabMenu" class="fab-menu" role="menu" hidden>
+    <button type="button" role="menuitem" data-fab-act="backup"><span class="fm-ico">⬇️</span><span id="fabMenuBackupLabel">Backup &amp; Restore</span></button>
+    <button type="button" role="menuitem" data-fab-act="share"><span class="fm-ico">💬</span><span>Share on WhatsApp</span></button>
+  </div>
 
 </div>
 
