@@ -216,9 +216,9 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
     : `<div class="wg-fine">No production in this period.</div>`;
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
     <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
-    <div class="wg-mini"><span>Meters <b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></span><span>Earned <b>${fmtRs2(net.earned)}</b></span><span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '—'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span></div>
+    <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(net.earned)}</strong></div><div><small>Meters</small><b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></div></div>
     <div class="wg-det">${detail}
-      <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
+      <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
 }
 // Salaried staff get their own card: weekly salary, salary earned in the period, bonus, paid, net. No meters or quality table.
