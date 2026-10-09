@@ -612,6 +612,7 @@ const I18N_UR_EXTRA = {"Ibrahim Weaving — Power Loom Ledger":"ابراہیم �
 "Total (No Bonus)":"کل (بونس کے بغیر)",
 "Bonus (Rs)":"بونس (روپے)",
 "Grand total":"کل میزان",
+"Paid extra":"اضافی ادائیگی",
 "Paid ahead (credit):":"پیشگی ادا (کریڈٹ):",
 "Earned, paid, bonus and production are for":"کمائی، ادائیگی، بونس اور پیداوار کے لیے ہیں",
 "Cheque No (optional)":"چیک نمبر (اختیاری)",

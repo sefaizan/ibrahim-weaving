@@ -290,9 +290,8 @@ function renderWages(){
 
   wrap.innerHTML = `
     <div class="card wg-hero"><div class="wg-hero-l">Still owed to employees (this period)</div><div class="wg-hero-big">${fmtRs(owed)}</div>
-      ${credit > 0.004 ? `<div class="wg-hero-sub">Paid ahead (credit): ${fmtRs(credit)}</div>` : ''}
-      <div class="wg-hero-row3"><span>Earned <b>${fmtRs(earned - bonus)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span><span>Grand total <b>${fmtRs(earned)}</b></span></div>
-      <div class="wg-hero-row"><span>Paid <b>${fmtRs(paid)}</b></span></div>
+            <div class="wg-hero-row3"><span>Earned <b>${fmtRs(earned - bonus)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span><span>Paid extra <b>${fmtRs(credit)}</b></span></div>
+      <div class="wg-hero-grand"><span>Grand total</span><b>${fmtRs(earned + credit)}</b></div>
       ${prodHtml}
       <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
