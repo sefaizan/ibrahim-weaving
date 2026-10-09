@@ -252,8 +252,9 @@ function renderWages(){
   const names = wageRelevantEmployees().map(e => e.name); rows.forEach(r => { if(!names.includes(r.employee)) names.push(r.employee); });
   const meterRows = rows.filter(r => !isSalariedEmp(r.employee));
   const data = names.map(name => ({ name, row: rowOf[name], bal: computeEmployeeWageBalance(name), net: computeEmployeeWageNetForPeriod(name, from, to) }));
-  const owed = data.reduce((s, d) => s + (d.bal.balance > 0.004 ? d.bal.balance : 0), 0);
-  const credit = data.reduce((s, d) => s + (d.bal.balance < -0.004 ? -d.bal.balance : 0), 0);
+  // Follows the selected period: earned minus paid within it (the running balance is on Settle).
+  const owed = data.reduce((s, d) => s + (d.net.net > 0.004 ? d.net.net : 0), 0);
+  const credit = data.reduce((s, d) => s + (d.net.net < -0.004 ? -d.net.net : 0), 0);
   const earned = data.reduce((s, d) => s + d.net.earned, 0), paid = data.reduce((s, d) => s + d.net.paid, 0);
   const bonus = rows.reduce((s, r) => s + r.bonus, 0);
 
@@ -288,9 +289,10 @@ function renderWages(){
     }).join('')}${prodRows.length > 1 ? `<div class="wg-prod-row tot"><span class="q">Total production</span><span class="m">${fmtQtyMtr(gM)}</span></div>` : ''}</div>` : '';
 
   wrap.innerHTML = `
-    <div class="card wg-hero"><div class="wg-hero-l">Still owed to employees (running balance)</div><div class="wg-hero-big">${fmtRs(owed)}</div>
+    <div class="card wg-hero"><div class="wg-hero-l">Still owed to employees (this period)</div><div class="wg-hero-big">${fmtRs(owed)}</div>
       ${credit > 0.004 ? `<div class="wg-hero-sub">Paid ahead (credit): ${fmtRs(credit)}</div>` : ''}
-      <div class="wg-hero-row"><span>Earned <b>${fmtRs(earned)}</b></span><span>Paid <b>${fmtRs(paid)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span></div>
+      <div class="wg-hero-row3"><span>Earned <b>${fmtRs(earned - bonus)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span><span>Grand total <b>${fmtRs(earned)}</b></span></div>
+      <div class="wg-hero-row"><span>Paid <b>${fmtRs(paid)}</b></span></div>
       ${prodHtml}
       <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
