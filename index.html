@@ -22,7 +22,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.48-release3-sync-self-repair">
+<meta name="app-build" content="v3.18.52-release3-stock-arrows">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -758,7 +758,8 @@
   .fab-menu[hidden]{ display:none; }
   .fab-menu button{ display:flex; align-items:center; gap:12px; min-height:48px; padding:0 14px; border:0; border-radius:12px; background:transparent; color:inherit; font:inherit; font-weight:600; text-align:start; cursor:pointer; }
   .fab-menu button:active{ background:rgba(128,128,128,0.18); }
-  .fab-menu .fm-ico{ font-size:20px; line-height:1; }
+  .fab-menu .fm-ico{ width:22px; height:22px; display:inline-flex; }
+  .fab-menu .fm-ico svg{ width:22px; height:22px; }
   /* "Needs backup" badge (see setFabNeedsBackup, js/autobackup.js): a dot rather than
      recoloring the whole button, so it reads as a notification ("something's waiting") rather
      than a warning ("something's wrong") — but it pulses continuously (see fabBackupPulse
@@ -1410,7 +1411,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.48</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.52</span></span>
     </div>
   </header>
 
@@ -1422,12 +1423,12 @@
 
   <main id="panels"></main>
 
-  <button id="fabBackup" class="fab-backup" type="button" title="Backup & Restore" aria-label="Backup & Restore">
-    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  <button id="fabBackup" class="fab-backup" type="button" title="Backup / Share" aria-label="Backup / Share">
+    <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span>
   </button>
   <div id="fabMenu" class="fab-menu" role="menu" hidden>
-    <button type="button" role="menuitem" data-fab-act="backup"><span class="fm-ico">⬇️</span><span id="fabMenuBackupLabel">Backup &amp; Restore</span></button>
-    <button type="button" role="menuitem" data-fab-act="share"><span class="fm-ico">💬</span><span>Share on WhatsApp</span></button>
+    <button type="button" role="menuitem" data-fab-act="backup"><span class="fm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.3A6 6 0 1 0 5 15.3"/><path d="M18 10a4 4 0 0 1 0 8H8"/><polyline points="9 13 12 10 15 13"/><line x1="12" y1="10" x2="12" y2="21"/></svg></span><span id="fabMenuBackupLabel">Backup</span></button>
+    <button type="button" role="menuitem" data-fab-act="share"><span class="fm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg></span><span>Share (alerts)</span></button>
   </div>
 
 </div>
