@@ -1,10 +1,11 @@
 {
   "name": "powerlooms-app",
-  "version": "3.18.72",
+  "version": "3.18.73",
   "private": true,
   "description": "Ibrahim Weaving - Power Loom Ledger (static installable web app). This file only exists to run the tests with `npm test`; the app itself needs no build step.",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "release": "node scripts/release.js"
   },
   "engines": {
     "node": ">=18"

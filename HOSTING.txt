@@ -20,6 +20,8 @@ GOOD TO KNOW
   from the home-screen icon; data entered in Safari won't appear there.
 - Changing the address (new domain, renamed site) gives a fresh, empty app. Take a backup
   first and Restore it at the new address.
+- Release shortcut: run  node scripts/release.js "short-label"  (or npm run release -- "short-label") - it bumps the version,
+  the app-build tag, the header version pill and CACHE_VERSION together, then runs the tests. Use --check to see the current values.
 - Updating: replace the files on the host (Netlify: drag the folder onto the SAME site's Deploys
   tab). Before deploying, change the app-build value in the <meta name="app-build"> tag near the
   top of index.html (any new text, e.g. the date) — that is what lets phones that already have the

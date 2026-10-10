@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#163B3D">
-<!-- RELEASE CHECKLIST — every fix/release must bump ALL of these together, or the app-build
+<!-- RELEASE CHECKLIST — do it all with one command:  node scripts/release.js "short-label"  (bumps 1-4 below, then runs the tests).
+     Every fix/release must bump ALL of these together, or the app-build
      meta tag below, the header's visible version badge, package.json, and the service worker's
      CACHE_VERSION will disagree with each other:
        1. This app-build content (any short unique label works, e.g. a date + fix name).
@@ -22,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.72-release3-stock-position-period">
+<meta name="app-build" content="v3.18.73-cheque-days-release-script">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1416,7 +1417,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.72</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.73</span></span>
     </div>
   </header>
 
