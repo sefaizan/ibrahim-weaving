@@ -734,6 +734,9 @@ Object.assign(I18N_UR, {
   "Send in WhatsApp": "واٹس ایپ میں بھیجیں",
   "Refresh figures": "اعداد و شمار تازہ کریں",
   "Send alerts": "الرٹس بھیجیں",
+  "Include orders (how much of each open order the stock covers)": "آرڈرز شامل کریں (اسٹاک ہر کھلے آرڈر کا کتنا پورا کرتا ہے)",
+  "Stock message: include orders": "اسٹاک پیغام: آرڈرز شامل کریں",
+  "adds how much of each open order the stock covers": "ہر کھلے آرڈر کا کتنا حصہ اسٹاک سے پورا ہوتا ہے",
   "Floating button": "فلوٹنگ بٹن"
 });
 // v3.18.48: the sync messages about a section that could not be opened, and the repair notice (section names in Urdu)

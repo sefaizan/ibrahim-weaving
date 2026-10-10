@@ -13,10 +13,10 @@ function alertUr(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_LANG ==
 const AL_MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
 // key -> [English, Urdu]; {0} {1} are filled in by al(). Names, quality names, order numbers and dates are never translated.
 const AL = {
-  stockTitle: ['📦 STOCK BY QUALITY', '📦 کوالٹی کے لحاظ سے اسٹاک'], noStock: ['No stock in hand.', 'اسٹاک موجود نہیں ہے۔'],
+  stockTitle: ['📦 STOCK IN HAND', '📦 اسٹاک موجود'], noStock: ['No stock in hand.', 'اسٹاک موجود نہیں ہے۔'],
   total: ['Total', 'کل اسٹاک'], more: ['more', 'مزید'], moreOrders: ['more orders', 'مزید آرڈرز'], orders: ['ORDERS', 'آرڈرز'], order: ['Order', 'آرڈر'],
-  legend: ['_▓ sent  ▒ stock  ░ to weave_', '_▓ بھیجا گیا  ▒ اسٹاک  ░ بننا باقی_'],
-  sentStock: ['↳ {0}% sent + {1}% from stock', '↳ {0}% بھیجا گیا + {1}% اسٹاک سے'],
+  legend: ['🟩 Sent   🟨 In stock   ⬜ To weave', '🟩 بھیجا گیا   🟨 اسٹاک   ⬜ بننا باقی'],
+  sent: ['Sent: *{0}%*', 'بھیجا گیا: *{0}%*'], fromStock: ['From stock: *{0}%*', 'اسٹاک سے: *{0}%*'], toWeave: ['Still to weave: *{0}%*', 'بننا باقی: *{0}%*'],
   weftTitle: ['🧵 WEFT STOCK', '🧵 بانا اسٹاک'], weftLow: ['🚨 WEFT RUNNING LOW 🚨', '🚨 بانا ختم ہو رہا ہے 🚨'],
   noWeft: ['No weft purchases recorded yet.', 'ابھی تک بانے کی کوئی خریداری درج نہیں ہے۔'],
   weftQty: ['*{0} bags* ({1} lbs)', '*{0} بیگ* ({1} پاؤنڈ)'], noPace: ['⏳ No recent production to measure the pace.', '⏳ رفتار جانچنے کے لیے حالیہ پیداوار موجود نہیں ہے۔'],
@@ -51,16 +51,16 @@ function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + 
 function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + d.getFullYear() : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
 function alertAsOf(){
   const d = new Date();
-  if(!alertUr()) return '_As of ' + d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/i, m => m.toUpperCase()) + '_';
+  if(!alertUr()) return '🕙 *As of ' + d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/i, m => m.toUpperCase()) + '*';
   const h = d.getHours(), part = h < 12 ? 'صبح' : h < 16 ? 'دوپہر' : h < 20 ? 'شام' : 'رات';
-  return '_تازہ ترین: ' + d.getDate() + ' ' + AL_MONTHS_UR[d.getMonth()] + '، ' + (h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + part + '_';
+  return '🕙 *تازہ ترین: ' + d.getDate() + ' ' + AL_MONTHS_UR[d.getMonth()] + '، ' + (h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + part + '*';
 }
-const ALERT_ASOF_RE = /\n*_(?:As of|تازہ ترین:) [^\n]*_\s*$/;
+const ALERT_ASOF_RE = /\n*(?:🕙 \*|_)(?:As of|تازہ ترین:) [^\n]*[*_]\s*$/;
 function alertBar(p){ const n = Math.max(0, Math.min(10, Math.round((Number(p) || 0) * 10))); return '▓'.repeat(n) + '░'.repeat(10 - n); }
-// Order bar: ▓ already delivered, ▒ covered by the stock in hand, ░ still to weave (10 blocks = the whole order).
+// Order bar: 🟩 already delivered, 🟨 covered by the stock in hand, ⬜ still to weave (10 squares = the whole order).
 function alertOrderBar(sentPct, stockPct){
   const d = Math.max(0, Math.min(10, Math.round(sentPct / 10))), c = Math.max(0, Math.min(10 - d, Math.round(stockPct / 10)));
-  return '▓'.repeat(d) + '▒'.repeat(c) + '░'.repeat(10 - d - c);
+  return '🟩'.repeat(d) + '🟨'.repeat(c) + '⬜'.repeat(10 - d - c);
 }
 // "62/44 (Micro 150.144)" -> "62/44", like the Orders page; two qualities that would look the same keep their full name.
 function alertShortNames(names){
@@ -79,8 +79,7 @@ function alertOrderLines(quality, stock, orders){
     left -= take;
     const sent = Math.round(got / qty * 100), stk = Math.round(take / qty * 100), total = Math.min(100, sent + stk);
     if(i) out.push('');
-    out.push((o.no || al('order')) + ' ' + alertOrderBar(sent, stk) + ' *' + total + '%*' + (total >= 100 ? ' ✅' : ''));
-    if(sent > 0 || stk > 0) out.push(al('sentStock', sent, stk));
+    out.push('*' + (o.no || al('order')) + '*', alertOrderBar(sent, stk) + '  *' + total + '%*' + (total >= 100 ? ' ✅' : ''), al('sent', sent), al('fromStock', stk), al('toWeave', Math.max(0, 100 - total)));
   });
   if(mine.length > 3) out.push('', '+ ' + (mine.length - 3) + ' ' + al('moreOrders'));
   return out;
@@ -91,14 +90,13 @@ function alertStockText(rows, total, orders){
   const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name));
   const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), vis = x => x.replace(/[\u200E\u202A\u202C]/g, ''), mW = Math.max(...mtrs.map(x => vis(x).length));
   const lrm = alertUr() ? '\u200E' : '';   // keeps the name-then-meters columns left to right even though the unit is Urdu
-  const block = shown.map((r, i) => lrm + '*' + nm[r.name] + '*' + ' → ' + '*' + mtrs[i] + '*');   // bold quality and bold quantity (WhatsApp cannot bold inside a ``` block)
-  if(list.length > 8) block.push('+ ' + (list.length - 8) + ' ' + al('more'));
-  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', block.join('\n'));
+  const HAND = '   👉   ', RULE = '━━━━━━━━━━━━━━';   // spaces round the hand so the number stands apart
+  const block = shown.map((r, i) => lrm + '*' + nm[r.name] + '*\n' + HAND + '*' + mtrs[i] + '*').join('\n\n');   // quality on one line, its quantity on the next
+  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', RULE, '', block + (list.length > 8 ? '\n\n+ ' + (list.length - 8) + ' ' + al('more') : ''));
   const og = [];
   shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length) og.push('*' + nm[r.name] + '*', '', ...ol, ''); });
-  if(og.length) lines.push('', '📋 *' + al('orders') + '*', ...og, al('legend'));
-  else lines.push('');
-  lines.push(alertAsOf());
+  if(og.length) lines.push('', RULE, '', '📋 *' + al('orders') + '*', '', ...og, al('legend'));
+  lines.push('', RULE, alertAsOf());
   return { title: al('stockTitle'), body: lines.join('\n') };
 }
 function alertWeftText(e){
@@ -162,9 +160,9 @@ function alertOpenOrders(){
   catch(e){ return []; }
 }
 // kind -> the message as one piece of text, ready for WhatsApp (title in bold).
-function alertBuild(kind){
+function alertBuild(kind, opts){
   let m;
-  if(kind === 'stock'){ const st = computeStats(''); m = alertStockText(st.stockByQuality, st.stock, alertOpenOrders()); }
+  if(kind === 'stock'){ const st = computeStats(''), withOrders = opts && opts.orders !== undefined ? !!opts.orders : !!sharePrefs().stockOrders; m = alertStockText(st.stockByQuality, st.stock, withOrders ? alertOpenOrders() : []); }
   else if(kind === 'weft') m = alertWeftText(weftStockEstimate());
   else if(kind === 'beams'){ const d = beamAlertDays() || 3; m = alertBeamText(computeBeamForecasts(d).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon'), d); }
   else if(kind === 'cheques'){ const t = todayStr(); m = alertChequeText(computePendingCheques(), t, dateAddDays(t, 7)); }
@@ -191,6 +189,7 @@ function alertShareCardHtml(){
     <p class="note info-note" hidden>Builds the message from the ledger on this phone and opens WhatsApp with it ready. Choose a person or a group and send. Keep one WhatsApp group per kind of person (for example Stock viewers) so each group gets only what it should see.</p>
     <div class="field" style="max-width:360px"><label for="al_kind">What to send</label>
       <select id="al_kind"><option value="stock">Stock by quality</option><option value="weft">Weft stock</option><option value="beams">Warp beams</option><option value="cheques">Cheques</option><option value="custom">My own message</option></select></div>
+    <label id="al_ord_wrap" style="display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer;margin:0 0 12px"><input type="checkbox" id="al_ord" style="width:18px;height:18px"><span>Include orders (how much of each open order the stock covers)</span></label>
     <div class="field"><label for="al_text">Message (you can edit it)</label><textarea id="al_text" rows="7"></textarea></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <a class="primary" id="al_wa" target="_blank" rel="noopener" href="#" style="text-decoration:none;display:inline-flex;align-items:center;padding:0 18px;min-height:44px">Send in WhatsApp</a>
@@ -203,7 +202,9 @@ function alertShareWire(){
   const kind = $('al_kind'), text = $('al_text'), wa = $('al_wa');
   if(!kind || !text || !wa) return;
   const sync = () => { wa.href = text.value.trim() ? alertWhatsAppUrl(text.value) : '#'; };
-  const fill = () => { text.value = kind.value === 'custom' ? '' : alertBuild(kind.value); if(kind.value === 'custom') text.focus(); sync(); };
+  const ord = $('al_ord'), wrap = $('al_ord_wrap');
+  if(ord){ ord.checked = !!sharePrefs().stockOrders; ord.onchange = () => { setSharePrefs(Object.assign(sharePrefs(), { stockOrders: ord.checked })); const f = document.querySelector('.sf_chk[data-key="stockOrders"]'); if(f) f.checked = ord.checked; fill(); }; }
+  const fill = () => { if(wrap) wrap.style.display = kind.value === 'stock' ? 'flex' : 'none'; text.value = kind.value === 'custom' ? '' : alertBuild(kind.value); if(kind.value === 'custom') text.focus(); sync(); };
   kind.onchange = fill; text.oninput = sync; $('al_refresh').onclick = fill;
   wa.onclick = (e) => { if(!text.value.trim()){ e.preventDefault(); if(typeof showToast === 'function') showToast('Write or build a message first.', 2500); } };
   fill();
@@ -222,10 +223,10 @@ const SHARE_SECTIONS = [
   ['profit', 'Profit and cash', 'this month, and cash in hand']
 ];
 function sharePrefs(){
-  const p = { stock: true, beams: true, weft: true, note: '', phone: '' };
+  const p = { stock: true, beams: true, weft: true, stockOrders: false, note: '', phone: '' };
   try{
     const s = JSON.parse(localStorage.getItem(SHARE_PREFS_KEY) || 'null');
-    if(s && typeof s === 'object'){ SHARE_SECTIONS.forEach(x => { if(typeof s[x[0]] === 'boolean') p[x[0]] = s[x[0]]; }); if(typeof s.note === 'string') p.note = s.note; if(typeof s.phone === 'string') p.phone = s.phone; }
+    if(s && typeof s === 'object'){ SHARE_SECTIONS.forEach(x => { if(typeof s[x[0]] === 'boolean') p[x[0]] = s[x[0]]; }); if(typeof s.stockOrders === 'boolean') p.stockOrders = s.stockOrders; if(typeof s.note === 'string') p.note = s.note; if(typeof s.phone === 'string') p.phone = s.phone; }
   }catch(e){ /* use the defaults */ }
   return p;
 }
@@ -261,6 +262,7 @@ function shareFabCardHtml(){
     <div class="card-head"><h2>Floating Share button</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
     <p class="note info-note" hidden>Tap the round button at the bottom of any screen, then Share. WhatsApp opens with the message below, built fresh from the ledger. Tick what to include. These choices are kept on this phone only.</p>
     ${rows}
+    <label style="display:flex;align-items:flex-start;gap:10px;font-weight:500;cursor:pointer;margin-top:10px;padding-left:28px"><input type="checkbox" class="sf_chk" data-key="stockOrders" ${p.stockOrders ? 'checked' : ''} style="width:18px;height:18px;margin-top:2px"><span>Stock message: include orders<span class="note" style="display:block;font-weight:400;margin:0">adds how much of each open order the stock covers</span></span></label>
     <div class="field" style="margin-top:14px"><label for="sf_note">Your own line on top (optional)</label><input id="sf_note" type="text" maxlength="200" placeholder="e.g. Today's update" value="${typeof escHtml === 'function' ? escHtml(p.note) : ''}"></div>
     <div class="field"><label for="sf_phone">Send to this number (optional)</label><input id="sf_phone" type="tel" inputmode="tel" placeholder="03xx xxxxxxx - leave empty to choose in WhatsApp" value="${typeof escHtml === 'function' ? escHtml(p.phone) : ''}"><p class="note" style="margin-top:4px">A number opens that chat directly. A WhatsApp group cannot be opened from a link, so leave this empty and pick the group in WhatsApp.</p></div>
     <div class="field"><label for="sf_preview">Preview <span id="sf_count" class="note" style="margin:0"></span></label><textarea id="sf_preview" rows="10" readonly></textarea></div>
@@ -277,7 +279,7 @@ function shareFabWire(){
     $('sf_preview').value = t || al('shNone');
     $('sf_count').textContent = t ? al(t.length > 3500 ? 'shLong' : 'shChars', t.length) : '';
   };
-  const save = () => { setSharePrefs(read()); preview(); };
+  const save = () => { const p = read(); setSharePrefs(p); const a = $('al_ord'); if(a && a.checked !== !!p.stockOrders){ a.checked = !!p.stockOrders; const k = $('al_refresh'); if(k) k.click(); } preview(); };
   document.querySelectorAll('.sf_chk').forEach(c => { c.onchange = save; });
   $('sf_note').oninput = save; $('sf_phone').onchange = save; $('sf_refresh').onclick = preview; $('sf_test').onclick = () => { setSharePrefs(read()); shareFabNow(); };
   preview();
