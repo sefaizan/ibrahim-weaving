@@ -887,10 +887,10 @@ function wirePanel(id){
         [v('ol_date'), 'Pick the date first.', 'ol_date'],
         [Number(v('ol_amt')||0) > 0, 'Enter the amount first.', 'ol_amt'],
       ])) return;
-      const repaid = v('ol_type') === 'Loan Repaid';
-      // The purpose only means something for money put in; the recovery link only for a repayment.
-      const rec = {date:v('ol_date'), type:v('ol_type'), amount:Number(v('ol_amt')||0),
-        purpose: repaid ? '' : v('ol_purpose'), recoveryId: repaid ? v('ol_rec') : '', remarks:v('ol_rem')};
+      const otype = v('ol_type');
+      // The purpose only means something for money put in; the recovery link only for the company paying you back.
+      const rec = {date:v('ol_date'), type:otype, amount:Number(v('ol_amt')||0),
+        purpose: otype === 'Loan In' ? v('ol_purpose') : '', recoveryId: otype === 'Loan Repaid' ? v('ol_rec') : '', remarks:v('ol_rem')};
       if(!Array.isArray(DATA.ownerLoans)) DATA.ownerLoans = [];
       if(EDITING && EDITING.key==='ownerLoans'){
         const idx = DATA.ownerLoans.findIndex(r=>r.id===EDITING.id);
@@ -905,21 +905,15 @@ function wirePanel(id){
     const updateOwnerLoanHelper = ()=>{
       const helperEl = document.getElementById('ol_helper');
       if(!helperEl) return;
-      const repaid = v('ol_type') === 'Loan Repaid';
+      const otype = v('ol_type'), down = otype === 'Loan Repaid' || otype === 'Loan Taken';
       const pw = document.getElementById('ol_purpose_wrap'), rw = document.getElementById('ol_rec_wrap');
-      if(pw) pw.style.display = repaid ? 'none' : '';
-      if(rw) rw.style.display = repaid ? '' : 'none';
+      if(pw) pw.style.display = otype === 'Loan In' ? '' : 'none';
+      if(rw) rw.style.display = otype === 'Loan Repaid' ? '' : 'none';
       const b = computeOwnerLoanBalance();
       const amt = Number(v('ol_amt')||0);
-      if(amt <= 0){ helperEl.textContent = b.balance > 0.004 ? `Currently ${fmtRs2(b.balance)} owed to you.` : ''; return; }
-      if(repaid){
-        const after = b.balance - amt;
-        helperEl.textContent = after <= 0.004
-          ? `This clears what you are owed${after < -0.004 ? `, with ${fmtRs2(Math.abs(after))} extra paid back` : ''}.`
-          : `Reduces what you are owed to ${fmtRs2(after)}.`;
-      } else {
-        helperEl.textContent = `This brings what you are owed to ${fmtRs2(b.balance + amt)}.`;
-      }
+      const state = x => x > 0.004 ? `the company owes you ${fmtRs2(x)}` : x < -0.004 ? `you owe the company ${fmtRs2(Math.abs(x))}` : 'everything is settled';
+      if(amt <= 0){ helperEl.textContent = Math.abs(b.balance) > 0.004 ? `Currently ${state(b.balance)}.` : ''; return; }
+      helperEl.textContent = `After this entry ${state(b.balance + (down ? -amt : amt))}.`;
     };
     document.getElementById('ol_type').addEventListener('change', updateOwnerLoanHelper);
     document.getElementById('ol_amt').addEventListener('input', updateOwnerLoanHelper);

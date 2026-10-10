@@ -401,15 +401,15 @@ function ownerLoansPanel(){
   const inTotals = sumAllAndMonth(list.filter(p=>!ownerLoanIsRepaid(p)), 'amount');
   const repaidTotals = sumAllAndMonth(list.filter(p=>ownerLoanIsRepaid(p)), 'amount');
   const owedCls = b.balance > 0.004 ? 'color:var(--red)' : '';
-  const balText = b.balance < -0.004 ? `${fmtRs(Math.abs(b.balance))} paid back extra` : fmtRs(Math.max(0, b.balance));
+  const balText = b.balance < -0.004 ? `You owe ${fmtRs(Math.abs(b.balance))}` : fmtRs(Math.max(0, b.balance));
   const purposeRows = ownerLoanByPurpose().map(r=>`<tr><td><span class="name">${escHtml(r.purpose)}</span></td><td>${fmtRs2(r.amount)}</td></tr>`).join('');
   const recById = {}; DATA.recovery.forEach(r=>{ recById[r.id] = r; });
   const recChoices = ownerLoanRecoveryChoices();
   const summary = `${sumCardOpen('ownerbalance','Owed to You')}
     <div class="grid cols-3" style="margin-bottom:14px">
-      <div class="stat compact"><div class="label">Owed to You Now</div><div class="value" style="${owedCls}">${balText}</div></div>
-      <div class="stat compact"><div class="label">Total Put In</div><div class="value">${fmtRs(inTotals.all)}</div></div>
-      <div class="stat compact"><div class="label">Total Paid Back</div><div class="value">${fmtRs(repaidTotals.all)}</div></div>
+      <div class="stat compact"><div class="label">${b.balance < -0.004 ? 'You Owe the Company' : 'Owed to You Now'}</div><div class="value" style="${owedCls}">${balText}</div></div>
+      <div class="stat compact"><div class="label">Total Money In</div><div class="value">${fmtRs(inTotals.all)}</div></div>
+      <div class="stat compact"><div class="label">Total Money Out</div><div class="value">${fmtRs(repaidTotals.all)}</div></div>
     </div>
     ${purposeRows ? `<div class="log-scroll"><table><thead><tr><th>Put in for</th><th>Total</th></tr></thead><tbody>${purposeRows}</tbody></table></div>` : ''}
   ${sumCardClose()}`;
@@ -417,10 +417,10 @@ function ownerLoansPanel(){
     ${summary}
     ${loanStatementCardHtml('owner')}
     <div class="card"><div class="card-head"><h2>Log Owner Loan</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Loan In = your own money put into the business (for yarn, spare parts, ...). It raises Cash Position, but it is not income and not an expense, so Profit/Loss does not change. Loan Repaid = money the business pays back to you, usually out of recoveries; it lowers Cash Position and what you are owed. The Overview shows "Cash after repaying you" = Cash Position minus what you are still owed, i.e. what the business really holds as its own money.</p>
+      <p class="note info-note" hidden>Two-way: the company can owe you, or you can owe the company. Loan In = your own money put into the business; Loan Taken = you take money out of the company as a loan; Loan Repaid = the company pays you back; Loan Returned = you pay the company back. If the balance goes negative, you owe the company. Loan In = your own money put into the business (for yarn, spare parts, ...). It raises Cash Position, but it is not income and not an expense, so Profit/Loss does not change. Loan Repaid = money the business pays back to you, usually out of recoveries; it lowers Cash Position and what you are owed. The Overview shows "Cash after repaying you" = Cash Position minus what you are still owed, i.e. what the business really holds as its own money.</p>
       <div class="grid cols-3">
         ${field('Date','ol_date','date',`value="${todayStr()}"`)}
-        <div class="field"><label>Type</label><select id="ol_type"><option value="Loan In">Loan In — you put money in</option><option value="Loan Repaid">Loan Repaid — paid back to you</option></select></div>
+        <div class="field"><label>Type</label><select id="ol_type"><option value="Loan In">Loan In — you put money in</option><option value="Loan Repaid">Loan Repaid — company paid you back</option><option value="Loan Taken">Loan Taken — you took a loan from the company</option><option value="Loan Returned">Loan Returned — you paid the company back</option></select></div>
         ${field('Amount (Rs)','ol_amt','number')}
       </div>
       <div class="grid cols-2" style="margin-top:12px">
@@ -439,7 +439,7 @@ function ownerLoansPanel(){
         ['Date','Type','Amount','For / From','Remarks',''],
         list.slice().reverse(),
         r=>[fmtDate(r.date), escHtml(r.type||'—'), fmtRs2(r.amount),
-            ownerLoanIsRepaid(r) ? (r.recoveryId ? (recById[r.recoveryId] ? escHtml(ownerLoanRecoveryLabel(recById[r.recoveryId])) : 'recovery removed') : '—') : escHtml(r.purpose||'—'),
+            r.type === 'Loan Repaid' ? (r.recoveryId ? (recById[r.recoveryId] ? escHtml(ownerLoanRecoveryLabel(recById[r.recoveryId])) : 'recovery removed') : '—') : escHtml(r.purpose||'—'),
             escHtml(r.remarks||'—'), actionBtns('ownerLoans',r.id)]
       )}</div>
   `;
@@ -454,10 +454,14 @@ const LOAN_STMT = {
   emp:   { title:'Employee Loan Statement', who:'Employee', up:'Given',  down:'Repaid',    bal:'Balance',
            list: who=> DATA.loanPayments.filter(p=>p.employee===who), isDown: p=> p.type === 'Loan Repaid',
            detail: p=> (p.type||'Loan') + (p.remarks ? ' - ' + p.remarks : '') },
-  owner: { title:'Company Loan Statement (Owner Loans)', who:'', up:'Put in', down:'Paid back', bal:'Owed to owner',
+  owner: { title:'Company Loan Statement (Owner Loans)', who:'', up:'Money in', down:'Money out', bal:'Balance',
            list: ()=> ownerLoanList(), isDown: p=> ownerLoanIsRepaid(p),
-           detail: p=> (p.type||'Loan') + (!ownerLoanIsRepaid(p) && p.purpose ? ' - ' + p.purpose : '') + (p.remarks ? ' - ' + p.remarks : '') }
+           detail: p=> (p.type||'Loan') + (p.type === 'Loan In' && p.purpose ? ' - ' + p.purpose : '') + (p.remarks ? ' - ' + p.remarks : '') }
 };
+function loanClosingLabel(kind, closing){
+  if(kind !== 'owner') return 'Closing Balance';
+  return closing < -0.004 ? 'Closing Balance (you owe the company)' : closing > 0.004 ? 'Closing Balance (company owes you)' : 'Closing Balance';
+}
 function buildLoanLedger(kind, who, from, to){
   const K = LOAN_STMT[kind];
   const all = K.list(who).slice().sort((a,b)=> String(a.date).localeCompare(String(b.date)) || String(a.time||'').localeCompare(String(b.time||'')));
@@ -527,7 +531,7 @@ function renderLoanStatementPdf(kind, who, from, to){
   led.rows.forEach(r=>{ if(y > pageH - 70){ doc.addPage(); y = margin + 16; y = header(y); }
     y = row(y, [fmtDate(r.date), r.detail, r.up ? fmtRs(r.up) : '', r.down ? fmtRs(r.down) : '', fmtRs(r.balance)]); });
   const sum = []; if(led.hasOpening) sum.push(['Opening balance', led.opening, false]);
-  sum.push([K.up + ' in range', led.totalUp, false], [K.down + ' in range', led.totalDown, false], ['Closing balance', led.closing, true]);
+  sum.push([K.up + ' in range', led.totalUp, false], [K.down + ' in range', led.totalDown, false], [loanClosingLabel(kind, led.closing), led.closing, true]);
   const boxH = sum.length*20 + 6; if(y + 24 + boxH > pageH - 50){ doc.addPage(); y = margin + 16; }
   y += 24; doc.setDrawColor(160); doc.setFillColor(250,250,250); doc.rect(margin, y-14, tableW, boxH, 'FD'); doc.setFontSize(10);
   sum.forEach(([label, val, strong])=>{ if(strong){ doc.setDrawColor(200); doc.line(margin, y-14, margin+tableW, y-14); }
@@ -572,7 +576,7 @@ function loanStatementPartHtml(rowHtmls, o){
       ${led.hasOpening ? `<div class="row"><span>Opening Balance</span><span>${fmtRs(led.opening)}</span></div>` : ''}
       <div class="row"><span>${K.up} in range</span><span>${fmtRs(led.totalUp)}</span></div>
       <div class="row"><span>${K.down} in range</span><span>${fmtRs(led.totalDown)}</span></div>
-      <div class="row total"><span>Closing Balance</span><span>${fmtRs(led.closing)}</span></div></div>`;
+      <div class="row total"><span>${loanClosingLabel(kind, led.closing)}</span><span>${fmtRs(led.closing)}</span></div></div>`;
   const head = first ? `${bizLines}\n    <div class="receipt-title">${K.title}</div>\n    ${meta}` : `<div class="receipt-title" style="margin-top:0">${K.title} (continued)</div>\n    ${meta}`;
   return `<div class="receipt" style="max-width:680px">
     ${receiptWatermarkDiv}

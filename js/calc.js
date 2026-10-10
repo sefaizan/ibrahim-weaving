@@ -342,7 +342,10 @@ function computePersonLoanBalance(person){
 // Profit/Loss is untouched. DATA.ownerLoans may be missing on an old ledger, so it is always read
 // through ownerLoanList().
 function ownerLoanList(){ return (typeof DATA !== 'undefined' && Array.isArray(DATA.ownerLoans)) ? DATA.ownerLoans : []; }
-function ownerLoanIsRepaid(p){ return p && p.type === 'Loan Repaid'; }
+// Two-way: 'Loan In' (you put money in) and 'Loan Returned' (you pay the company back) raise what the company owes you;
+// 'Loan Repaid' (company pays you back) and 'Loan Taken' (you take a loan from the company) lower it. A negative balance
+// means YOU owe the company. Cash moves the same way as the balance, so every total below keeps working unchanged.
+function ownerLoanIsRepaid(p){ return !!p && (p.type === 'Loan Repaid' || p.type === 'Loan Taken'); }
 function computeOwnerLoanBalance(){
   const list = ownerLoanList();
   const given = list.filter(p=>!ownerLoanIsRepaid(p)).reduce((s,p)=>s+(Number(p.amount)||0),0);
@@ -353,7 +356,7 @@ function computeOwnerLoanBalance(){
 // outstanding balance was spent on. Repayments are not tied to a purpose, so they are shown as one total.
 function ownerLoanByPurpose(){
   const m = {};
-  ownerLoanList().filter(p=>!ownerLoanIsRepaid(p)).forEach(p=>{ const k = p.purpose || 'Other'; m[k] = (m[k]||0) + (Number(p.amount)||0); });
+  ownerLoanList().filter(p=>!ownerLoanIsRepaid(p) && p.type !== 'Loan Returned').forEach(p=>{ const k = p.purpose || 'Other'; m[k] = (m[k]||0) + (Number(p.amount)||0); });
   return Object.keys(m).map(k=>({purpose:k, amount:m[k]}));
 }
 // Distinct people who appear anywhere in Personal Loans, in first-seen order — there's no
