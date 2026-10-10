@@ -21,6 +21,7 @@ All tests pass = every line prints `ok` and the summary ends with `# fail 0`.
 | `shortfall.test.js` | The Difference (qty produced - logged meters) split between employees, incl. negative differences; every meter paid exactly once |
 | `receivables.test.js` | Receivable aging buckets, "before last sale" figure, client statement running balance, Overview Receivable (headline = sum of client rows, for every period filter) |
 | `replacements.test.js` | Linking a replacing payment to a bounced cheque: what can be linked, what is refused, how cheque statuses follow the links, finding and matching older unlinked Replaced cheques |
+| `cheque-days.test.js` | Pending cheques: Days Held (since received) and Due (Overdue N days / Due today / Due in N days); Bounced cheques: Days Since Bounced (exact once recorded, else estimated); the bounce date is stamped, cleared and kept through edits |
 | `cheques.test.js` | How Pending / Cleared / Bounced / Replaced cheques count towards cash, received and bounced; Bounced and Pending lists; a cheque's life from Pending to Replaced |
 | `production-entry.test.js` | Which loom "Add & next loom" moves to (Settings order, last loom, unknown loom) |
 | `view-only.test.js` | View-only phones: who counts as view-only (owner and never-signed-in phones never do; signing out doesn't unlock), saving refused and undone, no pushing to the cloud, cloud copy still comes down, every Add / Edit / Delete / Save control is hidden and blocked |
