@@ -456,7 +456,7 @@ function renderStats(monthVal){
       <div class="group-label" style="margin-top:0">Stock by Quality</div>
       <div class="table-lg log-scroll">${table(
         ['Quality','Produced (mtr)','Sold (mtr)','In Stock (mtr)'],
-        s.stockByQuality.map(r=>[`<span class="name">${escHtml(r.name)}</span>`, fmtQtyMtr(r.produced), fmtQtyMtr(r.sold), `<b>${fmtQtyMtr(r.stock)}</b>`])
+        s.stockByQuality.map(r=>[`<span class="name">${escHtml(r.name)}</span>`, fmtQtyMtr(monthVal ? r.producedP : r.produced), fmtQtyMtr(monthVal ? r.soldP : r.sold), `<b>${fmtQtyMtr(r.stock)}</b>`])
       )}</div>
       <div class="group-label">Overall</div>
       <div class="grid cols-4">

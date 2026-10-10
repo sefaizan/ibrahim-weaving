@@ -1024,10 +1024,13 @@ function computeStats(monthVal){
   const producedByQ = sumWhereBy(DATA.production,'quality','qty',null,cumEnd);
   const soldByQ = sumWhereBy(activeSaleRows(),'quality','qty',null,cumEnd);
   const lShortageByQ = sumWhereBy(DATA.sale.filter(s=>s.lStatus==='applied'),'quality','lShortageQty',null,cumEnd);
+  // Produced / Sold inside the selected period only (what the table shows when a period is chosen); stock itself stays cumulative to the period end
+  const producedByQP = start ? sumWhereBy(DATA.production,'quality','qty',start,end) : producedByQ;
+  const soldByQP = start ? sumWhereBy(activeSaleRows(),'quality','qty',start,end) : soldByQ;
   const qualityNames = orderedGroupNames(DATA.qualities.map(q=>q.name), [DATA.production,'quality'], [DATA.sale,'quality']);
   const stockByQuality = qualityNames.map(name=>{
     const produced = producedByQ[name]||0, sold = soldByQ[name]||0, lShort = lShortageByQ[name]||0;
-    return {name, produced, sold, stock: produced-sold-lShort};
+    return {name, produced, sold, producedP: producedByQP[name]||0, soldP: soldByQP[name]||0, stock: produced-sold-lShort};
   }).filter(r=> r.produced || r.sold);
 
   // Sales & receivables breakdown by client
