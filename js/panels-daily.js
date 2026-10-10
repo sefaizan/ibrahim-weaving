@@ -368,22 +368,34 @@ function salePanel(){
 }
 function daysSince(dateStr){ return Math.max(0, Math.round((new Date(todayStr()+'T00:00:00Z') - new Date(dateStr+'T00:00:00Z')) / 86400000)); }
 function isChequeOverdue(c){ return c.chequeDate && c.chequeDate < todayStr(); }
+// Whole days from today to a date (negative = in the past), by the phone's local date.
+function daysUntil(dateStr){ return Math.round((new Date(dateStr+'T00:00:00Z') - new Date(todayStr()+'T00:00:00Z')) / 86400000); }
+const dayWord = n => n + ' day' + (n===1?'':'s');
+// "Due" cell for a Pending cheque: where it stands against its own cheque date.
+function chequeDueText(c){
+  if(!c.chequeDate) return '—';
+  const n = daysUntil(c.chequeDate);
+  if(n < 0) return '<span style="color:var(--rust)"><b>Overdue ' + dayWord(-n) + '</b></span>';
+  if(n === 0) return '<b>Due today</b>';
+  return 'Due in ' + dayWord(n);
+}
+// "Days Since Bounced" cell: exact when the bounce date was recorded (v3.18.73+); otherwise an estimate from the cheque date.
+function chequeBouncedText(c){
+  if(c.bouncedOn) return dayWord(daysSince(c.bouncedOn));
+  return '~' + dayWord(daysSince(c.chequeDate || c.date)) + '<div class="note" style="margin:2px 0 0">estimated, from the cheque date</div>';
+}
 function pendingChequesCardHtml(){
   const pendingCheques = computePendingCheques();
   if(!pendingCheques.length) return '';
   const pendingTotal = pendingCheques.reduce((s,c)=>s+(Number(c.amount)||0),0);
-  const headers = ['Date','Client','Cheque Owner','Cheque No','Bank','Cheque Date','Amount','Days Pending',''];
+  const headers = ['Date','Client','Cheque Owner','Cheque No','Bank','Cheque Date','Amount','Days Held','Due',''];
   const mapFn = c=>{
     const cells = [
       fmtDate(c.date), `<span class="name">${escHtml(c.client)}</span>`, escHtml(c.owner||'—'), escHtml(c.chequeNo||'—'), escHtml(c.bank||'—'),
-      c.chequeDate?fmtDate(c.chequeDate)+(isChequeOverdue(c)?' <span style="color:var(--rust)"><b>(overdue)</b></span>':''):'—',
-      // "Days Pending" counts from the cheque's OWN date (the date it clears/is dated for),
-      // not from c.date (when this recovery entry was logged into the app) — those two dates
-      // are often different (a cheque logged today but dated for next week, or logged late for
-      // a cheque from a few days ago). A cheque dated today shows 0 here, matching "not overdue
-      // yet"; daysSince clamps at 0 for a still-future-dated cheque too, which is correct for
-      // the same reason — isChequeOverdue (above) is what actually flags it red.
-      fmtRs(c.amount), daysSince(c.chequeDate || c.date),
+      c.chequeDate?fmtDate(c.chequeDate):'—',
+      // "Days Held" = days since the cheque was received (the entry's date); "Due" = where it stands against the
+      // cheque's OWN date (Overdue N days / Due today / Due in N days). A Pending cheque is flagged red once past its date.
+      fmtRs(c.amount), dayWord(daysSince(c.date)), chequeDueText(c),
       `<div class="chq-actions"><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Cleared">Mark Cleared</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Bounced">Mark Bounced</button></div>`
     ];
     if(isChequeOverdue(c)) cells.rowStyle = 'background:var(--warn-bg-1)';
@@ -399,13 +411,13 @@ function bouncedChequesCardHtml(){
   const bouncedCheques = computeBouncedCheques();
   if(!bouncedCheques.length) return '';
   const bouncedTotal = bouncedCheques.reduce((s,c)=>s+(Number(c.amount)||0),0);
-  const headers = ['Date','Client','Cheque Owner','Cheque No','Bank','Cheque Date','Amount',''];
+  const headers = ['Date','Client','Cheque Owner','Cheque No','Bank','Cheque Date','Amount','Days Since Bounced',''];
   const mapFn = c=>{
     const made = chequeReplacedAmount(c.recoveryId, c.id);
     const progress = made > 0.004 ? `<div class="note" style="margin:3px 0 0">${fmtRs(made)} replaced so far — ${fmtRs(Math.max(0,(Number(c.amount)||0)-made))} still owed</div>` : '';
     return [
     fmtDate(c.date), `<span class="name">${escHtml(c.client)}</span>`, `<b>${escHtml(c.owner||'—')}</b>`, escHtml(c.chequeNo||'—'), escHtml(c.bank||'—'),
-    c.chequeDate?fmtDate(c.chequeDate):'—', fmtRs(c.amount) + progress,
+    c.chequeDate?fmtDate(c.chequeDate):'—', fmtRs(c.amount) + progress, chequeBouncedText(c),
     `<div class="chq-actions"><button class="ghost" data-replace-cheque="${c.recoveryId}:${c.id}">Log replacement</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Replaced">Mark Replaced</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Pending">Reopen as Pending</button><button class="ghost" data-cheque="${c.recoveryId}:${c.id}:Cleared">Mark Cleared</button></div>`
     ];
   };

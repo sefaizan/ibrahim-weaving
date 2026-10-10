@@ -738,7 +738,7 @@ function wirePanel(id){
       ])) return;
       const cashAmount = Number(v('r_cash')||0);
       const bankAmount = Number(v('r_bank')||0);
-      const validCheques = chequeRows.filter(c=>Number(c.amount)>0).map(c=>({id:c.id, amount:Number(c.amount), chequeNo:c.chequeNo||'', bank:c.bank||'', owner:c.owner||'', chequeDate:c.chequeDate||'', status:c.status||'Pending'}));
+      const validCheques = chequeRows.filter(c=>Number(c.amount)>0).map(c=>({id:c.id, amount:Number(c.amount), chequeNo:c.chequeNo||'', bank:c.bank||'', owner:c.owner||'', chequeDate:c.chequeDate||'', status:c.status||'Pending', ...(c.bouncedOn?{bouncedOn:c.bouncedOn}:{})}));
       const amount = cashAmount + bankAmount + validCheques.reduce((s,c)=>s+c.amount,0);
       // r_cash is hidden until "+ Add Cash" is tapped, so point at the Bank Transfer box, which is always there.
       if(!requireFields([[amount > 0, 'Enter a Cash Amount, Bank Transfer Amount, or at least one cheque before saving.', 'r_bank']])) return;

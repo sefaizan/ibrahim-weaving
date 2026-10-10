@@ -566,6 +566,7 @@ function wireScrollAwareFab(fabBackup){
     const cheque = rec && (rec.cheques||[]).find(c=>c.id===chequeId);
     if(!cheque) return;
     cheque.status = status;
+    if(status === 'Bounced') cheque.bouncedOn = todayStr(); else delete cheque.bouncedOn; // when it bounced, for "Days Since Bounced"
     save();
     const activeTab = document.querySelector('nav.tabs button.active');
     switchTab(activeTab ? activeTab.dataset.tab : 'overview');
