@@ -91,9 +91,9 @@ function alertStockText(rows, total, orders){
   const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name));
   const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), vis = x => x.replace(/[\u200E\u202A\u202C]/g, ''), mW = Math.max(...mtrs.map(x => vis(x).length));
   const lrm = alertUr() ? '\u200E' : '';   // keeps the name-then-meters columns left to right even though the unit is Urdu
-  const block = shown.map((r, i) => lrm + nm[r.name].padEnd(nameW) + ' → ' + ' '.repeat(mW - vis(mtrs[i]).length) + mtrs[i]);
+  const block = shown.map((r, i) => lrm + '*' + nm[r.name] + '*' + ' → ' + '*' + mtrs[i] + '*');   // bold quality and bold quantity (WhatsApp cannot bold inside a ``` block)
   if(list.length > 8) block.push('+ ' + (list.length - 8) + ' ' + al('more'));
-  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', '```' + block.join('\n') + '```');
+  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', block.join('\n'));
   const og = [];
   shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length) og.push('*' + nm[r.name] + '*', '', ...ol, ''); });
   if(og.length) lines.push('', '📋 *' + al('orders') + '*', ...og, al('legend'));
