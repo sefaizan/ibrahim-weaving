@@ -13,12 +13,12 @@ function load(extra){
 }
 describe('alert texts', () => {
   const app = load();
-  test('stock: total, then the qualities in one line each with bold quality and bold quantity (short names), biggest first', () => {
+  test('stock: total, then each quality with its quantity on the next line after a spaced hand (short names), biggest first', () => {
     const t = app.alertStockText([{ name: '52 Picks', stock: 300.4 }, { name: '60/52 (Micro 150.144)', stock: 0 }, { name: '62/44 (Micro 150.144)', stock: 1240 }], 1540.4);
-    assert.equal(t.title, '📦 STOCK BY QUALITY');
-    assert.equal(t.body.split('\n').slice(0, 4).join('\n'), '🟢 *Total: 1,540 m*\n\n*62/44* → *1,240 m*\n*52 Picks* → *300 m*');
+    assert.equal(t.title, '📦 STOCK IN HAND');
+    assert.equal(t.body.split('\n').slice(0, 9).join('\n'), '🟢 *Total: 1,540 m*\n\n━━━━━━━━━━━━━━\n\n*62/44*\n   👉   *1,240 m*\n\n*52 Picks*\n   👉   *300 m*');
     assert.ok(!t.body.includes('60/52') && !t.body.includes('ORDERS'));
-    assert.ok(/^_As of .+ (AM|PM)_$/.test(t.body.split('\n').pop()));
+    assert.ok(/^🕙 \*As of .+ (AM|PM)\*$/.test(t.body.split('\n').pop()));
   });
   test('qualities that would get the same short name keep their full name', () => {
     const t = app.alertStockText([{ name: '62/44 (Micro 150.144)', stock: 500 }, { name: '62/44 (Polyester)', stock: 400 }], 900);
@@ -28,7 +28,8 @@ describe('alert texts', () => {
     const o = (no, date, qty, got, quality) => ({ no, date, qty, got, quality: quality || 'Q1', client: 'SECRET' });
     const t = app.alertStockText([{ name: 'Q1', stock: 1240 }, { name: 'Q2', stock: 300 }], 1540, [o('ORD-12', '2026-09-01', 2000, 600), o('ORD-14', '2026-09-05', 3000, 0), o('ORD-15', '2026-09-10', 1000, 400), o('ORD-16', '2026-09-02', 400, 100, 'Q2')]);
     const b = t.body;
-    assert.ok(b.includes('📋 *ORDERS*\n*Q1*\n\nORD-12 ▓▓▓▒▒▒▒▒▒░ *92%*\n↳ 30% sent + 62% from stock\n\nORD-14 ░░░░░░░░░░ *0%*\n\nORD-15 ▓▓▓▓░░░░░░ *40%*\n↳ 40% sent + 0% from stock\n\n*Q2*\n\nORD-16 ▓▓▓▒▒▒▒▒▒▒ *100%* ✅\n↳ 25% sent + 75% from stock\n\n_▓ sent  ▒ stock  ░ to weave_\n_As of '));
+    assert.ok(b.includes('📋 *ORDERS*\n\n*Q1*\n\n*ORD-12*\n🟩🟩🟩🟨🟨🟨🟨🟨🟨⬜  *92%*\nSent: *30%*\nFrom stock: *62%*\nStill to weave: *8%*\n\n*ORD-14*\n⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜  *0%*\nSent: *0%*\nFrom stock: *0%*\nStill to weave: *100%*\n\n*ORD-15*'));
+    assert.ok(b.includes('*ORD-16*\n🟩🟩🟩🟨🟨🟨🟨🟨🟨🟨  *100%* ✅\nSent: *25%*\nFrom stock: *75%*\nStill to weave: *0%*\n\n🟩 Sent   🟨 In stock   ⬜ To weave\n\n━━━━━━━━━━━━━━\n🕙 *As of '));
     assert.ok(!b.includes('SECRET'));
   });
   test('only 3 orders per quality are listed, the rest are counted', () => {
@@ -52,7 +53,13 @@ describe('alert texts', () => {
   test('the stock message is built from the ledger and the WhatsApp link carries it', () => {
     const a = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] });`);
     const msg = a.alertBuild('stock');
-    assert.ok(msg.startsWith('*📦 STOCK BY QUALITY*\n━━━━━━━━━━━━━━\n🟢 *Total: 1,500 m*\n\n*Q1* → *1,500 m*'));
+    assert.ok(msg.startsWith('*📦 STOCK IN HAND*\n━━━━━━━━━━━━━━\n🟢 *Total: 1,500 m*\n\n━━━━━━━━━━━━━━\n\n*Q1*\n   👉   *1,500 m*'));
+    assert.ok(!msg.includes('ORDERS'), 'orders are off unless ticked');
+    const b = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] }); var DATA = { orders: [{ quality: 'Q1', no: 'ORD-1', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 500 });`);
+    assert.ok(!b.alertBuild('stock').includes('ORDERS'), 'default: no orders');
+    assert.ok(b.alertBuild('stock', { orders: true }).includes('📋 *ORDERS*') && b.alertBuild('stock', { orders: true }).includes('*ORD-1*'));
+    const c = load(`var localStorage = { getItem: () => '{"stockOrders":true}', setItem(){} }; var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] }); var DATA = { orders: [{ quality: 'Q1', no: 'ORD-1', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 500 });`);
+    assert.ok(c.alertBuild('stock').includes('📋 *ORDERS*'), 'the saved tick turns orders on');
     assert.equal(a.alertBuild('custom'), '');
     const url = a.alertWhatsAppUrl('Q1: 1500 m\nTotal');
     assert.ok(url.startsWith('https://wa.me/?text=') && decodeURIComponent(url.split('text=')[1]) === 'Q1: 1500 m\nTotal');
@@ -75,10 +82,10 @@ describe('alert texts', () => {
   test('share message: your line, ticked sections in a fixed order, one As-of line at the end', () => {
     const a = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }], receivable: 250000 });`);
     const msg = a.shareBuild({ stock: true, receivable: true, beams: false, note: ' Today ' });
-    assert.ok(msg.startsWith('Today\n\n*📦 STOCK BY QUALITY*'));
-    assert.ok(msg.indexOf('STOCK BY QUALITY') < msg.indexOf('MONEY TO RECEIVE'));
-    assert.equal((msg.match(/_As of /g) || []).length, 1);
-    assert.ok(/_As of .+_$/.test(msg));
+    assert.ok(msg.startsWith('Today\n\n*📦 STOCK IN HAND*'));
+    assert.ok(msg.indexOf('STOCK IN HAND') < msg.indexOf('MONEY TO RECEIVE'));
+    assert.equal((msg.match(/As of /g) || []).length, 1);
+    assert.ok(/🕙 \*As of .+\*$/.test(msg));
     assert.equal(a.shareBuild({ note: 'Hi' }), 'Hi');
     assert.equal(a.shareHasContent({}), false);
     assert.equal(a.shareHasContent({ weft: true }), true);
@@ -91,9 +98,9 @@ describe('alert texts', () => {
   test('Urdu: every message is worded in Urdu when the app language is Urdu, data stays as typed', () => {
     const u = load(`var I18N_LANG = 'ur'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44 (Micro)', stock: 1240 }], receivable: 250000, profitMonth: 84500, cash: 3000 }); var DATA = { orders: [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 600 });`);
     const st = u.alertJoin(u.alertStockText([{ name: '62/44 (Micro)', stock: 1240 }], 1540, [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000, got: 600 }]));
-    assert.ok(st.startsWith('*📦 کوالٹی کے لحاظ سے اسٹاک*\n━━━━━━━━━━━━━━\n🟢 *کل اسٹاک: \u202A1,540\u202C میٹر*'));
-    assert.ok(st.includes('\u200E*62/44* → *\u202A1,240\u202C میٹر*') && st.includes('📋 *آرڈرز*') && st.includes('ORD-12 ▓▓▓▒▒▒▒▒▒░ *92%*') && st.includes('↳ 30% بھیجا گیا + 62% اسٹاک سے'));
-    assert.ok(st.includes('_▓ بھیجا گیا  ▒ اسٹاک  ░ بننا باقی_') && /_تازہ ترین: \d+ \S+، \d+:\d\d \S+_$/.test(st));
+    assert.ok(st.startsWith('*📦 اسٹاک موجود*\n━━━━━━━━━━━━━━\n🟢 *کل اسٹاک: \u202A1,540\u202C میٹر*'));
+    assert.ok(st.includes('\u200E*62/44*\n   👉   *\u202A1,240\u202C میٹر*') && st.includes('📋 *آرڈرز*') && st.includes('*ORD-12*\n🟩🟩🟩🟨🟨🟨🟨🟨🟨⬜  *92%*') && st.includes('بھیجا گیا: *30%*') && st.includes('اسٹاک سے: *62%*') && st.includes('بننا باقی: *8%*'));
+    assert.ok(st.includes('🟩 بھیجا گیا   🟨 اسٹاک   ⬜ بننا باقی') && /🕙 \*تازہ ترین: \d+ \S+، \d+:\d\d \S+\*$/.test(st));
     assert.ok(!/[A-Za-z]{4}/.test(st.replace('Micro', '')), 'no English words left: ' + st);
     const w = u.alertJoin(u.alertWeftText({ hasData: true, bags: 12.3, lbs: 1234, cover: 4.2, perDay: 300, low: true }));
     assert.ok(w.includes('🚨 بانا ختم ہو رہا ہے 🚨') && w.includes('*12.3 بیگ* (1,234 پاؤنڈ)') && w.includes('*بانا ابھی منگوائیں*'));
