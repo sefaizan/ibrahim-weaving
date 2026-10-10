@@ -485,7 +485,7 @@ function loanStatementCardHtml(kind){
     <div class="grid cols-3">
       <button class="ghost ls-btn" data-kind="${kind}" data-act="view" type="button" style="margin-top:0">View</button>
       <button class="primary ls-btn" data-kind="${kind}" data-act="download" type="button" style="margin-top:0">Download PDF</button>
-      <button class="primary ls-btn" data-kind="${kind}" data-act="share" type="button" style="margin-top:0">Share</button>
+      <button class="primary ls-btn" data-kind="${kind}" data-act="share" type="button" style="margin-top:0"><span style="display:inline-flex;width:1em;height:1em;vertical-align:-2px;margin-right:4px">${ICON_SHARE}</span> Share Statement</button>
     </div>
     <div id="lsPreview" class="log-scroll" style="margin-top:12px"></div>
   ${sumCardClose()}`;
@@ -546,19 +546,98 @@ async function loanStatementAction(kind, act){
   const led = buildLoanLedger(kind, who, from, to);
   if(!led){ say(kind === 'emp' ? `No loan entries found for ${who} in this range.` : 'No loan entries found in this range.'); const pv = document.getElementById('lsPreview'); if(pv) pv.innerHTML = ''; return; }
   if(act === 'view'){ const pv = document.getElementById('lsPreview'); if(pv) pv.innerHTML = loanLedgerPreviewHtml(kind, led); say(`${led.rows.length} entr${led.rows.length===1?'y':'ies'} \u00B7 closing balance ${fmtRs(led.closing)}`); return; }
+  if(act === 'share'){ await shareLoanStatement(kind, who, from, to); return; }
   if(typeof window.jspdf === 'undefined'){ say('PDF library is still loading \u2014 try again in a moment.'); return; }
   const built = renderLoanStatementPdf(kind, who, from, to);
   if(act === 'download'){ built.doc.save(built.filename); say('Downloaded \u2713 \u2014 ' + new Date().toLocaleString()); return; }
-  let file = null;
+}
+
+
+// ---- Share as pictures: same mechanism as the Client Statement (receipt-style PNG pages, cut at row boundaries so
+// WhatsApp never shrinks them; a second tap shares instantly from the cache). Download PDF stays the PDF.
+function loanStatementRowHtmls(led){
+  const NW = ' style="white-space:nowrap"', rows = [];
+  if(led.hasOpening) rows.push(`<tr><td${NW}></td><td><b>Opening Balance</b></td><td class="num"></td><td class="num"></td><td class="num"${NW}><b>${fmtRs(led.opening)}</b></td></tr>`);
+  led.rows.forEach(r=> rows.push(`<tr><td${NW}>${fmtDate(r.date)}</td><td>${escHtml(r.detail)}</td><td class="num"${NW}>${r.up ? fmtRs(r.up) : ''}</td><td class="num"${NW}>${r.down ? fmtRs(r.down) : ''}</td><td class="num"${NW}>${fmtRs(r.balance)}</td></tr>`));
+  return rows;
+}
+function loanStatementPartHtml(rowHtmls, o){
+  const {kind, who, from, to, led, first, last, label} = o, K = LOAN_STMT[kind];
+  const biz = DATA.businessInfo || {}, bizName = biz.name || 'Ibrahim Weaving';
+  const bizLines = [`<img class="receipt-logo" src="${BIZ_LOGO_PNG}" alt="${escHtml(bizName)}">`,
+    biz.address ? `<div class="biz-line">${escHtml(biz.address)}</div>` : '', biz.phone ? `<div class="biz-line">Phone: ${escHtml(biz.phone)}</div>` : ''].join('');
+  const meta = (kind === 'emp' ? `<div class="meta-row"><span>${K.who}</span><b>${escHtml(who)}</b></div>` : '') +
+    `<div class="meta-row"><span>Period</span><b>${from ? fmtDate(from) : 'Beginning'} to ${to ? fmtDate(to) : 'Now'}</b></div>`;
+  const summaryHtml = `<div class="balance-summary">
+      ${led.hasOpening ? `<div class="row"><span>Opening Balance</span><span>${fmtRs(led.opening)}</span></div>` : ''}
+      <div class="row"><span>${K.up} in range</span><span>${fmtRs(led.totalUp)}</span></div>
+      <div class="row"><span>${K.down} in range</span><span>${fmtRs(led.totalDown)}</span></div>
+      <div class="row total"><span>Closing Balance</span><span>${fmtRs(led.closing)}</span></div></div>`;
+  const head = first ? `${bizLines}\n    <div class="receipt-title">${K.title}</div>\n    ${meta}` : `<div class="receipt-title" style="margin-top:0">${K.title} (continued)</div>\n    ${meta}`;
+  return `<div class="receipt" style="max-width:680px">
+    ${receiptWatermarkDiv}
+    ${head}
+    <table>
+      <thead><tr><th style="white-space:nowrap">Date</th><th>Details</th><th class="num" style="white-space:nowrap">${K.up}</th><th class="num" style="white-space:nowrap">${K.down}</th><th class="num" style="white-space:nowrap">${K.bal}</th></tr></thead>
+      <tbody>${rowHtmls.join('')}</tbody>
+    </table>
+    ${last ? summaryHtml : ''}
+    ${label ? `<div class="footer-note" style="margin-top:${last ? 8 : 20}px">${label}</div>` : ''}
+  </div>`;
+}
+let _loanStmtImageCache = null;
+async function buildLoanStatementImages(kind, who, from, to, onProgress){
+  const led = buildLoanLedger(kind, who, from, to); if(!led) return null;
+  const rows = loanStatementRowHtmls(led), n = rows.length;
+  const base = (kind === 'emp' ? _stmtSafeName(who) + '_Loan_Statement' : 'Company_Loan_Statement') + '_' + dateTimeStamp();
+  const cacheKey = JSON.stringify([kind, who, from, to, n, led.closing, led.rows.map(r=>r.balance).join(',')]);
+  if(_loanStmtImageCache && _loanStmtImageCache.key === cacheKey) return _loanStmtImageCache.built;
+  const ctx = {kind, who, from, to, led};
+  const part = (i, j, label)=> loanStatementPartHtml(rows.slice(i, j), {...ctx, first: i === 0, last: j === n, label});
+  const MAXCSS = Math.floor(STMT_MAX_PX / STMT_SCALE);
+  const fitsOne = async (html, limit)=> (await receiptInkHeight(html, limit)) + STMT_PAD <= limit;
+  const files = [];
+  const whole = part(0, n, '');
+  const wholeInk = await receiptInkHeight(whole, MAXCSS);
+  if(wholeInk + STMT_PAD <= MAXCSS){
+    const scale = wholeInk + STMT_PAD <= Math.floor(STMT_MAX_PX / 2) ? 2 : STMT_SCALE;
+    files.push(await receiptHtmlToPngFile(whole, base + '.png', {scale}));
+  } else {
+    const fullInk = await receiptInkHeight(whole, 24000);
+    const avgRow = isFinite(fullInk) ? Math.max(30, (fullInk - 260) / n) : 60;
+    const ranges = []; let i = 0;
+    while(i < n){
+      if(onProgress) onProgress(ranges.length + 1);
+      const fit = k=> fitsOne(part(i, i + k, 'Page 99 of 99'), MAXCSS);
+      let k = Math.max(1, Math.min(n - i, Math.floor((MAXCSS - (i === 0 ? 300 : 120)) / avgRow)));
+      if(await fit(k)){ while(i + k < n && await fit(k + 1)) k++; }
+      else { while(k > 1 && !(await fit(k))) k--; }
+      ranges.push([i, i + k]); i += k;
+    }
+    for(let p = 0; p < ranges.length; p++){
+      const [a, b] = ranges[p];
+      files.push(await receiptHtmlToPngFile(part(a, b, `Page ${p + 1} of ${ranges.length}`), `${base}_page${p + 1}of${ranges.length}.png`, {scale: STMT_SCALE}));
+    }
+  }
+  const built = {files, fileBase: base, rowCount: n};
+  _loanStmtImageCache = {key: cacheKey, built};
+  return built;
+}
+async function shareLoanStatement(kind, who, from, to){
+  const say = m=>{ const el = document.getElementById('lsStatus'); if(el) el.textContent = m; };
+  if(kind === 'emp' && !who){ say('Pick an employee first.'); return; }
+  if(!canShareFiles()){ say("Sharing files isn't supported here \u2014 use Download PDF instead."); return; }
   try{
-    file = new File([built.doc.output('blob')], built.filename, {type:'application/pdf'});
-    if(!navigator.share || !navigator.canShare || !navigator.canShare({files:[file]})){ built.doc.save(built.filename); say("This browser can't share files directly, so the PDF was downloaded \u2014 attach it from your Downloads. \u2713"); return; }
-    await navigator.share({files:[file], title: LOAN_STMT[kind].title, text: LOAN_STMT[kind].title + (who ? ' \u2014 ' + who : '')});
-    say('Statement shared \u2713');
+    say('Preparing statement\u2026');
+    const built = await buildLoanStatementImages(kind, who, from, to, p=> say(`Preparing statement\u2026 page ${p}`));
+    if(!built){ say('No loan entries found in this range.'); return; }
+    if(navigator.canShare && !navigator.canShare({files: built.files})){ say("This device can't share that many pictures at once \u2014 pick a shorter From/To range, or use Download PDF."); return; }
+    await navigator.share({files: built.files});
+    say(built.files.length > 1 ? `Statement shared \u2713 (${built.files.length} pictures)` : 'Statement shared \u2713');
   }catch(e){
-    if(e && e.name === 'AbortError') return;
-    if(file){ shareRetryDialog(file, e); return; }
-    say('Could not share the statement PDF: ' + (e && (e.name + ' ' + e.message) || 'unknown error'));
+    if(e && e.name === 'AbortError'){ say(''); return; }
+    if(e && e.name === 'NotAllowedError'){ say('Ready \u2014 tap Share Statement once more to send it.'); return; }
+    say('Could not open share \u2014 tap Share Statement again.');
   }
 }
 
