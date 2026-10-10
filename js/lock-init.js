@@ -691,6 +691,11 @@ function wireScrollAwareFab(fabBackup){
     built.doc.save(built.filename);
     say(`Downloaded ✓ — ` + new Date().toLocaleString());
   });
+  // Loan Statement cards (Employee Loans, Company Loans): View / Download PDF / Share.
+  document.addEventListener('click', async (e)=>{
+    const b = e.target.closest('.ls-btn'); if(!b) return;
+    await loanStatementAction(b.dataset.kind, b.dataset.act);
+  });
   // Summary / Breakdown cards: tap the title row to show or hide the card's contents.
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('[data-summary-toggle]');

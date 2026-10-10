@@ -270,6 +270,7 @@ function loansPanel(){
   ${sumCardClose()}`;
   return `
     ${summary}
+    ${loanStatementCardHtml('emp')}
     ${outstandingCard}
     <div class="card"><div class="card-head"><h2>Log Loan Payment</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Loan Given = cash handed to the employee as a loan (reduces Cash Position; doesn't affect Business Expenses or Profit/Loss, since it's not a real expense). Loan Repaid = cash they hand back against an outstanding loan (increases Cash Position).</p>
@@ -414,6 +415,7 @@ function ownerLoansPanel(){
   ${sumCardClose()}`;
   return `
     ${summary}
+    ${loanStatementCardHtml('owner')}
     <div class="card"><div class="card-head"><h2>Log Owner Loan</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
       <p class="note info-note" hidden>Loan In = your own money put into the business (for yarn, spare parts, ...). It raises Cash Position, but it is not income and not an expense, so Profit/Loss does not change. Loan Repaid = money the business pays back to you, usually out of recoveries; it lowers Cash Position and what you are owed. The Overview shows "Cash after repaying you" = Cash Position minus what you are still owed, i.e. what the business really holds as its own money.</p>
       <div class="grid cols-3">
@@ -441,6 +443,123 @@ function ownerLoansPanel(){
             escHtml(r.remarks||'—'), actionBtns('ownerLoans',r.id)]
       )}</div>
   `;
+}
+
+
+/* ---------------- Loan statements (Employee Loans and Company / Owner Loans) ---------------- */
+// A running ledger for one employee's loan, or for the owner's loans to the company: every entry in the range, in date
+// order, with a running balance, an opening balance when From is set, and a closing summary. View it on screen, download
+// it as a PDF or share the PDF.
+const LOAN_STMT = {
+  emp:   { title:'Employee Loan Statement', who:'Employee', up:'Given',  down:'Repaid',    bal:'Balance',
+           list: who=> DATA.loanPayments.filter(p=>p.employee===who), isDown: p=> p.type === 'Loan Repaid',
+           detail: p=> (p.type||'Loan') + (p.remarks ? ' - ' + p.remarks : '') },
+  owner: { title:'Company Loan Statement (Owner Loans)', who:'', up:'Put in', down:'Paid back', bal:'Owed to owner',
+           list: ()=> ownerLoanList(), isDown: p=> ownerLoanIsRepaid(p),
+           detail: p=> (p.type||'Loan') + (!ownerLoanIsRepaid(p) && p.purpose ? ' - ' + p.purpose : '') + (p.remarks ? ' - ' + p.remarks : '') }
+};
+function buildLoanLedger(kind, who, from, to){
+  const K = LOAN_STMT[kind];
+  const all = K.list(who).slice().sort((a,b)=> String(a.date).localeCompare(String(b.date)) || String(a.time||'').localeCompare(String(b.time||'')));
+  if(!all.length) return null;
+  const amt = p=> Number(p.amount) || 0;
+  const net = p=> K.isDown(p) ? -amt(p) : amt(p);
+  const opening = from ? all.filter(p=> p.date < from).reduce((s,p)=> s + net(p), 0) : 0;
+  const inRange = all.filter(p=> (!from || p.date >= from) && (!to || p.date <= to));
+  if(!inRange.length && !(from && all.some(p=> p.date < from))) return null;
+  let bal = opening;
+  const rows = inRange.map(p=>{ bal += net(p); return { date:p.date, detail:K.detail(p), up:K.isDown(p) ? 0 : amt(p), down:K.isDown(p) ? amt(p) : 0, balance:bal }; });
+  return { rows, opening, hasOpening: !!from, totalUp: rows.reduce((s,r)=> s + r.up, 0), totalDown: rows.reduce((s,r)=> s + r.down, 0), closing: bal };
+}
+function loanStatementCardHtml(kind){
+  const K = LOAN_STMT[kind];
+  const infoBtn = '<button type="button" class="info-btn" data-info-toggle data-info-target="info-loanstmt-' + kind + '" title="Info">i</button>';
+  return `${sumCardOpen('loanstatement' + kind, 'Loan Statement', infoBtn)}
+    <p class="note info-note" id="info-loanstmt-${kind}" hidden>A printable/shareable running ledger${kind==='emp' ? ' for one employee' : ' of your loans to the company'}: every entry in the range in date order with a running balance. Leave From blank for the full history; with a From date, the balance before it is shown as the opening balance.</p>
+    <div class="grid cols-${kind==='emp' ? 3 : 2}">
+      ${kind==='emp' ? employeeSelectField('Employee','ls_who') : ''}
+      ${field('From (optional)','ls_from','date')}
+      ${field('To (optional)','ls_to','date',`value="${todayStr()}"`)}
+    </div>
+    <div id="lsStatus" class="note" style="min-height:16px;margin:6px 0 12px"></div>
+    <div class="grid cols-3">
+      <button class="ghost ls-btn" data-kind="${kind}" data-act="view" type="button" style="margin-top:0">View</button>
+      <button class="primary ls-btn" data-kind="${kind}" data-act="download" type="button" style="margin-top:0">Download PDF</button>
+      <button class="primary ls-btn" data-kind="${kind}" data-act="share" type="button" style="margin-top:0">Share</button>
+    </div>
+    <div id="lsPreview" class="log-scroll" style="margin-top:12px"></div>
+  ${sumCardClose()}`;
+}
+function loanLedgerPreviewHtml(kind, led){
+  const K = LOAN_STMT[kind];
+  const row = (a,b,c,d,e,st)=> `<tr${st ? ' style="'+st+'"' : ''}><td>${a}</td><td>${b}</td><td>${c}</td><td>${d}</td><td>${e}</td></tr>`;
+  let h = `<table><thead><tr><th>Date</th><th>Details</th><th>${K.up}</th><th>${K.down}</th><th>${K.bal}</th></tr></thead><tbody>`;
+  if(led.hasOpening) h += row('', '<b>Opening balance</b>', '', '', '<b>' + fmtRs2(led.opening) + '</b>');
+  led.rows.forEach(r=>{ h += row(fmtDate(r.date), escHtml(r.detail), r.up ? fmtRs2(r.up) : '', r.down ? fmtRs2(r.down) : '', fmtRs2(r.balance)); });
+  h += row('', '<b>Total in this range</b>', '<b>' + fmtRs2(led.totalUp) + '</b>', '<b>' + fmtRs2(led.totalDown) + '</b>', '<b>' + fmtRs2(led.closing) + '</b>', 'background:var(--chip,rgba(128,128,128,.12))');
+  return h + '</tbody></table>';
+}
+function renderLoanStatementPdf(kind, who, from, to){
+  const led = buildLoanLedger(kind, who, from, to); if(!led) return null;
+  const K = LOAN_STMT[kind], biz = DATA.businessInfo || {};
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight(), margin = 40, tableW = pageW - margin*2;
+  const cols = [{label:'Date',w:0.14,a:'left'},{label:'Details',w:0.34,a:'left'},{label:K.up,w:0.16,a:'right'},{label:K.down,w:0.16,a:'right'},{label:K.bal,w:0.20,a:'right'}];
+  const header = y=>{ doc.setFillColor(240,240,240); doc.rect(margin, y-12, tableW, 20, 'F'); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(20);
+    let x = margin; cols.forEach(c=>{ const w = c.w*tableW; doc.text(c.label, c.a==='left' ? x+4 : x+w-4, y, {align:c.a}); x += w; }); return y + 20; };
+  const row = (y, vals, bold)=>{ doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(9.5); doc.setTextColor(20);
+    let x = margin, lines = 1; const wr = cols.map((c,i)=>{ const l = doc.splitTextToSize(String(vals[i]||''), c.w*tableW - 8); lines = Math.max(lines, l.length); return l; });
+    cols.forEach((c,i)=>{ const w = c.w*tableW; doc.text(wr[i], c.a==='left' ? x+4 : x+w-4, y, {align:c.a}); x += w; }); return y + 12*lines + 4; };
+  let y = 56;
+  { const logoH = 40, logoW = logoH*BIZ_LOGO_RATIO; doc.addImage(BIZ_LOGO_PNG, 'PNG', (pageW-logoW)/2, y-28, logoW, logoH); y += logoH-6; }
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(60);
+  if(biz.address){ doc.text(biz.address, pageW/2, y, {align:'center'}); y += 13; }
+  if(biz.phone){ doc.text(`Phone: ${biz.phone}`, pageW/2, y, {align:'center'}); y += 13; }
+  y += 8; doc.setDrawColor(180); doc.line(margin, y, pageW-margin, y); y += 22;
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(20); doc.text(K.title, pageW/2, y, {align:'center'}); y += 20;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  const kv = (k, val)=>{ doc.setTextColor(90); doc.text(k, margin, y); doc.setTextColor(20); doc.setFont('helvetica','bold'); doc.text(val, margin+72, y); doc.setFont('helvetica','normal'); y += 15; };
+  if(kind === 'emp') kv(K.who, who);
+  kv('Period', `${from ? fmtDate(from) : 'Beginning'} to ${to ? fmtDate(to) : 'Now'}`);
+  y += 6; y = header(y);
+  if(led.hasOpening){ y = row(y, ['', 'Opening balance', '', '', fmtRs(led.opening)], true); y += 4; }
+  led.rows.forEach(r=>{ if(y > pageH - 70){ doc.addPage(); y = margin + 16; y = header(y); }
+    y = row(y, [fmtDate(r.date), r.detail, r.up ? fmtRs(r.up) : '', r.down ? fmtRs(r.down) : '', fmtRs(r.balance)]); });
+  const sum = []; if(led.hasOpening) sum.push(['Opening balance', led.opening, false]);
+  sum.push([K.up + ' in range', led.totalUp, false], [K.down + ' in range', led.totalDown, false], ['Closing balance', led.closing, true]);
+  const boxH = sum.length*20 + 6; if(y + 24 + boxH > pageH - 50){ doc.addPage(); y = margin + 16; }
+  y += 24; doc.setDrawColor(160); doc.setFillColor(250,250,250); doc.rect(margin, y-14, tableW, boxH, 'FD'); doc.setFontSize(10);
+  sum.forEach(([label, val, strong])=>{ if(strong){ doc.setDrawColor(200); doc.line(margin, y-14, margin+tableW, y-14); }
+    doc.setFont('helvetica', strong ? 'bold' : 'normal'); doc.setTextColor(strong ? 20 : 60); doc.text(label, margin+10, y);
+    doc.setTextColor(20); doc.text(fmtRs(val), pageW-margin-10, y, {align:'right'}); y += 20; });
+  addPdfWatermark(doc);
+  const safe = t => String(t||'').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_');
+  const base = kind === 'emp' ? safe(who) + '_Loan_Statement' : 'Company_Loan_Statement';
+  return { doc, filename: `${asciiFileBase(base)}_${dateTimeStamp()}.pdf` };
+}
+// View / Download / Share buttons of the two loan-statement cards (delegated from lock-init.js).
+async function loanStatementAction(kind, act){
+  const say = m=>{ const el = document.getElementById('lsStatus'); if(el) el.textContent = m; };
+  const who = kind === 'emp' ? v('ls_who') : '', from = v('ls_from') || null, to = v('ls_to') || null;
+  if(kind === 'emp' && !who){ say('Pick an employee first.'); return; }
+  const led = buildLoanLedger(kind, who, from, to);
+  if(!led){ say(kind === 'emp' ? `No loan entries found for ${who} in this range.` : 'No loan entries found in this range.'); const pv = document.getElementById('lsPreview'); if(pv) pv.innerHTML = ''; return; }
+  if(act === 'view'){ const pv = document.getElementById('lsPreview'); if(pv) pv.innerHTML = loanLedgerPreviewHtml(kind, led); say(`${led.rows.length} entr${led.rows.length===1?'y':'ies'} \u00B7 closing balance ${fmtRs(led.closing)}`); return; }
+  if(typeof window.jspdf === 'undefined'){ say('PDF library is still loading \u2014 try again in a moment.'); return; }
+  const built = renderLoanStatementPdf(kind, who, from, to);
+  if(act === 'download'){ built.doc.save(built.filename); say('Downloaded \u2713 \u2014 ' + new Date().toLocaleString()); return; }
+  let file = null;
+  try{
+    file = new File([built.doc.output('blob')], built.filename, {type:'application/pdf'});
+    if(!navigator.share || !navigator.canShare || !navigator.canShare({files:[file]})){ built.doc.save(built.filename); say("This browser can't share files directly, so the PDF was downloaded \u2014 attach it from your Downloads. \u2713"); return; }
+    await navigator.share({files:[file], title: LOAN_STMT[kind].title, text: LOAN_STMT[kind].title + (who ? ' \u2014 ' + who : '')});
+    say('Statement shared \u2713');
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    if(file){ shareRetryDialog(file, e); return; }
+    say('Could not share the statement PDF: ' + (e && (e.name + ' ' + e.message) || 'unknown error'));
+  }
 }
 
 /* ---------------- Grey Cloth Rate Calculator ---------------- */
