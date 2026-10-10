@@ -663,12 +663,14 @@ function wireOrdersCard(root){
    The page is drawn as before; this only regroups the finished cards (nothing is removed). A card that is not listed below lands in "More", so no card can go missing. */
 const OV_SECS = [
   ['business', 'Business', ['orders', 'awaiting-l-ail', 'stock-position', 'sales-receivables', 'receivables-aging', 'clients-breakdown-by-quality', 'client-statement']],
-  ['cash', 'Cash', ['pending-cheques', 'bounced-cheques', 'owner-loans-owed-to-you']],
+  ['cash', 'Cash', ['owner-loans-owed-to-you']],
   ['costs', 'Costs & Profit', ['expenses-material-cost', 'warp-usage-last-2-months', 'profit-loss']],
   ['more', 'More', []]
 ];
 const OV_SEC_DEFAULT_FOLDED = {cash: 1, costs: 1};
-function ovGroupOf(slug){ if(slug === 'at-a-glance') return 'top'; const s = OV_SECS.find(x => x[2].includes(slug)); return s ? s[0] : 'more'; }
+// Pending and Bounced cheques always need a look: they sit right under the "Needs attention" strip, always open (no group header, no fold, not touched by Collapse all).
+const OV_PINNED = ['pending-cheques', 'bounced-cheques'];
+function ovGroupOf(slug){ if(slug === 'at-a-glance') return 'top'; if(OV_PINNED.includes(slug)) return 'pinned'; const s = OV_SECS.find(x => x[2].includes(slug)); return s ? s[0] : 'more'; }
 // What needs a look right now: orders that are stalled or over delivered, bounced cheques, sales waiting for their L (AIL). Each count follows the card's own permission.
 function ovAttention(){
   const out = [], today = todayStr();
@@ -678,6 +680,9 @@ function ovAttention(){
   }
   if(ovCardOn('bounced_cheques') && typeof computeBouncedCheques === 'function'){
     const b = computeBouncedCheques(); if(b.length) out.push({key: 'bounced-cheques', text: b.length + ' bounced cheque' + (b.length > 1 ? 's' : '') + ' · ' + fmtRs(b.reduce((t, c) => t + (Number(c.amount) || 0), 0)), tone: 'warn'});
+  }
+  if(ovCardOn('pending_cheques') && typeof computePendingCheques === 'function'){
+    const p = computePendingCheques(); if(p.length) out.push({key: 'pending-cheques', text: p.length + ' pending cheque' + (p.length > 1 ? 's' : '') + ' · ' + fmtRs(p.reduce((t, c) => t + (Number(c.amount) || 0), 0)), tone: p.some(c => typeof isChequeOverdue === 'function' && isChequeOverdue(c)) ? 'warn' : ''});
   }
   if(ovCardOn('pending_l')){
     const n = (DATA.sale || []).filter(r => r.lStatus === 'awaiting').length; if(n) out.push({key: 'awaiting-l-ail', text: n + ' sale' + (n > 1 ? 's' : '') + ' awaiting L (AIL)', tone: ''});
@@ -709,6 +714,7 @@ function wireFoldCards(root){
   const att = ovAttention(), strip = document.createElement('div'); strip.className = 'ovo-attn';
   strip.innerHTML = `<div class="ovo-attn-t">Needs attention</div>` + (att.length ? att.map(a => `<button type="button" class="ghost ovo-ach ${a.tone}" data-jump="${a.key}">${a.text}</button>`).join('') : `<div class="ovo-clear">Nothing needs attention</div>`);
   if(info.length > 1) put2(strip);
+  OV_PINNED.forEach(sl => info.filter(x => x.slug === sl).forEach(x => { x.c.hidden = false; put2(x.c); }));
   const tracked = [], secs = [];
   OV_SECS.forEach(([id, title]) => {
     const list = OV_SECS.find(x => x[0] === id)[2], mem = info.filter(x => x.g === id).sort((p, q) => list.indexOf(p.slug) - list.indexOf(q.slug)); if(!mem.length) return;
@@ -723,7 +729,7 @@ function wireFoldCards(root){
   });
   // 2. Each card folds by tapping its heading (cards with their own Show/Hide, like Client Statement, keep that).
   info.forEach(x => {
-    if(!x.head || x.own) return;
+    if(!x.head || x.own || x.g === 'pinned') return;
     x.c.classList.add('foldable'); x.c.classList.toggle('folded', !!st[x.key]); tracked.push(x); x.c.dataset.fkey = x.slug;
     x.head.addEventListener('click', e => { if(e.target.closest('button')) return; const f = x.c.classList.toggle('folded'); st[x.key] = f ? 1 : 0; put('ov_folded', st); label(); });
   });
