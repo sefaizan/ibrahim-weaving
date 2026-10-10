@@ -260,12 +260,17 @@ describe('Overview grouping and attention strip (v3.18.29)', () => {
     heads.forEach(h => { assert.ok(src.includes(h), h + ' is still a card'); assert.notEqual(run(`ovGroupOf(${JSON.stringify(slug(h))})`), 'more', h + ' has no group'); });
     assert.equal(run(`ovGroupOf('at-a-glance')`), 'top'); assert.equal(run(`ovGroupOf('some-new-card')`), 'more');
   });
+  test('Pending and Bounced cheques are pinned: own group, never folded, not inside Cash (v3.18.70)', () => {
+    assert.equal(run(`ovGroupOf('pending-cheques')`), 'pinned'); assert.equal(run(`ovGroupOf('bounced-cheques')`), 'pinned');
+    assert.ok(!JSON.stringify(run('OV_SECS')).includes('cheques'), 'Cash group no longer lists them');
+    const src = read('js/overview.js'); assert.match(src, /x\.g === 'pinned'\) return;/);
+  });
   test('the strip counts stalled orders, bounced cheques and sales awaiting L, and follows permissions', () => {
     const d = LEDGER(); d.orders = [{ id: 'o1', no: 'ORD-001', client: 'Acme', quality: 'Q', qty: 1000, rate: 10, date: dayStr(-30), closed: false }];
     d.recovery[0].cheques.push({ chequeId: 'c3', amount: 700, status: 'Bounced', chequeDate: dayStr(-9) }); d.sale.push({ id: 's2', client: 'Acme', quality: 'Q', qty: 5, rate: 10, amount: 50, date: dayStr(-1), lStatus: 'awaiting' });
     load({ email: OWNER, data: d });
     const a = JSON.parse(JSON.stringify(run('ovAttention()'))), keys = a.map(x => x.key);
-    assert.deepEqual(keys, ['orders', 'bounced-cheques', 'awaiting-l-ail']); assert.ok(a[1].text.startsWith('1 bounced cheque'));
+    assert.deepEqual(keys, ['orders', 'bounced-cheques', 'pending-cheques', 'awaiting-l-ail']); assert.ok(a[1].text.startsWith('1 bounced cheque'));
     load({ perms: { production: 'v', reference: 'v' }, data: d }); assert.deepEqual(JSON.parse(JSON.stringify(run('ovAttention()'))), []);
   });
 });
