@@ -128,6 +128,52 @@
     const cf = rows && rows.closest('.more-fold'); if(cf && rows.children.length) cf.open = true;
   }
 
+
+  /* ---- 13. summary tables: show every column on a phone (v3.18.79) ----
+     A table whose header cells are all filled in (no action-button column) is a summary table. It is first made
+     compact; if it is STILL wider than its card, each row turns into a small label/value card instead of being cut
+     off or scrolled sideways. Tables with an action-button column (empty header) or inputs are left alone. */
+  const NUM = /^(Rs\.?\s*)?[-\u2013+]?[\d.,/:\- ]+\s*(lakh|Cr|mtr|m|%|days?)?$|^[\u2014\u2013-]$/i;
+  function fitTables(root){
+    $$('table', root).forEach(tb => {
+      if(tb.closest('.wg-sheet')) return;
+      const heads = tb.tHead && tb.tHead.rows.length ? Array.from(tb.tHead.rows[tb.tHead.rows.length - 1].cells) : [];
+      if(!heads.length || heads.some(h => !h.textContent.trim())) return;
+      if(tb.querySelector('tbody button, tbody input, tbody select, tbody textarea')) return;
+      if(!tb.offsetParent) return;                        // hidden (collapsed card): measured again when it opens
+      const labels = []; heads.forEach(h => { for(let i = 0; i < (h.colSpan || 1); i++) labels.push(h.textContent.replace(/\s+/g, ' ').trim()); });
+      const numeric = labels.map(() => true);
+      Array.from(tb.tBodies).concat(tb.tFoot ? [tb.tFoot] : []).forEach(body => Array.from(body.rows).forEach(r => {
+        let c = 0;
+        Array.from(r.cells).forEach(td => {
+          td.dataset.label = labels[c] || '';
+          const txt = td.textContent.trim();
+          td.classList.toggle('n', NUM.test(txt));
+          if(c > 0 && txt && !NUM.test(txt)) numeric[c] = false;
+          c += td.colSpan || 1;
+        });
+      }));
+      heads.forEach((h, i) => h.classList.toggle('n', i > 0 && !!numeric[i]));
+      tb.classList.add('fit-tbl');
+      tb.classList.remove('tbl-stack');
+      const box = tb.closest('.log-scroll, .wg-scroll, .purchase-panel, .card') || tb.parentElement;
+      const cs = getComputedStyle(box);
+      const avail = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      if(avail > 0 && tb.scrollWidth > avail + 1) tb.classList.add('tbl-stack');
+    });
+  }
+  let fitTimer = 0;
+  const schedFit = (ms) => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { const r = panels(); if(r) fitTables(r); }, ms || 150); };
+  window.addEventListener('resize', () => schedFit(200));
+  window.addEventListener('orientationchange', () => schedFit(300));
+  // Wages quick-add "+" tucks away while the page scrolls, so it never sits on top of a table you are reading.
+  let fabTimer = 0;
+  document.addEventListener('scroll', () => {
+    const f = document.querySelector('.wg-fab'); if(!f) return;
+    f.classList.add('wg-fab-hide'); clearTimeout(fabTimer);
+    fabTimer = setTimeout(() => { const g = document.querySelector('.wg-fab'); if(g) g.classList.remove('wg-fab-hide'); }, 700);
+  }, { passive: true, capture: true });
+
   function enhance(){
     const root = panels(); if(!root) return;
     foldFields(root, ['s_inv','s_dyeing'], 'More details — invoice no, dyeing');
@@ -137,6 +183,7 @@
     $$('.log-scroll', root).forEach(addLogBar);
     $$('input[type="date"]', root).forEach(addDateChips);
     $$('.card', root).forEach(foldNotes);
+    fitTables(root);
   }
   let t = null;
   const sched = () => { clearTimeout(t); t = setTimeout(enhance, 120); };
@@ -165,7 +212,7 @@
     const root = panels(); if(!root) return;
     new MutationObserver(sched).observe(root, {childList:true, subtree:true});
     enhance();
-    root.addEventListener('click', () => setTimeout(() => autoOpen(root), 200));
+    root.addEventListener('click', () => { setTimeout(() => autoOpen(root), 200); schedFit(260); });
 
     /* ---- 7. Enter = next field, last field = save ---- */
     root.addEventListener('keydown', e => {
