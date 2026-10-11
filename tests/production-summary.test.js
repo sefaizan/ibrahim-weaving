@@ -16,8 +16,8 @@ const rows = [
 
 describe('productionSummary', () => {
   const s = app.productionSummary(rows);
-  test('totals, entries, distinct days and average per day', () => {
-    assert.equal(s.meters, 300.5); assert.equal(s.entries, 3); assert.equal(s.days, 2); assert.equal(s.perDay, 150.25);
+  test('totals, entries, days logged, and the all-looms average (sum of each loom\'s daily rate)', () => {
+    assert.equal(s.meters, 300.5); assert.equal(s.entries, 3); assert.equal(s.days, 2); assert.equal(s.perDay, 75); // loom 1: 150 m over the 2 days since 1 Oct; loom 2 has one log so far
   });
   test('by quality, biggest first', () => {
     assert.deepEqual(s.byQuality.map(r => [r.name, r.meters, r.entries]), [['Q50', 250, 2], ['Q44', 50.5, 1]]);
@@ -31,7 +31,7 @@ describe('productionSummary', () => {
     assert.equal(app.productionSummary(null).entries, 0);
   });
   test('a filtered subset gives a filtered summary', () => {
-    const f = app.productionSummary(rows.filter(r => r.quality === 'Q44')); assert.equal(f.meters, 50.5); assert.equal(f.days, 1);
+    const f = app.productionSummary(rows.filter(r => r.quality === 'Q44'), rows); assert.equal(f.meters, 50.5); assert.equal(f.days, 1);
   });
 });
 
@@ -91,21 +91,59 @@ describe('This Week / Last Week ranges follow the wage week (Friday to Thursday)
   test('existing periods unchanged', () => assert.deepEqual(range('this-month', '2026-10-14'), { from: '2026-10-01', to: '2026-10-31' }));
 });
 
-describe('By Loom average per day', () => {
-  const s = app.productionSummary(rows);
-  test('each loom: meters divided by the days that loom had output', () => {
-    const l1 = s.byLoom.find(r => r.name === '1'), l2 = s.byLoom.find(r => r.name === '2');
-    assert.equal(l1.days, 2); assert.equal(l1.perDay, 125);     // 250 m over 1 and 3 Oct
-    assert.equal(l2.days, 1); assert.equal(l2.perDay, 50.5);
+describe('By Loom average per day: days BETWEEN logs, not days with entries', () => {
+  const L = (rs, all, range) => app.productionSummary(rs, all || rs, range).byLoom;
+  const p = (date, loom, qty, quality) => prod({ date, loom, qty, quality: quality || 'Q50' });
+  test('logged after 2 days: 200 m since the last log = 100 m/day', () => {
+    const r = [p('2026-10-01', '1', 100), p('2026-10-03', '1', 200)];
+    const l = L(r)[0]; assert.equal(l.days, 2); assert.equal(l.perDay, 100);
   });
-  test('two entries on the same day count as one day', () => {
-    const r = app.productionSummary([prod({ date: '2026-10-05', loom: '3', qty: 40 }), prod({ date: '2026-10-05', loom: '3', qty: 50 })]);
-    assert.equal(r.byLoom[0].days, 1); assert.equal(r.byLoom[0].perDay, 90);
+  test('the first-ever entry is skipped (nothing before it to measure from)', () => {
+    const l = L([p('2026-10-01', '1', 500), p('2026-10-03', '1', 200)])[0];
+    assert.equal(l.perDay, 100); assert.equal(l.meters, 700);              // total still shows everything
   });
-  test('only the loom table shows the Avg / Day column', () => {
+  test('uneven gaps: 2 days then 3 days', () => {
+    const l = L([p('2026-10-01', '1', 999), p('2026-10-03', '1', 180), p('2026-10-06', '1', 300)])[0];
+    assert.equal(l.days, 5); assert.equal(l.perDay, 96);                    // (180+300) / (2+3)
+  });
+  test('days after the last entry are never counted (today not logged yet)', () => {
+    const r = [p('2026-10-01', '1', 100), p('2026-10-03', '1', 200)];
+    assert.equal(L(r)[0].perDay, 100);                                     // same whether "today" is the 3rd or the 12th
+  });
+  test('two entries on one date are added together; the date counts once', () => {
+    const l = L([p('2026-10-05', '3', 1), p('2026-10-07', '3', 80), p('2026-10-07', '3', 120)]).find(x => x.name === '3');
+    assert.equal(l.days, 2); assert.equal(l.perDay, 100);
+  });
+  test('a loom with a single log has no average yet', () => {
+    const l = L([p('2026-10-05', '9', 300)])[0]; assert.equal(l.days, 0); assert.equal(l.perDay, 0);
+  });
+  test('each loom is measured on its own log dates', () => {
+    const l = L([p('2026-10-01', '1', 1), p('2026-10-03', '1', 200), p('2026-10-02', '2', 1), p('2026-10-03', '2', 90)]);
+    assert.equal(l.find(x => x.name === '1').perDay, 100); assert.equal(l.find(x => x.name === '2').perDay, 90);
+  });
+  test('date filter: the log just before the range is still the starting point', () => {
+    const all = [p('2026-10-01', '1', 100), p('2026-10-03', '1', 200), p('2026-10-06', '1', 300)];
+    const inRange = all.filter(r => r.date >= '2026-10-03');
+    const l = L(inRange, all, { from: '2026-10-03', to: '2026-10-31' })[0];
+    assert.equal(l.days, 5); assert.equal(l.perDay, 100);                  // (200+300) / (2+3)
+    const one = L(all.filter(r => r.date === '2026-10-03'), all, { from: '2026-10-03', to: '2026-10-03' })[0];
+    assert.equal(one.days, 2); assert.equal(one.perDay, 100);
+  });
+  test('quality filter: days still come from all of the loom\'s logs, meters only from that quality', () => {
+    const all = [p('2026-10-01', '1', 1, 'Q44'), p('2026-10-03', '1', 120, 'Q50'), p('2026-10-05', '1', 80, 'Q44')];
+    const l = L(all.filter(r => r.quality === 'Q50'), all)[0];             // Q50 meters 120 over 2+2 days
+    assert.equal(l.days, 4); assert.equal(l.perDay, 30);
+  });
+  test('the all-looms average is the sum of each loom\'s daily rate', () => {
+    const r = [p('2026-10-01', '1', 1), p('2026-10-03', '1', 200), p('2026-10-02', '2', 1), p('2026-10-03', '2', 90)];
+    assert.equal(app.productionSummary(r).perDay, 190);
+  });
+  test('only the loom table shows the Avg / Day column, with a note when there is nothing to average', () => {
     const src = read('js/panels-daily.js');
     assert.match(src, /table\('By Loom', sm\.byLoom, 'Loom', true\)/);
     assert.match(src, /table\('By Quality', sm\.byQuality, 'Quality'\)/);
-    assert.match(src, /<th>Avg \/ Day<\/th>/);
+    assert.match(src, /<th>Avg \/ Day<\/th>/); assert.match(src, /needs 2 logs/);
+    assert.match(src, /productionSummary\(rows, DATA\.production, \{from: fromVal, to: toVal\}\)/);
   });
 });
+
