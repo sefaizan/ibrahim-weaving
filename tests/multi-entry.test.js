@@ -12,7 +12,7 @@ const panels = read('js/panels-daily.js'), wiring = read('js/wiring.js'), core =
 
 // The Multiple Entries helpers (and loomAssignmentFor) run unchanged, with small stand-ins for the page's own helpers.
 const block = panels.slice(panels.indexOf('/* v3.17.60'), panels.indexOf('function productionPanel'));
-const lam = panels.match(/function loomAssignmentFor[\s\S]*?\n}\n/)[0];
+const lam = panels.match(/function loomAssignmentFor[\s\S]*?\n}\n/)[0] + panels.match(/function loomQualityFor[\s\S]*?\n}\n/)[0];
 function load(data) {
   const ctx = vm.createContext({ DATA: data, escHtml: s => String(s), todayStr: () => '2026-10-03',
     field: (l, id) => `<input id="${id}">`, selectField: (l, id) => `<select id="${id}"></select>`,
@@ -57,7 +57,7 @@ describe('loom cards', () => {
     const html = load(data).mbCardHtml('9');
     const order = [...html.matchAll(/class="(mb_[gsm]\d?) mb_f"/g)].map(m => m[1]);
     assert.deepEqual(order, ['mb_g', 'mb_s', 'mb_m1', 'mb_m2', 'mb_m3']);
-    assert.equal((html.match(/tabindex="-1"/g) || []).length, 4); // 3 name dropdowns + the add-third button
+    assert.equal((html.match(/tabindex="-1"/g) || []).length, 5); // quality + 3 name dropdowns + the add-third button
   });
   test('the sixteenths box has no "/16" watermark and sits after a line, not dashes', () => {
     const html = load(data).mbCardHtml('9');
