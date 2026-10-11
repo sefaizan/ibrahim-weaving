@@ -43,3 +43,14 @@ test('v3.18.81: buttons inside Classic-table cells keep one line (cheque rows we
   // the phone card view still wraps its cheque buttons (more specific rule)
   assert.match(html, /html:not\(\[data-logs=\"table\"\]\) \.log-cards \.chq-actions button\{\s*width:100%; margin:0; white-space:normal;/);
 });
+
+test('v3.18.82: UI review fixes 1-5', () => {
+  assert.match(html, /\.fab-backup\.fab-typing-hide\{ opacity:0;/);                         // (1) FAB hides while typing
+  assert.match(ux, /function fabTyping\(on\)/);
+  assert.match(html, /\.wg-dates\{ grid-template-columns:repeat\(2, minmax\(0, 1fr\)\); \}/);  // (2) Wages dates fit
+  assert.match(ux, /function chartsToLatest\(root\)/);                                       // (3) charts open on newest month
+  assert.match(ux, /No data yet for this period/);
+  assert.match(html, /\.appbar-titles h1\{ white-space:normal;[^}]*-webkit-line-clamp:2;/);   // (4) titles wrap
+  assert.match(html, /:root\[data-theme="dark"\] button\.primary[^{]*\{ background:var\(--rust-deep\);/); // (5) dark contrast
+  assert.match(html, /:root\[data-theme="dark"\] label \.req/);
+});
