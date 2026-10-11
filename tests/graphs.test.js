@@ -55,12 +55,12 @@ describe('graphs figures', () => {
     const split = Object.fromEntries(D.expenseSplit.map(x => [x.key, x.value]));
     assert.deepEqual(split, { Business: 5000, Family: 3000 });
   });
-  test('weekly production buckets Monday-Sunday; latest entry date', () => {
+  test('weekly production buckets Friday-Thursday (the wage week); latest entry date', () => {
     const app = loadApp(); app.setData(ledger()); app.setToday('2026-09-20');
-    const w = app.graphsWeeklyProduction('2026-09-20', 4); // weeks starting 31 Aug, 24 Aug, 17 Aug, 10 Aug... (last = week of 14 Sep)
-    assert.equal(w.length, 4); assert.equal(w[3].from, '2026-09-14'); assert.equal(w[2].from, '2026-09-07');
+    const w = app.graphsWeeklyProduction('2026-09-20', 4); // Friday-start weeks: 28 Aug, 4 Sep, 11 Sep, 18 Sep (last = the week containing Sun 20 Sep)
+    assert.equal(w.length, 4); assert.equal(w[3].from, '2026-09-18'); assert.equal(w[2].from, '2026-09-11');
     const all = app.graphsWeeklyProduction('2026-09-20', 8);
-    closeTo(all.find(x => x.from === '2026-08-31').meters, 400); closeTo(all.find(x => x.from === '2026-08-17').meters, 50);
+    closeTo(all.find(x => x.from === '2026-08-28').meters, 400); closeTo(all.find(x => x.from === '2026-08-14').meters, 50); closeTo(all.find(x => x.from === '2026-07-31').meters, 200);
     assert.equal(app.graphsLatestEntryDate(), '2026-09-04');
   });
 });

@@ -61,22 +61,32 @@ describe('the filters live inside the summary card', () => {
   test('a "Filtered" badge shows on the collapsed header', () => assert.match(src, /<b>Filtered<\/b>/));
 });
 
-describe('This Week / Last Week ranges (Monday to Sunday)', () => {
-  // quickPeriodRange lives in core.js (not loaded by the calc helper), so lift just that function.
-  const fnSrc = read('js/core.js').match(/^function quickPeriodRange[\s\S]*?^}/m)[0];
-  const ctx = require('node:vm').createContext({}); require('node:vm').runInContext(fnSrc + '\nthis.f = quickPeriodRange;', ctx);
+describe('This Week / Last Week ranges follow the wage week (Friday to Thursday)', () => {
+  // quickPeriodRange lives in core.js and uses currentWageWeek from calc.js, so lift just those two functions.
+  const vm = require('node:vm');
+  const core = read('js/core.js').match(/^function quickPeriodRange[\s\S]*?^}/m)[0];
+  const calc = read('js/calc.js').match(/^function currentWageWeek[\s\S]*?^}/m)[0];
+  const ctx = vm.createContext({ todayStr: () => '2026-10-14' });
+  vm.runInContext(calc + '\n' + core + '\nthis.f = quickPeriodRange;', ctx);
   const range = (p, d) => JSON.parse(JSON.stringify(ctx.f(p, d)));
-  test('mid-week', () => {
-    assert.deepEqual(range('this-week', '2026-10-14'), { from: '2026-10-12', to: '2026-10-18' });
-    assert.deepEqual(range('last-week', '2026-10-14'), { from: '2026-10-05', to: '2026-10-11' });
+  test('mid-week (Wednesday)', () => {
+    assert.deepEqual(range('this-week', '2026-10-14'), { from: '2026-10-09', to: '2026-10-15' });
+    assert.deepEqual(range('last-week', '2026-10-14'), { from: '2026-10-02', to: '2026-10-08' });
   });
-  test('Sunday belongs to the week that started the Monday before', () => {
-    assert.deepEqual(range('this-week', '2026-10-11'), { from: '2026-10-05', to: '2026-10-11' });
+  test('Friday starts a new week; Thursday is its last day', () => {
+    assert.deepEqual(range('this-week', '2026-10-09'), { from: '2026-10-09', to: '2026-10-15' });
+    assert.deepEqual(range('this-week', '2026-10-15'), { from: '2026-10-09', to: '2026-10-15' });
+    assert.deepEqual(range('this-week', '2026-10-16'), { from: '2026-10-16', to: '2026-10-22' });
   });
-  test('Monday starts a new week', () => assert.deepEqual(range('this-week', '2026-10-12'), { from: '2026-10-12', to: '2026-10-18' }));
+  test('weekend belongs to the week that began on Friday', () => {
+    assert.deepEqual(range('this-week', '2026-10-10'), { from: '2026-10-09', to: '2026-10-15' });
+    assert.deepEqual(range('this-week', '2026-10-11'), { from: '2026-10-09', to: '2026-10-15' });
+  });
   test('crosses month and year ends', () => {
-    assert.deepEqual(range('this-week', '2026-12-31'), { from: '2026-12-28', to: '2027-01-03' });
-    assert.deepEqual(range('last-week', '2027-01-05'), { from: '2026-12-28', to: '2027-01-03' });
+    assert.deepEqual(range('this-week', '2026-10-30'), { from: '2026-10-30', to: '2026-11-05' });
+    assert.deepEqual(range('this-week', '2027-01-02'), { from: '2027-01-01', to: '2027-01-07' });
+    assert.deepEqual(range('last-week', '2027-01-02'), { from: '2026-12-25', to: '2026-12-31' });
   });
+  test('defaults to the app\'s own today when no date is passed', () => assert.deepEqual(JSON.parse(JSON.stringify(ctx.f('this-week'))), { from: '2026-10-09', to: '2026-10-15' }));
   test('existing periods unchanged', () => assert.deepEqual(range('this-month', '2026-10-14'), { from: '2026-10-01', to: '2026-10-31' }));
 });

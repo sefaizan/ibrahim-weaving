@@ -25,9 +25,10 @@ describe('order progress', () => {
     seed([sale('a', '2026-09-01', 6000, 'o1'), sale('b', '2026-09-02', 9000, ''), sale('c', '2026-09-03', 3000, 'o1', {lStatus: 'applied'})]);
     const s = app.orderStats(app.getData().orders[0]); assert.equal(s.got, 6000); assert.equal(s.pending, 14000);
   });
-  test('this week counts from Monday', () => {
-    seed([sale('a', '2026-09-14', 4000, 'o1'), sale('b', '2026-09-21', 3000, 'o1')], {weekly: 6000});
-    assert.equal(app.orderStats(app.getData().orders[0], '2026-09-23').weekGot, 3000);
+  test('this week is the wage week: Friday to Thursday', () => {
+    // On Wed 23 Sep the week began Fri 18 Sep: Sat 19 and Mon 21 count, Thu 17 (the week before) does not.
+    seed([sale('a', '2026-09-17', 4000, 'o1'), sale('b', '2026-09-19', 2000, 'o1'), sale('c', '2026-09-21', 3000, 'o1')], {weekly: 6000});
+    assert.equal(app.orderStats(app.getData().orders[0], '2026-09-23').weekGot, 5000);
   });
   test('a batch under the minimum, or on a completed order, warns', () => {
     seed([], {minBatch: 6000}); assert.match(app.orderSaleWarn({order: 'o1', qty: 5000}), /minimum of 6000/); assert.equal(app.orderSaleWarn({order: 'o1', qty: 6500}), '');
