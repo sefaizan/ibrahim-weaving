@@ -33,3 +33,17 @@ describe('loom default quality', () => {
     assert.ok(s.includes('Set quality for the whole group') && s.includes("['loomAssignments','q']"));
   });
 });
+
+describe('quality stays out of the control sequence', () => {
+  const rd = f => fs.readFileSync(path.join(root, f), 'utf8');
+  test('single form: Loom comes before Quality; Quality (and Multiple Entries quality) are tabindex -1', () => {
+    const p = rd('js/panels-daily.js');
+    assert.ok(p.indexOf("selectField('Loom','p_loom'") > -1 && p.indexOf("selectField('Loom','p_loom'") < p.indexOf("selectField('Quality','p_quality'"));
+    assert.ok(p.includes("selectField('Quality','p_quality',DATA.qualities,'tabindex=\"-1\"')"));
+    assert.ok(p.includes("'mb_quality',DATA.qualities,'tabindex="));
+  });
+  test('the custom dropdown button inherits tabindex -1 from its select', () => {
+    const s = rd('js/shell.js');
+    assert.ok(s.includes("getAttribute('tabindex') === '-1'") && s.includes('if(skipTab) fake.tabIndex = -1;'));
+  });
+});
