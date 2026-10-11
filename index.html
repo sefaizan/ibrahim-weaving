@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.79-ui-sticky-tabs-frame-fit-tables">
+<meta name="app-build" content="v3.18.80-buttons-never-cut-off">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1410,6 +1410,13 @@
   table.fit-tbl.tbl-stack td:first-child::before{ display:none; }
   table.fit-tbl.tbl-stack td:empty{ display:none; }
   table.fit-tbl.tbl-stack tbody tr td, table.fit-tbl.tbl-stack tfoot tr td, table.fit-tbl.tbl-stack tr:hover td{ background:transparent; }
+
+  /* ===== v3.18.80 — buttons never cut off ===== */
+  /* Long button text wraps instead of running past the screen (row icon buttons keep their fixed square). */
+  button.primary:not(.rowbtn), button.ghost:not(.rowbtn){ max-width:100%; white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
+  /* A dropdown shows its whole selected text (wraps to a second line) instead of "Loan In — you put mo…". */
+  .sel-fake{ white-space:normal; text-overflow:clip; overflow-wrap:anywhere; line-height:1.3; }
+  .ov-sticky .sel-fake{ white-space:nowrap; text-overflow:ellipsis; }
 </style>
 <script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
 </head>
@@ -1440,7 +1447,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.79</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.80</span></span>
     </div>
   </header>
 
