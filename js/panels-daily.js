@@ -172,13 +172,15 @@ function multiEntryCardHtml(){
     `;
 }
 // Collapsed-by-default summary of whatever the Production Log filters below are showing.
-function productionSummaryCard(rows, qualityVal, fromVal, toVal){
+function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
   const sm = productionSummary(rows);
   const filt = [qualityVal ? escHtml(qualityVal) : '', (fromVal || toVal) ? (fromVal ? fmtDate(fromVal) : 'the start') + ' to ' + (toVal ? fmtDate(toVal) : 'today') : ''].filter(Boolean);
   const table = (title, list, first) => list.length ? `<div class="group-label" style="margin-top:14px">${title}</div><div class="log-scroll"><table><thead><tr><th>${first}</th><th>Meters</th><th>Entries</th></tr></thead>
     <tbody>${list.map(r=>`<tr><td><span class="name">${escHtml(r.name)}</span></td><td><b>${fmtQtyMtr(r.meters)}</b></td><td>${r.entries}</td></tr>`).join('')}</tbody></table></div>` : '';
-  return `${sumCardOpen('summary','Production Summary')}
-    <p class="note" style="margin:0 0 10px">${filt.length ? 'Showing: ' + filt.join(' · ') + '.' : 'Showing all entries.'} Change the filters in Production Log below.</p>
+  const badge = filt.length ? '<span class="note" style="margin:0;color:var(--rust)"><b>Filtered</b></span>' : '';
+  return `${sumCardOpen('summary','Production Summary', badge)}
+    ${filterHtml}
+    <p class="note" style="margin:10px 0">${filt.length ? 'Showing: ' + filt.join(' · ') + '.' : 'Showing all entries.'} The Production Log below follows these filters.</p>
     ${sm.entries ? `<div class="grid cols-2" style="margin-bottom:4px">
       <div class="stat compact"><div class="label">Total Meters</div><div class="value">${fmtQtyMtr(sm.meters)}</div></div>
       <div class="stat compact"><div class="label">Entries</div><div class="value">${sm.entries}</div></div>
@@ -196,6 +198,22 @@ function productionPanel(){
   if(fromVal) filteredProduction = filteredProduction.filter(r=>r.date >= fromVal);
   if(toVal) filteredProduction = filteredProduction.filter(r=>r.date <= toVal);
   const filterQty = filteredProduction.reduce((s,r)=>s+(Number(r.qty)||0),0);
+  const productionFilterHtml = `      <div class="field"><label>Filter by Quality</label><select id="pf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
+      <div class="chip-row" id="pf_chips" style="margin-top:12px">
+        <button type="button" class="chip" data-period="">All Time</button>
+        <button type="button" class="chip" data-period="this-week">This Week</button>
+        <button type="button" class="chip" data-period="last-week">Last Week</button>
+        <button type="button" class="chip" data-period="this-month">This Month</button>
+        <button type="button" class="chip" data-period="last-month">Last Month</button>
+        <button type="button" class="chip" data-period="this-year">This Year</button>
+        <button type="button" class="chip" data-period="custom">Custom…</button>
+      </div>
+      <div id="pf_custom" hidden style="margin-top:12px">
+        <div class="grid cols-2">
+          <div class="field"><label>From</label><input type="date" id="pf_from" value="${fromVal}"></div>
+          <div class="field"><label>To</label><input type="date" id="pf_to" value="${toVal}"></div>
+        </div>
+      </div>`;
   return `<div class="card"><h2>Log Production</h2>
     <div class="grid cols-4">
       ${field('Date','p_date','date',`value="${todayStr()}" autofocus`)}
@@ -250,22 +268,8 @@ function productionPanel(){
       <div class="note" id="pb_result" style="margin-top:8px"></div>
       </div>
     </div>
-    ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal)}
+    ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml)}
     <div class="card"><h2>Production Log</h2>
-      <div class="field"><label>Filter by Quality</label><select id="pf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
-      <div class="chip-row" id="pf_chips" style="margin-top:12px">
-        <button type="button" class="chip" data-period="">All Time</button>
-        <button type="button" class="chip" data-period="this-month">This Month</button>
-        <button type="button" class="chip" data-period="last-month">Last Month</button>
-        <button type="button" class="chip" data-period="this-year">This Year</button>
-        <button type="button" class="chip" data-period="custom">Custom…</button>
-      </div>
-      <div id="pf_custom" hidden style="margin-top:12px">
-        <div class="grid cols-2">
-          <div class="field"><label>From</label><input type="date" id="pf_from" value="${fromVal}"></div>
-          <div class="field"><label>To</label><input type="date" id="pf_to" value="${toVal}"></div>
-        </div>
-      </div>
       ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
       ['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],

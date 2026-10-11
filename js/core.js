@@ -198,10 +198,15 @@ const todayStr = () => { const d = new Date(), p = n=>String(n).padStart(2,'0');
 // every page's period quick-chips (Production, Overview via its own month/year combine(),
 // Graphs) so "This Month" / "Last Month" / "This Year" always mean the same window everywhere.
 // '' for either side means open-ended (All Time returns both blank).
-function quickPeriodRange(period){
+function quickPeriodRange(period, today){
   const pad = n => String(n).padStart(2,'0');
   const ymd = (y,m,d) => `${y}-${pad(m)}-${pad(d)}`;
-  const now = new Date();
+  const now = today ? new Date(today + 'T00:00:00') : new Date();
+  if(period === 'this-week' || period === 'last-week'){   // Monday to Sunday, like the other weekly views
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) - (period === 'last-week' ? 7 : 0));
+    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    return {from: ymd(mon.getFullYear(), mon.getMonth()+1, mon.getDate()), to: ymd(sun.getFullYear(), sun.getMonth()+1, sun.getDate())};
+  }
   if(period === 'this-month'){
     const y = now.getFullYear(), m = now.getMonth()+1;
     return {from: ymd(y,m,1), to: ymd(y,m,new Date(y,m,0).getDate())};

@@ -321,7 +321,7 @@ function wirePanel(id){
     const pfDetected = (()=>{
       const from = FILTER.productionFrom || '', to = FILTER.productionTo || '';
       if(!from && !to) return '';
-      for(const p of ['this-month','last-month','this-year']){
+      for(const p of ['this-week','last-week','this-month','last-month','this-year']){
         const r = quickPeriodRange(p);
         if(r.from===from && r.to===to) return p;
       }
