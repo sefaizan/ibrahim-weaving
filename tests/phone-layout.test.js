@@ -37,3 +37,9 @@ test('v3.18.80: buttons are never cut off', () => {
   assert.match(ux, /function revealBtn\(b\)/);                 // Remove -> Confirm is scrolled into view in sideways logs
   assert.match(ux, /scrollBy\(\{ left: r\.right - pr\.right \+ 12 \}\)/);
 });
+
+test('v3.18.81: buttons inside Classic-table cells keep one line (cheque rows were ~900px tall)', () => {
+  assert.match(html, /\.log-scroll td button\.primary, \.log-scroll td button\.ghost\{ white-space:nowrap; overflow-wrap:normal; max-width:none; \}/);
+  // the phone card view still wraps its cheque buttons (more specific rule)
+  assert.match(html, /html:not\(\[data-logs=\"table\"\]\) \.log-cards \.chq-actions button\{\s*width:100%; margin:0; white-space:normal;/);
+});
