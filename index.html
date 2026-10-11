@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.81-cheque-table-rows-one-line">
+<meta name="app-build" content="v3.18.82-ui-review-fixes-1-5">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1422,6 +1422,34 @@
      word-by-word and the Pending/Bounced cheque row grew ~900px tall. Buttons in table cells keep their text on one line;
      in phone card view the card rules below still wrap them (they are more specific). */
   .log-scroll td button.primary, .log-scroll td button.ghost{ white-space:nowrap; overflow-wrap:normal; max-width:none; }
+
+  /* ===== v3.18.82 — UI review fixes 1-5 ===== */
+  /* (1) The floating Backup/Share button tucks away while you type in a field, and sits half-faded on entry forms
+         so the helper text under it can still be read. It is tappable again as soon as you leave the field. */
+  .fab-backup.fab-typing-hide{ opacity:0; transform:scale(0.8); pointer-events:none; }
+  body:has(.panel.active .form-actions) .fab-backup:not(.fab-scroll-hide):not(.fab-typing-hide){ opacity:.72; }
+  /* (2) Wages From/To dates share the row evenly on narrow phones instead of pushing "To" off the screen. */
+  .wg-dates{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .wg-dates input{ min-width:0; width:100%; }
+  @media (max-width:359px){
+    .wg-dates input[type="date"]{ font-size:13px; padding-left:8px; padding-right:6px; }
+    .wg-chips{ flex-wrap:wrap; overflow-x:visible; }
+  }
+  /* (3) Charts that are wider than the screen open on the newest month (see chartsToLatest in js/ux-enhance.js);
+         a chart with nothing in it says so. */
+  .gx-tip.gx-empty{ font-style:italic; }
+  /* (4) Long page titles wrap onto a second line (and shrink a little) instead of ending in "…". */
+  .appbar-titles h1{ white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2;
+    font-size:clamp(15px, 4.9vw, 19px); line-height:1.1; overflow-wrap:anywhere; text-overflow:clip; }
+  /* (5) Dark mode: white text on the light teal failed contrast, so filled teal buttons/chips use the deeper teal; small teal
+         labels and the required-field star use lighter colours that read on the dark background. */
+  :root[data-theme="dark"] button.primary, :root[data-theme="dark"] .chip.active, :root[data-theme="dark"] .wg-chip.on,
+  :root[data-theme="dark"] .lf-chip.on, :root[data-theme="dark"] .ad-step.done .ad-n, :root[data-theme="dark"] .info-btn.active,
+  :root[data-theme="dark"] input[type="file"]::file-selector-button{ background:var(--rust-deep); border-color:var(--rust-deep); color:#fff; }
+  :root[data-theme="dark"] .chip.active, :root[data-theme="dark"] .wg-chip.on, :root[data-theme="dark"] .lf-chip.on{ border-color:var(--rust); }
+  :root[data-theme="dark"] .ovo-sec-t, :root[data-theme="dark"] .ovo-sec-c, :root[data-theme="dark"] .od-sec{ color:#7CC4BC; }
+  :root[data-theme="dark"] label .req, :root[data-theme="dark"] .req{ color:#FF8A7A; }
+  :root[data-theme="dark"] .wg-fab{ background:#A9531F; color:#fff; }
 </style>
 <script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
 </head>
@@ -1452,7 +1480,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.81</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.82</span></span>
     </div>
   </header>
 
