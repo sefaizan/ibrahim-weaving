@@ -193,6 +193,31 @@
     setTimeout(() => revealBtn(b), 60); setTimeout(() => revealBtn(b), 320);
   }, true);
 
+  /* ---- 15. UI review fixes (v3.18.82) ---- */
+  // Graphs: a chart wider than the screen scrolls sideways — open it on the NEWEST month (not the oldest), once per draw.
+  function chartsToLatest(root){
+    $$('.gx-scroll', root).forEach(box => {
+      if(box.dataset.latest === '1') return;
+      if(box.scrollWidth > box.clientWidth + 1){ box.scrollLeft = document.documentElement.dir === 'rtl' ? 0 : box.scrollWidth; }
+      box.dataset.latest = '1';
+    });
+  }
+  // Graphs: a bar chart whose bars are all empty says "No data yet" instead of "Tap a bar for details".
+  function markEmptyCharts(root){
+    $$('.gx-card', root).forEach(card => {
+      const tip = card.querySelector('.gx-tip'); if(!tip) return;
+      const bars = $$('.gx-bar', card);
+      if(!bars.length) return;
+      const empty = bars.every(b => !(parseFloat(b.getAttribute('height')) > 0));
+      if(empty && !tip.classList.contains('gx-empty')){ tip.classList.add('gx-empty'); tip.dataset.hint = 'No data yet for this period'; tip.textContent = 'No data yet for this period'; }
+      else if(!empty && tip.classList.contains('gx-empty')){ tip.classList.remove('gx-empty'); tip.dataset.hint = 'Tap a bar for details'; tip.textContent = 'Tap a bar for details'; }
+    });
+  }
+  // The floating Backup/Share button hides while a typing box has focus (keyboard open). Date fields and dropdowns don't count: pages focus the date on open.
+  function fabTyping(on){ const f = document.getElementById('fabBackup'); if(f) f.classList.toggle('fab-typing-hide', on); }
+  document.addEventListener('focusin', e => { if(e.target && e.target.matches && e.target.matches('input:is([type="text"],[type="number"],[type="search"],[type="tel"],[type="email"],[type="url"],[type="password"],:not([type])), textarea')) fabTyping(true); });
+  document.addEventListener('focusout', () => { setTimeout(() => { const a = document.activeElement; if(!(a && a.matches && a.matches('input:is([type="text"],[type="number"],[type="search"],[type="tel"],[type="email"],[type="url"],[type="password"],:not([type])), textarea'))) fabTyping(false); }, 120); });
+
   function enhance(){
     const root = panels(); if(!root) return;
     foldFields(root, ['s_inv','s_dyeing'], 'More details — invoice no, dyeing');
@@ -202,6 +227,8 @@
     $$('.log-scroll', root).forEach(addLogBar);
     $$('input[type="date"]', root).forEach(addDateChips);
     $$('.card', root).forEach(foldNotes);
+    chartsToLatest(root);
+    markEmptyCharts(root);
     fitTables(root);
   }
   let t = null;
