@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.82-ui-review-fixes-1-5">
+<meta name="app-build" content="v3.18.83-receipts-always-light">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -832,6 +832,20 @@
   .receipt .balance-summary .row.total span:first-child{ color:#1a1a1a; }
   .receipt .balance-summary .sub{ font-size:10.5px; color:#777; display:block; font-weight:400; }
   .receipt .footer-note{ margin-top:26px; font-size:12px; color:#555; text-align:center; }
+  /* Receipts always stay in the LIGHT theme, whatever Dark Mode is set to (print / Save as PDF, order papers, and the
+     picture used for Share). The print area and every .receipt re-declare the light colour tokens, so anything inside that
+     reads var(--ink) / var(--line) / var(--card) etc. gets the light value; Share-as-picture copies this rule too
+     (it contains ".receipt") and always draws on white. */
+  #receiptPrintArea, .receipt{
+    color-scheme: light;
+    --paper:#EDEFF1; --paper-dim:#E1E4E8; --ink:#1B2126; --ink-soft:#626B72; --line:#D9DEE3; --field-border:#B9C2C9;
+    --rust:#204E52; --rust-deep:#163B3D; --rust-tonal:#DCEDEB; --gold:#C1652D; --green:#3D8361; --red:#B5402E; --card:#FFFFFF;
+  }
+  .receipt{ background:#fff; }
+  @media print{
+    :root, :root[data-theme="dark"]{ color-scheme: light; }
+    html, html[data-theme="dark"], body{ background:#fff !important; color:#1a1a1a; }
+  }
 
   /* Visible feedback for Share buttons — the header status line is off-screen once you scroll. */
   #appToast{ position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(20px);
@@ -1480,7 +1494,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.82</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.83</span></span>
     </div>
   </header>
 
