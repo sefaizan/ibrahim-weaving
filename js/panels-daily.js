@@ -171,7 +171,7 @@ function multiEntryCardHtml(){
     <div ${formBodyOpen('multiEntry')}>
       <div class="grid cols-2">
         ${field('Date (applies to all looms)','mb_date','date',`value="${todayStr()}"`)}
-        ${selectField('Quality (fills every loom; each loom keeps its own below)','mb_quality',DATA.qualities)}
+        ${selectField('Quality (fills every loom; each loom keeps its own below)','mb_quality',DATA.qualities,'tabindex="-1"')}
       </div>
       <div class="group-label">Looms</div>
       <div class="loom-pick-grid">${looms.map(n=>`<label class="loom-pick"><input type="checkbox" class="mb_pk" value="${escHtml(n)}"> ${escHtml(n)}</label>`).join('')}</div>
@@ -230,8 +230,8 @@ function productionPanel(){
     <div class="grid cols-4">
       ${field('Date','p_date','date',`value="${todayStr()}" autofocus`)}
       ${field('Time','p_time','time',`value="${nowStr()}"`)}
-      ${selectField('Quality','p_quality',DATA.qualities)}
       ${selectField('Loom','p_loom',DATA.looms)}
+      ${selectField('Quality','p_quality',DATA.qualities,'tabindex="-1"')}
     </div>
     <div class="grid cols-2" style="margin-top:12px">
       ${meterFracField('Quantity Produced (mtr)','p_qty','p_qty_16','','Total meters')}

@@ -53,10 +53,12 @@ function enhanceSelects(root){
     sel.parentNode.insertBefore(wrap, sel);
     wrap.appendChild(sel);
     sel.setAttribute('aria-hidden','true');
+    const skipTab = sel.getAttribute('tabindex') === '-1'; // a select marked tabindex="-1" stays out of the Tab sequence (its visible button too)
     sel.tabIndex = -1;
     const fake = document.createElement('button');
     fake.type = 'button';
     fake.className = 'sel-fake';
+    if(skipTab) fake.tabIndex = -1;
     const list = document.createElement('div');
     list.className = 'sel-list';
     list.hidden = true;
