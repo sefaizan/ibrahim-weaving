@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.78-loom-avg-between-logs">
+<meta name="app-build" content="v3.18.79-ui-sticky-tabs-frame-fit-tables">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -133,7 +133,7 @@
      app rather than a stretched-out desktop page. Purely cosmetic wrapper, changes nothing
      about IDs or event wiring below it. */
   .app-shell{ position:relative; min-height:100vh; background:var(--paper); overflow-x:clip; } /* clip (not hidden) so the sticky header can stick to the screen */
-  @media (min-width:700px){
+  @media (min-width:700px) and (min-height:700px){
     html{ display:flex; justify-content:center; }
     body{ display:flex; justify-content:center; padding:28px 0; min-height:100vh; }
     .app-shell{
@@ -154,7 +154,7 @@
   }
   .statusbar .sb-icons{ display:flex; align-items:center; gap:5px; }
   .statusbar .icon{ font-size:15px; }
-  @media (max-width:699px){ .statusbar{ display:none; } }
+  @media not all and (min-width:700px) and (min-height:700px){ .statusbar{ display:none; } }
   header.appbar{
     position:sticky; top:0; z-index:40; flex:0 0 auto;
     background:linear-gradient(165deg, var(--rust), var(--rust-deep));
@@ -781,7 +781,7 @@
      visual treatment as fab-scroll-hide, minus hiding it entirely, so it's clear something is
      happening without the button vanishing mid-send. */
   .fab-backup.fab-busy{ opacity:0.55; pointer-events:none; }
-  @media (max-width:699px){
+  @media not all and (min-width:700px) and (min-height:700px){
     .fab-backup{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:52px; height:52px; }
   }
   /* Ripple — a single delegated listener (see script near Init) spawns one of these inside
@@ -869,7 +869,7 @@
   .wg-chip.on{ background:var(--rust); color:#fff; border-color:var(--rust); }
   .wg-dates{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px; }
   .wg-dates .field{ margin:0; } .wg-dates label{ font-size:12px; }
-  .wg-tabs{ display:flex; position:sticky; top:0; z-index:20; background:var(--paper); border-bottom:1px solid var(--line); margin:0 0 12px; } /* only the tabs stay on screen while scrolling */
+  .wg-tabs{ display:flex; position:sticky; top:calc(var(--appbar-h) + env(safe-area-inset-top, 0px)); z-index:20; background:var(--paper); border-bottom:1px solid var(--line); margin:0 0 12px; } /* only the tabs stay on screen while scrolling */
   .wg-root{ padding-bottom:84px; }
   .wg-tab{ flex:1; background:none; border:0; border-bottom:3px solid transparent; border-radius:0; padding:10px 0; font-weight:700; font-size:14px; color:var(--ink-soft); cursor:pointer; margin:0; box-shadow:none; min-height:0; }
   .wg-tab.on{ color:var(--rust); border-bottom-color:var(--rust); }
@@ -930,7 +930,8 @@
   table.wg-q tfoot td{ font-weight:700; border-top:1px solid var(--line); }
   .wg-fine{ font-size:12px; color:var(--ink-soft); margin-top:6px; }
   .wg-full > summary{ cursor:pointer; font-weight:700; color:var(--rust); }
-  .wg-fab{ position:fixed; left:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:56px; height:56px; border-radius:18px; border:0; background:var(--gold); color:#fff; font-size:32px; line-height:1; padding:0; margin:0; box-shadow:var(--elev-3); cursor:pointer; z-index:30; }
+  .wg-fab{ position:fixed; left:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); width:56px; height:56px; border-radius:18px; border:0; background:var(--gold); color:#fff; font-size:32px; line-height:1; padding:0; margin:0; box-shadow:var(--elev-3); cursor:pointer; z-index:30; transition:opacity .15s ease, transform .15s ease; }
+  .wg-fab.wg-fab-hide{ opacity:0; transform:scale(0.8); pointer-events:none; }
   .wg-sheetbg{ position:fixed; inset:0; background:rgba(15,12,30,0.45); z-index:60; display:none; } .wg-sheetbg.on{ display:block; }
   .wg-sheet{ position:fixed; left:0; right:0; bottom:0; max-width:520px; margin:auto; background:var(--card); border-radius:20px 20px 0 0; padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)); z-index:61; display:none; max-height:92vh; overflow-y:auto; box-shadow:var(--elev-3); } .wg-sheet.on{ display:block; }
   .wg-qa{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
@@ -1387,6 +1388,28 @@
   #graphs_root .gx-mrow i{ font-style:normal; font-size:11.5px; font-weight:700; text-align:right; color:var(--ink-soft); } #graphs_root .gx-mrow i.good{ color:var(--green); } #graphs_root .gx-mrow i.bad{ color:var(--red); }
   #graphs_root .gx-flash{ animation:gxFlash 1.4s ease-out; }
   @keyframes gxFlash{ 0%,40%{ box-shadow:0 0 0 3px var(--gold); } 100%{ box-shadow:var(--elev-1); } }
+
+  /* ===== v3.18.79 — summary tables always show every column on a phone ===== */
+  @media (min-width:700px) and (min-height:700px){ .wg-tabs{ top:0; } }
+  @media (max-width:720px){
+    table.fit-tbl:not(.tbl-stack){ width:100%; min-width:0; font-size:12.5px; }
+    table.fit-tbl:not(.tbl-stack) th, table.fit-tbl:not(.tbl-stack) td{ padding:8px 5px; white-space:normal; overflow-wrap:break-word; }
+    table.fit-tbl:not(.tbl-stack) th{ font-size:11px; line-height:1.2; vertical-align:bottom; letter-spacing:0; }
+    table.fit-tbl:not(.tbl-stack) th:first-child, table.fit-tbl:not(.tbl-stack) td:first-child{ min-width:4.5em; padding-inline-start:8px; }
+    table.fit-tbl:not(.tbl-stack) td.n, table.fit-tbl:not(.tbl-stack) th.n{ white-space:nowrap; text-align:end; }
+  }
+  /* When even the compact table is wider than the screen, each row becomes a small card (label: value) — nothing is cut or hidden. */
+  table.fit-tbl.tbl-stack{ display:block; width:100%; min-width:0; border:0; }
+  table.fit-tbl.tbl-stack thead{ display:none; }
+  table.fit-tbl.tbl-stack tbody, table.fit-tbl.tbl-stack tfoot{ display:block; }
+  table.fit-tbl.tbl-stack tr{ display:block; border:1px solid var(--line); border-radius:12px; margin:0 0 10px; padding:4px 12px; background:var(--card); }
+  table.fit-tbl.tbl-stack td{ display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:7px 0; border:0; border-bottom:1px dashed var(--line); white-space:normal; text-align:end; font-size:13.5px; }
+  table.fit-tbl.tbl-stack td:last-child{ border-bottom:0; }
+  table.fit-tbl.tbl-stack td::before{ content:attr(data-label); flex:0 1 48%; text-align:start; font-size:11.5px; font-weight:600; color:var(--ink-soft); }
+  table.fit-tbl.tbl-stack td:first-child{ display:block; text-align:start; font-weight:700; font-size:14.5px; border-bottom:1px solid var(--line); padding:9px 0; }
+  table.fit-tbl.tbl-stack td:first-child::before{ display:none; }
+  table.fit-tbl.tbl-stack td:empty{ display:none; }
+  table.fit-tbl.tbl-stack tbody tr td, table.fit-tbl.tbl-stack tfoot tr td, table.fit-tbl.tbl-stack tr:hover td{ background:transparent; }
 </style>
 <script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
 </head>
@@ -1417,7 +1440,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.78</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.79</span></span>
     </div>
   </header>
 
