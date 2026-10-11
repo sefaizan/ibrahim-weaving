@@ -30,3 +30,10 @@ test('summary tables are fitted: compact first, label/value cards when still too
   assert.match(html, /table\.fit-tbl\.tbl-stack td::before\{ content:attr\(data-label\)/);
   assert.match(ux, /heads\.some\(h => !h\.textContent\.trim\(\)\)\) return/); // action-button tables are left alone
 });
+
+test('v3.18.80: buttons are never cut off', () => {
+  assert.match(html, /button\.primary:not\(\.rowbtn\), button\.ghost:not\(\.rowbtn\)\{ max-width:100%; white-space:normal;/);
+  assert.match(html, /\.sel-fake\{ white-space:normal; text-overflow:clip;/);
+  assert.match(ux, /function revealBtn\(b\)/);                 // Remove -> Confirm is scrolled into view in sideways logs
+  assert.match(ux, /scrollBy\(\{ left: r\.right - pr\.right \+ 12 \}\)/);
+});
