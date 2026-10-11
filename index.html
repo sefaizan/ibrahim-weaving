@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.76-friday-thursday-weeks">
+<meta name="app-build" content="v3.18.77-loom-avg-update-fix">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1417,7 +1417,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.76</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.77</span></span>
     </div>
   </header>
 
@@ -1487,8 +1487,13 @@ if('serviceWorker' in navigator){
   const hadController = !!navigator.serviceWorker.controller;
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('./service-worker.js', {updateViaCache:'none'}).then(reg=>{
+      // Look for a newer version at launch, whenever the app comes back to the front (visibility, focus, pageshow, back online)
+      // and every 10 minutes while it stays open, so a phone that never closes the app still gets updates.
+      const poke = ()=>{ if(document.visibilityState === 'visible') reg.update().catch(()=>{}); };
       reg.update().catch(()=>{});
-      document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') reg.update().catch(()=>{}); });
+      document.addEventListener('visibilitychange', poke);
+      window.addEventListener('pageshow', poke); window.addEventListener('focus', poke); window.addEventListener('online', poke);
+      setInterval(poke, 10*60*1000);
     }).catch(()=>{ /* offline support just won't be available */ });
   });
   // A new service worker took over (whole new file set installed) -> restart on it automatically.

@@ -15,7 +15,7 @@
  * app-build meta tag in index.html) and reloads the app automatically (waiting while you type) — so change that tag on every release.
  * If you add new files to APP_FILES below, bump CACHE_VERSION too.
  */
-const CACHE_VERSION = 'v304';
+const CACHE_VERSION = 'v305';
 const CACHE = 'powerlooms-' + CACHE_VERSION;
 
 // Must match the <link> in index.html character-for-character so the cached copy is found.
@@ -79,15 +79,20 @@ async function fetchWithCorsFallback(url){
 
 // Downloads the fonts stylesheet and every font file it points at, so text looks right offline.
 // Best effort — a failure here must never stop the app itself from installing.
+// Each fetch gives up after a few seconds: a stalled fonts request must never keep a new version from taking over.
+function fetchQuick(url, ms){
+  const ctl = new AbortController(), t = setTimeout(()=> ctl.abort(), ms || 6000);
+  return fetch(url, {mode:'cors', signal: ctl.signal}).finally(()=> clearTimeout(t));
+}
 async function cacheFonts(cache){
   try{
-    const cssRes = await fetch(FONTS_CSS_URL, {mode:'cors'});
+    const cssRes = await fetchQuick(FONTS_CSS_URL);
     if(!cssRes.ok) return;
     const css = await cssRes.clone().text();
     await cache.put(FONTS_CSS_URL, cssRes);
     const urls = Array.from(new Set((css.match(/https:\/\/fonts\.gstatic\.com\/[^)'"\s]+/g) || [])));
     await Promise.all(urls.map(async (u)=>{
-      try{ const r = await fetch(u, {mode:'cors'}); if(r.ok) await cache.put(u, r); }catch(e){ /* skip this file */ }
+      try{ const r = await fetchQuick(u); if(r.ok) await cache.put(u, r); }catch(e){ /* skip this file */ }
     }));
   }catch(e){ /* offline at install time — fonts will be cached the first time they load online */ }
 }
