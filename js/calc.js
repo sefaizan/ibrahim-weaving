@@ -1660,3 +1660,22 @@ function weftStockEstimate(){
   const hasData = (DATA.weft || []).length > 0 || !!cnt;
   return {lbs, bags: weftLbsToBags(lbs), bagLbs: bag, perDay, cover, limit, counted: cnt, hasData, low: hasData && perDay > 0 && (lbs <= 0 || cover <= limit)};
 }
+
+// Production Summary (Production page): totals and per-quality / per-loom / per-employee splits for whatever rows
+// are passed in (the page passes the rows its filters currently show). Meters are summed as stored (exact 1/16ths),
+// "days" = distinct dates with output, perDay = meters / days. Employee meters are the e1m/e2m/e3m credited meters.
+function productionSummary(rows){
+  rows = Array.isArray(rows) ? rows : [];
+  const by = {quality:{}, loom:{}, employee:{}}, dates = new Set();
+  const add = (grp, key, m, entry)=>{ if(!key) return; const g = grp[key] || (grp[key] = {name:key, meters:0, entries:0}); g.meters += m; if(entry) g.entries++; };
+  let meters = 0;
+  rows.forEach(r=>{
+    const q = Number(r.qty) || 0; meters += q; if(r.date) dates.add(r.date);
+    add(by.quality, r.quality, q, true); add(by.loom, String(r.loom == null ? '' : r.loom), q, true);
+    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0, true); });
+  });
+  const list = g => Object.values(g).sort((a,b)=> b.meters - a.meters || String(a.name).localeCompare(String(b.name), undefined, {numeric:true}));
+  const days = dates.size;
+  return {meters, entries: rows.length, days, perDay: days ? meters / days : 0,
+    byQuality: list(by.quality), byLoom: list(by.loom), byEmployee: list(by.employee)};
+}

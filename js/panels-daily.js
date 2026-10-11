@@ -171,6 +171,23 @@ function multiEntryCardHtml(){
     </div></div>
     `;
 }
+// Collapsed-by-default summary of whatever the Production Log filters below are showing.
+function productionSummaryCard(rows, qualityVal, fromVal, toVal){
+  const sm = productionSummary(rows);
+  const filt = [qualityVal ? escHtml(qualityVal) : '', (fromVal || toVal) ? (fromVal ? fmtDate(fromVal) : 'the start') + ' to ' + (toVal ? fmtDate(toVal) : 'today') : ''].filter(Boolean);
+  const table = (title, list, first) => list.length ? `<div class="group-label" style="margin-top:14px">${title}</div><div class="log-scroll"><table><thead><tr><th>${first}</th><th>Meters</th><th>Entries</th></tr></thead>
+    <tbody>${list.map(r=>`<tr><td><span class="name">${escHtml(r.name)}</span></td><td><b>${fmtQtyMtr(r.meters)}</b></td><td>${r.entries}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return `${sumCardOpen('summary','Production Summary')}
+    <p class="note" style="margin:0 0 10px">${filt.length ? 'Showing: ' + filt.join(' · ') + '.' : 'Showing all entries.'} Change the filters in Production Log below.</p>
+    ${sm.entries ? `<div class="grid cols-2" style="margin-bottom:4px">
+      <div class="stat compact"><div class="label">Total Meters</div><div class="value">${fmtQtyMtr(sm.meters)}</div></div>
+      <div class="stat compact"><div class="label">Entries</div><div class="value">${sm.entries}</div></div>
+      <div class="stat compact"><div class="label">Days with Output</div><div class="value">${sm.days}</div></div>
+      <div class="stat compact"><div class="label">Avg per Day (mtr)</div><div class="value">${fmtQtyMtr(sm.perDay)}</div></div>
+    </div>
+    ${table('By Quality', sm.byQuality, 'Quality')}${table('By Loom', sm.byLoom, 'Loom')}${table('By Employee', sm.byEmployee, 'Employee')}` : '<div class="empty">No production for these filters</div>'}
+  ${sumCardClose()}`;
+}
 function productionPanel(){
   const qualityVal = FILTER.production || '';
   const fromVal = FILTER.productionFrom || '';
@@ -233,6 +250,7 @@ function productionPanel(){
       <div class="note" id="pb_result" style="margin-top:8px"></div>
       </div>
     </div>
+    ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal)}
     <div class="card"><h2>Production Log</h2>
       <div class="field"><label>Filter by Quality</label><select id="pf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
       <div class="chip-row" id="pf_chips" style="margin-top:12px">
