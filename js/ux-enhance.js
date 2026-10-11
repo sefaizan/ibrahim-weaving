@@ -174,6 +174,25 @@
     fabTimer = setTimeout(() => { const g = document.querySelector('.wg-fab'); if(g) g.classList.remove('wg-fab-hide'); }, 700);
   }, { passive: true, capture: true });
 
+
+  /* ---- 14. a button that grows (Remove -> "Confirm") is scrolled fully into view inside a sideways-scrolling log (v3.18.80) ---- */
+  function revealBtn(b){
+    if(!b || !b.isConnected) return;
+    for(let p = b.parentElement; p && p !== document.body; p = p.parentElement){
+      const o = getComputedStyle(p).overflowX;
+      if((o === 'auto' || o === 'scroll') && p.scrollWidth > p.clientWidth + 1){
+        const pr = p.getBoundingClientRect(), r = b.getBoundingClientRect();
+        if(r.right > pr.right - 4) p.scrollBy({ left: r.right - pr.right + 12 });
+        else if(r.left < pr.left + 4) p.scrollBy({ left: r.left - pr.left - 12 });
+        return;
+      }
+    }
+  }
+  document.addEventListener('click', e => {
+    const b = e.target && e.target.closest ? e.target.closest('button') : null; if(!b) return;
+    setTimeout(() => revealBtn(b), 60); setTimeout(() => revealBtn(b), 320);
+  }, true);
+
   function enhance(){
     const root = panels(); if(!root) return;
     foldFields(root, ['s_inv','s_dyeing'], 'More details — invoice no, dyeing');
