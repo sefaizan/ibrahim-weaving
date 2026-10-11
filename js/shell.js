@@ -360,12 +360,12 @@ function loomAssignmentsSection(){
     </label>`).join('');
   const rows = DATA.looms.map(l=>{
     const a = loomAssignmentFor(l.name);
-    return `<tr>
-      <td><span class="name">${escHtml(l.name)}</span></td>
-      <td>${employeeInlineSelect(`la_e1_${l.id}`, a?.e1)}</td>
-      <td>${employeeInlineSelect(`la_e2_${l.id}`, a?.e2)}</td>
-      <td>${qualityInlineSelect(`la_q_${l.id}`, a?.q)}</td>
-    </tr>`;
+    return `<div class="la-row">
+      <div class="la-loom">Loom ${escHtml(l.name)}</div>
+      <div><label>Employee 1</label>${employeeInlineSelect(`la_e1_${l.id}`, a?.e1)}</div>
+      <div><label>Employee 2</label>${employeeInlineSelect(`la_e2_${l.id}`, a?.e2)}</div>
+      <div class="la-q"><label>Quality</label>${qualityInlineSelect(`la_q_${l.id}`, a?.q)}</div>
+    </div>`;
   }).join('');
   // One row per employee pair: set the quality for every loom in that group with one tap.
   const grpRows = mbGroups().map((g,i)=>{
@@ -387,10 +387,7 @@ function loomAssignmentsSection(){
       <div class="group-label vo-hide">Set quality for the whole group</div>
       <div class="vo-hide">${grpRows}</div>
       <div class="group-label">Per-Loom</div>
-      <table>
-        <thead><tr><th>Loom</th><th>Employee 1</th><th>Employee 2</th><th>Quality</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div class="la-list">${rows}</div>
     </div>`;
 }
 // Same options as employeeSelectField but with a plain id (no wrapping .field/<label>) so it
