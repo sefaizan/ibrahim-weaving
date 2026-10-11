@@ -1375,11 +1375,9 @@ function graphsRangeKeys(kind){
   return out;
 }
 function graphsWeekStart(dateStr){
-  const d = new Date(dateStr+'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay()+6)%7)); // Monday
-  return d.toISOString().slice(0,10);
+  return currentWageWeek(dateStr).from; // Friday (the wage week starts on Friday)
 }
-// Meters woven per Monday-to-Sunday week, for the n weeks up to the week containing endDate.
+// Meters woven per Friday-to-Thursday week, for the n weeks up to the week containing endDate.
 function graphsWeeklyProduction(endDate, n){
   const last = new Date(graphsWeekStart(endDate)+'T00:00:00Z');
   const weeks = [];
@@ -1551,8 +1549,7 @@ function orderStats(o, today){
   const got = sum(rows, r => r.qty), val = sum(rows, r => r.amount), qty = Number(o.qty) || 0;
   const tol = o.tolerance !== undefined && o.tolerance !== '' && o.tolerance !== null ? Number(o.tolerance) : 5;
   const diff = got - qty, pct = qty ? diff / qty * 100 : 0;
-  const d = new Date((today || todayStr()) + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const mon = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const mon = currentWageWeek(today || todayStr()).from;   // this wage week's Friday (name kept short; it is the week start)
   const stock = Math.max(0, sum((DATA.production || []).filter(p => p.quality === o.quality), r => r.qty) - sum((DATA.sale || []).filter(s => s.quality === o.quality && live(s)), r => r.qty));
   const pending = Math.max(0, qty - got);
   return {got, val, qty, avg: got ? val / got : 0, diff, pct, tol, pending, stock, toWeave: Math.max(0, pending - stock), batches: rows.length,

@@ -1239,7 +1239,7 @@ function graphsPanel(){
     cards.push(card('Production by Quality','Meters produced each month, split by fabric quality. The largest six qualities are shown; the rest are grouped as Other.',
       `${legend(D.qualities.map((q,k)=>[GX_PALETTE[k%GX_PALETTE.length],q.name]))}${tipBox}<div class="gx-scroll">${svgStackedBarChart(monthKeys, D.qualities.map((q,k)=>({...q, color: GX_PALETTE[k%GX_PALETTE.length]})), {curKey})}</div>`, ++i));
   }
-  cards.push(card('Weekly Production (Last 12 Weeks)','Meters woven per week (Monday to Sunday), up to the end of the selected range. Weekly totals smooth out days when entries are logged in batches.',
+  cards.push(card('Weekly Production (Last 12 Weeks)','Meters woven per week (Friday to Thursday), up to the end of the selected range. Weekly totals smooth out days when entries are logged in batches.',
     `${tipBox}<div class="gx-scroll">${svgGroupedBarChart(weekKeys,[{name:'Meters', color:'var(--rust)', values: weeks.map(w=>w.meters), labelPrev: k=> weekLabels[k-1]}], wo)}</div>`, ++i));
   cards.push(card('Profit / Loss (Rs)','Sales minus Business Expenses (incl. Wages Paid), Family Expenses, Personal Expenses, Warp (Tana) and Weft (Bana) cost, per month. Green is a profit, red is a loss.',
     `${tipBox}<div class="gx-scroll">${svgDivergingBarChart(monthKeys, C.profit, {...o, ghost: ghostOn ? D.prev.profit : null})}</div>`, ++i, 'gx_profit'));

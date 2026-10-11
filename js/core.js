@@ -202,10 +202,11 @@ function quickPeriodRange(period, today){
   const pad = n => String(n).padStart(2,'0');
   const ymd = (y,m,d) => `${y}-${pad(m)}-${pad(d)}`;
   const now = today ? new Date(today + 'T00:00:00') : new Date();
-  if(period === 'this-week' || period === 'last-week'){   // Monday to Sunday, like the other weekly views
-    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) - (period === 'last-week' ? 7 : 0));
-    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
-    return {from: ymd(mon.getFullYear(), mon.getMonth()+1, mon.getDate()), to: ymd(sun.getFullYear(), sun.getMonth()+1, sun.getDate())};
+  if(period === 'this-week' || period === 'last-week'){   // the wage week the whole app uses: Friday to Thursday
+    const tw = currentWageWeek(today || todayStr());
+    if(period === 'this-week') return tw;
+    const d = new Date(tw.from + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);   // the Thursday before this week began
+    return currentWageWeek(d.toISOString().slice(0,10));
   }
   if(period === 'this-month'){
     const y = now.getFullYear(), m = now.getMonth()+1;
