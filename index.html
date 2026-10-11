@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.80-buttons-never-cut-off">
+<meta name="app-build" content="v3.18.81-cheque-table-rows-one-line">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1417,6 +1417,11 @@
   /* A dropdown shows its whole selected text (wraps to a second line) instead of "Loan In — you put mo…". */
   .sel-fake{ white-space:normal; text-overflow:clip; overflow-wrap:anywhere; line-height:1.3; }
   .ov-sticky .sel-fake{ white-space:nowrap; text-overflow:ellipsis; }
+  /* ===== v3.18.81 — cheque (and other) table rows stay one line tall in Classic table view ===== */
+  /* The v3.18.80 wrap rule let buttons inside a table cell shrink to a few letters, so "Mark Cleared" broke
+     word-by-word and the Pending/Bounced cheque row grew ~900px tall. Buttons in table cells keep their text on one line;
+     in phone card view the card rules below still wrap them (they are more specific). */
+  .log-scroll td button.primary, .log-scroll td button.ghost{ white-space:nowrap; overflow-wrap:normal; max-width:none; }
 </style>
 <script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
 </head>
@@ -1447,7 +1452,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.80</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.81</span></span>
     </div>
   </header>
 
