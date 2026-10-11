@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.84-loom-default-quality">
+<meta name="app-build" content="v3.18.85-loom-quality-layout">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1181,6 +1181,14 @@
     --glass: color-mix(in srgb, var(--card) 95%, transparent);
     --elev-card: 0 1px 2px rgba(16,32,36,.06), 0 6px 18px -8px rgba(16,32,36,.16);
   }
+  /* Settings > Loom Assignments: each loom is a small card (two employees side by side, quality full width) instead of a cramped 4-column table */
+  .la-row{ display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .la-row:last-child{ border-bottom:0; }
+  .la-row > div{ min-width:0; }
+  .la-row .la-loom{ grid-column:1/-1; font-weight:700; }
+  .la-row .la-q{ grid-column:1/-1; }
+  .la-row label{ display:block; font-size:12px; margin:0 0 3px; opacity:.75; }
+  .la-row select.la_inline{ width:100%; min-width:0; }
   :root[data-theme="dark"]{ --elev-card: 0 1px 2px rgba(0,0,0,.5), 0 8px 20px -8px rgba(0,0,0,.6); }
   /* Header: soft highlight + hairline so it reads as a polished app bar */
   header.appbar{ background:linear-gradient(165deg,var(--rust) 0%,var(--rust-deep) 100%); box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 6px 16px -6px rgba(10,30,32,.45); }
@@ -1494,7 +1502,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.84</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.85</span></span>
     </div>
   </header>
 
