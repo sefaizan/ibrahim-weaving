@@ -364,28 +364,41 @@ function loomAssignmentsSection(){
       <td><span class="name">${escHtml(l.name)}</span></td>
       <td>${employeeInlineSelect(`la_e1_${l.id}`, a?.e1)}</td>
       <td>${employeeInlineSelect(`la_e2_${l.id}`, a?.e2)}</td>
+      <td>${qualityInlineSelect(`la_q_${l.id}`, a?.q)}</td>
     </tr>`;
+  }).join('');
+  // One row per employee pair: set the quality for every loom in that group with one tap.
+  const grpRows = mbGroups().map((g,i)=>{
+    const qs = g.looms.map(n=>(loomAssignmentFor(n)||{}).q||'');
+    return `<div class="field"><label>${escHtml(g.label)}</label>${qualityInlineSelect(`la_gq_${i}`, qs.every(x=>x===qs[0]) ? qs[0] : '', 'Mixed')}</div>`;
   }).join('');
   return `
     <div class="card">
       <div class="card-head"><h2>Loom Assignments</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-      <p class="note info-note" hidden>Set which two employees usually run each loom. Picking a loom in Log Production will auto-fill these two — still fully editable there. A 3rd employee (a fill-in for someone on leave, or an outside worker) is handled separately on the entry form as before, and isn't part of this assignment.</p>
+      <p class="note info-note" hidden>Set which two employees usually run each loom, and the quality it usually weaves. Picking a loom in Log Production will auto-fill these — still fully editable there, so a one-off quality on a single entry is fine. A 3rd employee (a fill-in for someone on leave, or an outside worker) is handled separately on the entry form as before, and isn't part of this assignment.</p>
       <div class="group-label vo-hide" style="margin-top:0">Quick Assign</div>
       <div class="vo-hide loom-pick-grid" style="margin-bottom:10px">${loomChecks}</div>
       <div class="grid cols-2 vo-hide">
         ${employeeSelectField('Employee 1','la_qa_e1','',true)}
         ${employeeSelectField('Employee 2','la_qa_e2','',true)}
+        ${selectField('Quality','la_qa_q',DATA.qualities)}
       </div>
       <button class="primary" id="la_apply" type="button" style="margin-top:10px">Assign to Selected Looms</button>
+      <div class="group-label vo-hide">Set quality for the whole group</div>
+      <div class="vo-hide">${grpRows}</div>
       <div class="group-label">Per-Loom</div>
       <table>
-        <thead><tr><th>Loom</th><th>Employee 1</th><th>Employee 2</th></tr></thead>
+        <thead><tr><th>Loom</th><th>Employee 1</th><th>Employee 2</th><th>Quality</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
 // Same options as employeeSelectField but with a plain id (no wrapping .field/<label>) so it
 // drops straight into a table cell, and pre-selects an existing assignment's employee if any.
+function qualityInlineSelect(id, selected='', blank='—'){
+  const opt = x=> `<option value="${escHtml(x.name)}"${x.name===selected?' selected':''}>${escHtml(x.name)}</option>`;
+  return `<select id="${id}" class="la_inline"><option value=""${!selected?' selected':''}>${blank}</option>${DATA.qualities.map(opt).join('')}</select>`;
+}
 function employeeInlineSelect(id, selected=''){
   const active = DATA.employees.filter(e=>e.active !== false);
   const inactive = DATA.employees.filter(e=>e.active === false);
@@ -404,7 +417,7 @@ const normalizeMasterName = s => String(s==null?'':s).replace(/\s+/g,' ').trim()
 const masterNameKey = s => normalizeMasterName(s).toLowerCase();
 const MASTER_REF_FIELDS = {
   clients:   [['sale','client'], ['recovery','client']],
-  qualities: [['production','quality'], ['sale','quality']],
+  qualities: [['production','quality'], ['sale','quality'], ['loomAssignments','q']],
   employees: [['wageBonuses','employee'], ['wagePayments','employee'], ['wageSettlements','employee'], ['loanPayments','employee'],
               ['production','e1'], ['production','e2'], ['production','e3'], ['loomAssignments','e1'], ['loomAssignments','e2']],
   looms:     [['production','loom'], ['warpBeams','loom'], ['loomAssignments','loom']],

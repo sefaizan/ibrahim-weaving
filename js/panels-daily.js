@@ -35,15 +35,24 @@ function meterFracField(label, idWhole, idSixteenth, extra='', wholePh='Whole'){
 function loomAssignmentFor(loomName){
   return DATA.loomAssignments.find(a=>a.loom===loomName) || null;
 }
-function setLoomAssignment(loomName, e1, e2){
+// q = the loom's usual quality (a default, overridable per entry). Leave q undefined to keep what is stored.
+function setLoomAssignment(loomName, e1, e2, q){
   const idx = DATA.loomAssignments.findIndex(a=>a.loom===loomName);
-  const rec = {loom:loomName, e1:e1||'', e2:e2||''};
-  if(!rec.e1 && !rec.e2){
+  const old = idx>-1 ? DATA.loomAssignments[idx] : {};
+  const rec = {...old, loom:loomName, e1:e1||'', e2:e2||''};
+  const qq = q===undefined ? (old.q||'') : (q||'');
+  if(qq) rec.q = qq; else delete rec.q;
+  if(!rec.e1 && !rec.e2 && !rec.q){
     if(idx>-1) DATA.loomAssignments.splice(idx,1);
     return;
   }
-  if(idx>-1) DATA.loomAssignments[idx] = {...DATA.loomAssignments[idx], ...rec};
+  if(idx>-1) DATA.loomAssignments[idx] = rec;
   else DATA.loomAssignments.push(rec);
+}
+// The loom's usual quality, only if that quality still exists in Settings > Qualities.
+function loomQualityFor(loomName){
+  const a = loomAssignmentFor(loomName);
+  return a && a.q && (DATA.qualities||[]).some(x=>x.name===a.q) ? a.q : '';
 }
 // Employee picker for entry forms: active employees listed plainly (so new entries never
 // see anyone who's left), inactive ones tucked into their own labeled group below — still
@@ -143,9 +152,12 @@ function mbCardHtml(name){
   const a = loomAssignmentFor(name) || {};
   const eo = sel => '<option value="">—</option>' + DATA.employees.filter(e=>e.active!==false && !e.salaried).map(e=>`<option${e.name===sel?' selected':''}>${escHtml(e.name)}</option>`).join('');
   const row = (n, lbl, sel) => `<label>${lbl}</label><div class="mb-rw"><select class="mb_n${n}" tabindex="-1">${eo(sel)}</select><input class="mb_m${n} mb_f" type="number" inputmode="decimal" enterkeyhint="next" placeholder="Mtr"></div>`;
+  const qd = loomQualityFor(name);
+  const qo = '<option value="">—</option>' + (DATA.qualities||[]).map(x=>`<option${x.name===qd?' selected':''}>${escHtml(x.name)}</option>`).join('');
   return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
     <div class="mb-bm"></div>
+    <label>Quality</label><div class="mb-rw"><select class="mb_q" tabindex="-1">${qo}</select></div>
     <label>Gzana (meters and sixteenths)</label>
     <div class="mb-rw"><input placeholder="Total meters" class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
     ${row(1,'Employee 1',a.e1)}${row(2,'Employee 2',a.e2)}
@@ -159,7 +171,7 @@ function multiEntryCardHtml(){
     <div ${formBodyOpen('multiEntry')}>
       <div class="grid cols-2">
         ${field('Date (applies to all looms)','mb_date','date',`value="${todayStr()}"`)}
-        ${selectField('Quality (applies to all looms)','mb_quality',DATA.qualities)}
+        ${selectField('Quality (fills every loom; each loom keeps its own below)','mb_quality',DATA.qualities)}
       </div>
       <div class="group-label">Looms</div>
       <div class="loom-pick-grid">${looms.map(n=>`<label class="loom-pick"><input type="checkbox" class="mb_pk" value="${escHtml(n)}"> ${escHtml(n)}</label>`).join('')}</div>

@@ -140,7 +140,7 @@ function wirePanel(id){
       const pf = PRODUCTION_PREFILL; PRODUCTION_PREFILL = null;
       const a = pf.loom ? loomAssignmentFor(pf.loom) : null;
       document.getElementById('p_date').value = pf.date;
-      document.getElementById('p_quality').value = pf.quality;
+      document.getElementById('p_quality').value = loomQualityFor(pf.loom) || pf.quality;
       document.getElementById('p_loom').value = pf.loom;
       document.getElementById('p_e1').value = a?.e1 || '';
       document.getElementById('p_e2').value = a?.e2 || '';
@@ -264,6 +264,9 @@ function wirePanel(id){
       const a = loomAssignmentFor(v('p_loom'));
       document.getElementById('p_e1').value = a?.e1 || '';
       document.getElementById('p_e2').value = a?.e2 || '';
+      // The loom's usual quality is only a default: it fills the box, and you can still change it for this entry.
+      const qd = loomQualityFor(v('p_loom'));
+      if(qd && !(EDITING && EDITING.key==='production')){ document.getElementById('p_quality').value = qd; document.getElementById('p_quality').dispatchEvent(new Event('change')); }
       syncE2();
     });
     syncE2(); // first paint, and coming back from "Add & next loom" with the next loom's pair already filled in
@@ -408,6 +411,7 @@ function wirePanel(id){
       const shown = ()=>cards().filter(c=>c.style.display!=='none');
       const e3On = c=>q(c,'.mb-e3').style.display!=='none';
       const total = c=>combineMtr16(q(c,'.mb_g').value, q(c,'.mb_s').value);
+      const cardQ = c=>q(c,'.mb_q').value || v('mb_quality');
       const assigned = c=>num(q(c,'.mb_m1'))+num(q(c,'.mb_m2'))+(e3On(c)?num(q(c,'.mb_m3')):0);
       const autoSplit = c=>{
         const m2 = q(c,'.mb_m2'), t = total(c);
@@ -429,7 +433,7 @@ function wirePanel(id){
         const bu = computeBeamForecasts(beamAlertDays() || 3);
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
-          q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu) + prodCheckBadges(c.dataset.loom, v('mb_date'), v('mb_quality'), t, {dup:true});
+          q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu) + prodCheckBadges(c.dataset.loom, v('mb_date'), cardQ(c), t, {dup:true});
           if(!(t>0)){ d.textContent='Diff: —'; d.style.color=''; return; }
           const diff = Math.round((t-a)*16)/16;
           d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
@@ -439,6 +443,8 @@ function wirePanel(id){
         document.getElementById('mb_err').textContent = bad ? `Employees exceed Gzana on ${bad} loom(s). Check the meters.` : '';
       };
       ['mb_date','mb_quality'].forEach(id=>{ const e = document.getElementById(id); if(e){ e.addEventListener('change', calc); e.addEventListener('input', calc); } });
+      // Picking a quality at the top fills every loom card; each card can still be changed afterwards.
+      document.getElementById('mb_quality').addEventListener('change', e=>{ if(e.target.value) cards().forEach(c=>{ q(c,'.mb_q').value = e.target.value; }); calc(); });
       const setPicks = fn=>{
         document.querySelectorAll('.mb_pk').forEach(p=>{ p.checked = fn(p.value); });
         cards().forEach(c=>{ c.style.display = document.querySelector(`.mb_pk[value="${CSS.escape(c.dataset.loom)}"]`).checked ? 'block' : 'none'; });
@@ -459,6 +465,7 @@ function wirePanel(id){
       });
       mbRoot.addEventListener('change', e=>{
         const c = e.target.closest('.mb-card');
+        if(c && e.target.matches('.mb_q')) calc();
         if(c && e.target.matches('.mb_n2,.mb_n3')){ autoSplit3(c); calc(); }
       });
       mbRoot.addEventListener('focusin', e=>{ if(e.target.classList.contains('mb_f')) e.target.select(); });
@@ -478,15 +485,15 @@ function wirePanel(id){
         calc();
       });
       document.getElementById('saveMultiProduction').onclick = async ()=>{
-        const err = document.getElementById('mb_err'), date = v('mb_date'), quality = v('mb_quality');
+        const err = document.getElementById('mb_err'), date = v('mb_date');
         const fail = m=>{ err.textContent = m; };
         if(!date) return fail('Pick the date first.');
-        if(!quality) return fail('Pick a quality first.');
         const list = shown(); if(!list.length) return fail('Tick at least one loom.');
         const recs = [];
         for(const c of list){
-          const loom = c.dataset.loom, t = total(c);
+          const loom = c.dataset.loom, t = total(c), quality = cardQ(c);
           if(!(t>0)) return fail(`Loom ${loom}: enter the Gzana (total meters) first.`);
+          if(!quality) return fail(`Loom ${loom}: Pick a quality first.`);
           const r = {date, time:nowStr(), loom, quality, qty:t, beam:'', e1:'', e1m:0, e2:'', e2m:0, e3:'', e3m:0};
           for(const n of (e3On(c)?[1,2,3]:[1,2])){
             const name = q(c,'.mb_n'+n).value, m = num(q(c,'.mb_m'+n));
@@ -1931,27 +1938,37 @@ function wirePanel(id){
     // Loom Assignments: each per-loom dropdown saves on change; Quick Assign applies one
     // employee pair to every checked loom at once.
     DATA.looms.forEach(l=>{
-      ['e1','e2'].forEach(slot=>{
+      ['e1','e2','q'].forEach(slot=>{
         const el = document.getElementById(`la_${slot}_${l.id}`);
         if(!el) return;
         el.addEventListener('change', async ()=>{
           const a = loomAssignmentFor(l.name) || {};
-          const next = {e1:a.e1||'', e2:a.e2||''};
+          const next = {e1:a.e1||'', e2:a.e2||'', q:a.q||''};
           next[slot] = el.value;
-          setLoomAssignment(l.name, next.e1, next.e2);
+          setLoomAssignment(l.name, next.e1, next.e2, next.q);
           await save(); switchTab('settings');
         });
+      });
+    });
+    // "Set quality for the whole group": one tap fills every loom in that employee-pair group; single looms can still be changed below.
+    mbGroups().forEach((g,i)=>{
+      const el = document.getElementById(`la_gq_${i}`); if(!el) return;
+      el.addEventListener('change', async ()=>{
+        if(!el.value) return;
+        g.looms.forEach(n=>{ const a = loomAssignmentFor(n) || {}; setLoomAssignment(n, a.e1, a.e2, el.value); });
+        await save(); switchTab('settings');
       });
     });
     const laApply = document.getElementById('la_apply');
     if(laApply) laApply.onclick = async ()=>{
       const looms = Array.from(document.querySelectorAll('.la_loom_pick:checked')).map(cb=>cb.value);
-      const e1 = v('la_qa_e1'), e2 = v('la_qa_e2');
+      const e1 = v('la_qa_e1'), e2 = v('la_qa_e2'), qq = v('la_qa_q');
       if(!requireFields([
         [looms.length, 'Pick at least one loom first.', null],
-        [e1 || e2, 'Pick at least one employee first.', 'la_qa_e1'],
+        [e1 || e2 || qq, 'Pick an employee or a quality first.', 'la_qa_e1'],
       ])) return;
-      looms.forEach(loomName=> setLoomAssignment(loomName, e1, e2));
+      // Employees are replaced only when one is picked; the quality only when one is picked.
+      looms.forEach(loomName=>{ const a = loomAssignmentFor(loomName) || {}; setLoomAssignment(loomName, (e1||e2) ? e1 : a.e1, (e1||e2) ? e2 : a.e2, qq || a.q || ''); });
       await save(); switchTab('settings');
     };
   }
