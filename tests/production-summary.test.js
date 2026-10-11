@@ -90,3 +90,22 @@ describe('This Week / Last Week ranges follow the wage week (Friday to Thursday)
   test('defaults to the app\'s own today when no date is passed', () => assert.deepEqual(JSON.parse(JSON.stringify(ctx.f('this-week'))), { from: '2026-10-09', to: '2026-10-15' }));
   test('existing periods unchanged', () => assert.deepEqual(range('this-month', '2026-10-14'), { from: '2026-10-01', to: '2026-10-31' }));
 });
+
+describe('By Loom average per day', () => {
+  const s = app.productionSummary(rows);
+  test('each loom: meters divided by the days that loom had output', () => {
+    const l1 = s.byLoom.find(r => r.name === '1'), l2 = s.byLoom.find(r => r.name === '2');
+    assert.equal(l1.days, 2); assert.equal(l1.perDay, 125);     // 250 m over 1 and 3 Oct
+    assert.equal(l2.days, 1); assert.equal(l2.perDay, 50.5);
+  });
+  test('two entries on the same day count as one day', () => {
+    const r = app.productionSummary([prod({ date: '2026-10-05', loom: '3', qty: 40 }), prod({ date: '2026-10-05', loom: '3', qty: 50 })]);
+    assert.equal(r.byLoom[0].days, 1); assert.equal(r.byLoom[0].perDay, 90);
+  });
+  test('only the loom table shows the Avg / Day column', () => {
+    const src = read('js/panels-daily.js');
+    assert.match(src, /table\('By Loom', sm\.byLoom, 'Loom', true\)/);
+    assert.match(src, /table\('By Quality', sm\.byQuality, 'Quality'\)/);
+    assert.match(src, /<th>Avg \/ Day<\/th>/);
+  });
+});
