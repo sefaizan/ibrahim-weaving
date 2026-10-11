@@ -1658,23 +1658,44 @@ function weftStockEstimate(){
   return {lbs, bags: weftLbsToBags(lbs), bagLbs: bag, perDay, cover, limit, counted: cnt, hasData, low: hasData && perDay > 0 && (lbs <= 0 || cover <= limit)};
 }
 
-// Production Summary (Production page): totals and per-quality / per-loom / per-employee splits for whatever rows
-// are passed in (the page passes the rows its filters currently show). Meters are summed as stored (exact 1/16ths),
-// "days" = distinct dates with output, perDay = meters / days. Employee meters are the e1m/e2m/e3m credited meters.
-function productionSummary(rows){
+// Production Summary (Production page): totals and per-quality / per-loom / per-employee splits for the rows passed in
+// (the page passes the rows its filters currently show). Meters are summed as stored (exact 1/16ths). Employee meters are the
+// e1m/e2m/e3m credited meters.
+// Averages follow how the mill logs: entries are NOT daily (often 2-3 days apart), so an entry covers the days since that
+// loom's PREVIOUS entry. Per loom: avg/day = meters of the entries ÷ the days between logs. Days after the loom's last entry
+// (e.g. today, not logged yet) are never counted, and a loom's very first entry has nothing before it, so it is skipped.
+// allRows = every production row (the previous log may lie outside the filter); range = {from, to} of the date filter.
+function productionSummary(rows, allRows, range){
   rows = Array.isArray(rows) ? rows : [];
+  allRows = Array.isArray(allRows) ? allRows : rows;
+  const from = range && range.from, to = range && range.to;
   const by = {quality:{}, loom:{}, employee:{}}, dates = new Set();
-  const add = (grp, key, m, date)=>{ if(!key) return; const g = grp[key] || (grp[key] = {name:key, meters:0, entries:0, dates:new Set()}); g.meters += m; g.entries++; if(date) g.dates.add(date); };
+  const add = (grp, key, m)=>{ if(!key) return; const g = grp[key] || (grp[key] = {name:key, meters:0, entries:0}); g.meters += m; g.entries++; };
   let meters = 0;
   rows.forEach(r=>{
     const q = Number(r.qty) || 0; meters += q; if(r.date) dates.add(r.date);
-    add(by.quality, r.quality, q, r.date); add(by.loom, String(r.loom == null ? '' : r.loom), q, r.date);
-    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0, r.date); });
+    add(by.quality, r.quality, q); add(by.loom, String(r.loom == null ? '' : r.loom), q);
+    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0); });
   });
-  // days = distinct dates that group had output; perDay = meters / days (so a loom that ran 3 days of the 7 is judged on those 3)
-  const list = g => Object.values(g).map(x=>({name:x.name, meters:x.meters, entries:x.entries, days:x.dates.size, perDay: x.dates.size ? x.meters / x.dates.size : 0}))
+  const dayNo = d => Math.round(Date.parse(d + 'T00:00:00Z') / 86400000);
+  // Each loom's log dates from ALL its entries (any quality), so a quality filter can't shrink the days.
+  const loomDates = {};
+  allRows.forEach(r=>{ if(r.date && r.loom != null && r.loom !== '') (loomDates[String(r.loom)] = loomDates[String(r.loom)] || new Set()).add(r.date); });
+  const rate = {};
+  Object.keys(by.loom).forEach(loom=>{
+    const ds = [...(loomDates[loom] || [])].sort();
+    const shown = {}; rows.forEach(r=>{ if(String(r.loom == null ? '' : r.loom) === loom) shown[r.date] = (shown[r.date] || 0) + (Number(r.qty) || 0); });
+    let m = 0, d = 0;
+    for(let i = 1; i < ds.length; i++){                      // i = 0 is the first-ever entry: nothing before it
+      if((from && ds[i] < from) || (to && ds[i] > to)) continue;
+      d += dayNo(ds[i]) - dayNo(ds[i-1]); m += shown[ds[i]] || 0;
+    }
+    rate[loom] = {days: d, perDay: d ? m / d : 0};
+  });
+  const list = (g, isLoom) => Object.values(g).map(x=>({name:x.name, meters:x.meters, entries:x.entries,
+      days: isLoom ? rate[x.name].days : 0, perDay: isLoom ? rate[x.name].perDay : 0}))
     .sort((a,b)=> b.meters - a.meters || String(a.name).localeCompare(String(b.name), undefined, {numeric:true}));
-  const days = dates.size;
-  return {meters, entries: rows.length, days, perDay: days ? meters / days : 0,
-    byQuality: list(by.quality), byLoom: list(by.loom), byEmployee: list(by.employee)};
+  const byLoom = list(by.loom, true);
+  return {meters, entries: rows.length, days: dates.size, perDay: byLoom.reduce((t,l)=> t + l.perDay, 0),
+    byQuality: list(by.quality), byLoom, byEmployee: list(by.employee)};
 }

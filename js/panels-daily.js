@@ -173,10 +173,10 @@ function multiEntryCardHtml(){
 }
 // Collapsed-by-default summary of whatever the Production Log filters below are showing.
 function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
-  const sm = productionSummary(rows);
+  const sm = productionSummary(rows, DATA.production, {from: fromVal, to: toVal});
   const filt = [qualityVal ? escHtml(qualityVal) : '', (fromVal || toVal) ? (fromVal ? fmtDate(fromVal) : 'the start') + ' to ' + (toVal ? fmtDate(toVal) : 'today') : ''].filter(Boolean);
   const table = (title, list, first, avg) => list.length ? `<div class="group-label" style="margin-top:14px">${title}</div><div class="log-scroll"><table><thead><tr><th>${first}</th><th>Meters</th><th>Entries</th>${avg ? '<th>Avg / Day</th>' : ''}</tr></thead>
-    <tbody>${list.map(r=>`<tr><td><span class="name">${escHtml(r.name)}</span></td><td><b>${fmtQtyMtr(r.meters)}</b></td><td>${r.entries}</td>${avg ? `<td><b>${fmtQtyMtr(r.perDay)}</b><div class="note" style="margin:2px 0 0">${r.days} day${r.days === 1 ? '' : 's'}</div></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '';
+    <tbody>${list.map(r=>`<tr><td><span class="name">${escHtml(r.name)}</span></td><td><b>${fmtQtyMtr(r.meters)}</b></td><td>${r.entries}</td>${avg ? (r.days ? `<td><b>${fmtQtyMtr(r.perDay)}</b><div class="note" style="margin:2px 0 0">over ${r.days} day${r.days === 1 ? '' : 's'}</div></td>` : '<td>—<div class="note" style="margin:2px 0 0">needs 2 logs</div></td>') : ''}</tr>`).join('')}</tbody></table></div>` : '';
   const badge = filt.length ? '<span class="note" style="margin:0;color:var(--rust)"><b>Filtered</b></span>' : '';
   return `${sumCardOpen('summary','Production Summary', badge)}
     ${filterHtml}
@@ -184,10 +184,10 @@ function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
     ${sm.entries ? `<div class="grid cols-2" style="margin-bottom:4px">
       <div class="stat compact"><div class="label">Total Meters</div><div class="value">${fmtQtyMtr(sm.meters)}</div></div>
       <div class="stat compact"><div class="label">Entries</div><div class="value">${sm.entries}</div></div>
-      <div class="stat compact"><div class="label">Days with Output</div><div class="value">${sm.days}</div></div>
-      <div class="stat compact"><div class="label">Avg per Day (mtr)</div><div class="value">${fmtQtyMtr(sm.perDay)}</div></div>
+      <div class="stat compact"><div class="label">Days Logged</div><div class="value">${sm.days}</div></div>
+      <div class="stat compact"><div class="label">Avg per Day (all looms)</div><div class="value">${fmtQtyMtr(sm.perDay)}</div></div>
     </div>
-    ${table('By Quality', sm.byQuality, 'Quality')}${table('By Loom', sm.byLoom, 'Loom', true)}${table('By Employee', sm.byEmployee, 'Employee')}` : '<div class="empty">No production for these filters</div>'}
+    ${table('By Quality', sm.byQuality, 'Quality')}${table('By Loom', sm.byLoom, 'Loom', true)}${sm.byLoom.length ? '<p class="note" style="margin:6px 0 0">Avg / Day = meters ÷ the days between a loom\'s entries. Days after its last entry are not counted, and its first entry is skipped.</p>' : ''}${table('By Employee', sm.byEmployee, 'Employee')}` : '<div class="empty">No production for these filters</div>'}
   ${sumCardClose()}`;
 }
 function productionPanel(){
