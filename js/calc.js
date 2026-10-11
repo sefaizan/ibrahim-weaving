@@ -1664,14 +1664,16 @@ function weftStockEstimate(){
 function productionSummary(rows){
   rows = Array.isArray(rows) ? rows : [];
   const by = {quality:{}, loom:{}, employee:{}}, dates = new Set();
-  const add = (grp, key, m, entry)=>{ if(!key) return; const g = grp[key] || (grp[key] = {name:key, meters:0, entries:0}); g.meters += m; if(entry) g.entries++; };
+  const add = (grp, key, m, date)=>{ if(!key) return; const g = grp[key] || (grp[key] = {name:key, meters:0, entries:0, dates:new Set()}); g.meters += m; g.entries++; if(date) g.dates.add(date); };
   let meters = 0;
   rows.forEach(r=>{
     const q = Number(r.qty) || 0; meters += q; if(r.date) dates.add(r.date);
-    add(by.quality, r.quality, q, true); add(by.loom, String(r.loom == null ? '' : r.loom), q, true);
-    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0, true); });
+    add(by.quality, r.quality, q, r.date); add(by.loom, String(r.loom == null ? '' : r.loom), q, r.date);
+    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0, r.date); });
   });
-  const list = g => Object.values(g).sort((a,b)=> b.meters - a.meters || String(a.name).localeCompare(String(b.name), undefined, {numeric:true}));
+  // days = distinct dates that group had output; perDay = meters / days (so a loom that ran 3 days of the 7 is judged on those 3)
+  const list = g => Object.values(g).map(x=>({name:x.name, meters:x.meters, entries:x.entries, days:x.dates.size, perDay: x.dates.size ? x.meters / x.dates.size : 0}))
+    .sort((a,b)=> b.meters - a.meters || String(a.name).localeCompare(String(b.name), undefined, {numeric:true}));
   const days = dates.size;
   return {meters, entries: rows.length, days, perDay: days ? meters / days : 0,
     byQuality: list(by.quality), byLoom: list(by.loom), byEmployee: list(by.employee)};

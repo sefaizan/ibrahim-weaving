@@ -688,41 +688,73 @@ document.addEventListener('click', (e)=>{
 // freshly deployed version is normally only seen on the launch AFTER the one that fetched it.
 // This asks the server which build is live and, if it's newer than the one running, offers a reload.
 const APP_BUILD = (document.querySelector('meta[name="app-build"]') || {}).content || '';
-let _lastUpdateCheck = 0;
-async function checkForNewVersion(){
-  try{
-    if(!APP_BUILD || !navigator.onLine || Date.now() - _lastUpdateCheck < 30*60*1000) return;
-    _lastUpdateCheck = Date.now();
-    const res = await fetch('./index.html?__ck=' + Date.now(), {cache:'no-store'});
-    if(!res.ok) return;
-    const m = (await res.text()).match(/<meta name="app-build" content="([^"]+)"/);
-    if(m && m[1] !== APP_BUILD) showUpdateBar();
-  }catch(e){ /* offline or blocked — just try again later */ }
+let _lastUpdateCheck = 0, _lastTypeAt = 0;
+// Remember when you last typed, so an update never restarts the app in the middle of an entry — but a field that
+// is merely still focused (nothing typed for a minute) no longer holds an update back forever.
+['keydown', 'input'].forEach(ev => document.addEventListener(ev, ()=>{ _lastTypeAt = Date.now(); }, true));
+async function swRegistration(){
+  try{ return ('serviceWorker' in navigator) ? await navigator.serviceWorker.getRegistration() : null; }catch(e){ return null; }
 }
-// Updates are applied automatically (no prompt). The reload waits while you are typing in a field or
+// manual = true when you tap the version pill: skips the wait between checks and says what it found.
+async function checkForNewVersion(manual){
+  try{
+    if(!APP_BUILD) return;
+    if(!navigator.onLine){ if(manual) showToast('No internet — cannot check for updates.'); return; }
+    if(!manual && Date.now() - _lastUpdateCheck < 5*60*1000) return;
+    _lastUpdateCheck = Date.now();
+    const reg = await swRegistration();
+    if(reg) reg.update().catch(()=>{});
+    const res = await fetch('./index.html?__ck=' + Date.now(), {cache:'no-store'});
+    if(!res.ok){ if(manual) showToast('Could not check — try again.'); return; }
+    const m = (await res.text()).match(/<meta name="app-build" content="([^"]+)"/);
+    if(m && m[1] !== APP_BUILD){ if(manual) showToast('New version found — updating…'); applyNewVersion(); }
+    else if(manual) showToast('You have the latest version ✓');
+  }catch(e){ if(manual) showToast('Could not check — try again.'); }
+}
+// A newer build is live. Normal path: the new service worker finishes installing, takes over, and the "controllerchange"
+// listener restarts the app. Reloading BEFORE that would just reopen the old saved copy, so we wait for it — and if it has
+// not happened after 25 seconds (a stalled install), drop the saved app copies and load fresh from the network. Your ledger
+// lives in the phone's database, not in those copies, so it is not touched.
+async function dropSavedAppCopies(){
+  const reg = await swRegistration(); if(reg) await reg.unregister();
+  const names = await caches.keys();
+  await Promise.all(names.filter(n => n.startsWith('powerlooms-')).map(n => caches.delete(n)));
+}
+function applyNewVersion(){ showUpdateBar(dropSavedAppCopies); }
+// Updates are applied automatically (no prompt). The reload waits while you are typing (typed in the last minute) or
 // reviewing cloud data, and never runs more than once every 2 minutes so it can't loop. Everything
 // you entered is already saved before the reload.
 const AUTO_RELOAD_KEY = 'khata-auto-reload-at';
-let _autoReloadTimer = null;
+let _autoReloadTimer = null, _fallbackPending = false;
 function updateIsBusy(){
   const a = document.activeElement;
-  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && Date.now() - _lastTypeAt < 60000) return true;
   try{ if(typeof CLOUD_PENDING_PULL !== 'undefined' && CLOUD_PENDING_PULL) return true; }catch(e){ /* not loaded */ }
   return false;
 }
-function showUpdateBar(){
-  if(_autoReloadTimer) return;
+function showUpdateBar(beforeReload){
+  if(_autoReloadTimer){
+    // The new service worker took over while we were waiting on the fallback: restart now instead of at the 25-second mark.
+    if(!beforeReload && _fallbackPending){ clearTimeout(_autoReloadTimer); _autoReloadTimer = null; _fallbackPending = false; }
+    else return;
+  }
   try{
     const last = +sessionStorage.getItem(AUTO_RELOAD_KEY) || 0;
     if(Date.now() - last < 120000) return; // just reloaded — don't loop
   }catch(e){ /* best effort */ }
-  const tryReload = ()=>{
+  _fallbackPending = !!beforeReload;
+  const tryReload = async ()=>{
     if(updateIsBusy()){ _autoReloadTimer = setTimeout(tryReload, 10000); return; }
     try{ sessionStorage.setItem(AUTO_RELOAD_KEY, String(Date.now())); }catch(e){ /* best effort */ }
+    if(beforeReload){ try{ await beforeReload(); }catch(e){ /* reload anyway */ } }
     location.reload();
   };
-  _autoReloadTimer = setTimeout(tryReload, 1500);
+  _autoReloadTimer = setTimeout(tryReload, beforeReload ? 25000 : 1500);
 }
+// Also check every 10 minutes while the app stays open and when the connection returns; tapping the version pill checks right now.
+setInterval(()=>{ if(document.visibilityState === 'visible') checkForNewVersion(); }, 10*60*1000);
+window.addEventListener('online', ()=> checkForNewVersion());
+document.addEventListener('click', (e)=>{ if(e.target.closest && e.target.closest('#appVersionTag')) checkForNewVersion(true); });
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible'){ checkForNewVersion(); maybeAutoSnapshot(); runBeamAlerts(); } });
 
 // The service worker can finish updating in the background and take over (skipWaiting +
