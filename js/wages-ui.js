@@ -32,12 +32,13 @@ function wagesChipsHtml(from, to){
     + `<button type="button" class="wg-chip${hit ? '' : ' on'}" data-wg-custom>Custom</button>`;
 }
 function wagesTopBarHtml(from, to){
-  const tabs = [['sum', 'Summary'], ['pay', 'Payments'], ['rates', 'Rates'], ['settle', 'Settle']];
+  const tabs = [['sum', 'Summary'], ['pay', 'Payments']], moreOn = WAGES_UI.tab === 'rates' || WAGES_UI.tab === 'settle';
   return `<div class="wg-top">
     <div class="wg-chips" id="wg_chips">${wagesChipsHtml(from, to)}</div>
     <div class="wg-dates"><div class="field"><label>From</label><input id="wg_from" type="date" value="${from}"></div><div class="field"><label>To</label><input id="wg_to" type="date" value="${to}"></div></div>
   </div>
-  <div class="wg-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" class="wg-tab${WAGES_UI.tab === k ? ' on' : ''}" data-wtab-btn="${k}" role="tab">${l}</button>`).join('')}</div>`;
+  <div class="wg-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" class="wg-tab${WAGES_UI.tab === k ? ' on' : ''}" data-wtab-btn="${k}" role="tab">${l}</button>`).join('')}<button type="button" class="wg-tab${moreOn ? ' on' : ''}" data-wtab-more role="tab" aria-expanded="${moreOn}">More</button></div>
+  <div class="wg-more" id="wg_more"${moreOn ? '' : ' hidden'}>${[['rates', 'Rates'], ['settle', 'Settle']].map(([k, l]) => `<button type="button" class="wg-chip${WAGES_UI.tab === k ? ' on' : ''}" data-wtab-btn="${k}">${l}</button>`).join('')}</div>`;
 }
 function wagesPaneCls(k){ return 'wg-pane' + (WAGES_UI.tab === k ? ' on' : ''); }
 function wagesSubCls(k){ return 'wg-sub' + (WAGES_UI.logKind === k ? ' on' : ''); }
@@ -189,6 +190,14 @@ function wagesPeriodPaid(n){ return n.earned > 0.004 && n.net <= 0.004; }
 function wagesPeriodPayment(name, from, to){
   return (DATA.wagePayments || []).filter(p => p.employee === name && (!from || p.date >= from) && (!to || p.date <= to)).reduce((a, p) => !a || p.date >= a.date ? p : a, null);
 }
+// Period status for a card: Paid (nothing left), Part (something paid, something left), Due (nothing paid yet); nothing when nothing was earned.
+function wagesStatusTag(net){
+  if(net.earned <= 0.004 && Math.abs(net.net) <= 0.004) return '';
+  if(net.net <= 0.004) return '<span class="wg-tag zero">Paid</span>';
+  return net.paid > 0.004 ? '<span class="wg-tag due">Part</span>' : '<span class="wg-tag due">Due</span>';
+}
+// People still owed first (biggest amount first), then everyone else.
+function wagesDueFirst(a, b){ return ((b.net.net > 0.004) - (a.net.net > 0.004)) || (b.net.net - a.net.net); }
 function wagesPayBtn(name, net, from, to){
   const done = wagesPeriodPaid(net), last = done ? wagesPeriodPayment(name, from, to) : null;
   const share = last ? `<button type="button" class="ghost wg-pay" data-wage-share="${escHtml(last.id)}" aria-label="Share receipt" title="Share the wage receipt" style="padding-inline:12px;min-width:0">${typeof ICON_SHARE !== 'undefined' ? ICON_SHARE : 'Share'}</button>` : '';
@@ -215,7 +224,7 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
        <tfoot><tr><td>Total</td><td>${fmtQtyMtr(row.totalMeters)}</td><td></td><td>${fmtRs2(row.totalWagesNoBonus).replace('Rs ', '')}</td></tr></tfoot></table></div>${changed ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}`
     : `<div class="wg-fine">No production in this period.</div>`;
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${wagesStatusTag(net)}${tag}${wagesPayBtn(name, net, from, to)}</div>
     <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(net.earned)}</strong></div><div><small>Meters</small><b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></div></div>
     <div class="wg-det">${detail}
       <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
@@ -231,7 +240,7 @@ function wagesSalCardHtml(d, from, to, asOf){
   const weekly = salaryWeeklyOn(name, asOf);
   const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
-    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${tag}${wagesPayBtn(name, net, from, to)}</div>
+    <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${wagesStatusTag(net)}${tag}${wagesPayBtn(name, net, from, to)}</div>
     ${emp.title ? `<div class="wg-fine" data-wg-toggle style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
     <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(row ? row.totalWages : 0)}</strong></div><div><small>Weekly salary</small><b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></div></div>
     <div class="wg-det"><div class="wg-lines"><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span>${row && row.totalWagesNoBonus > 0 ? `<span>Wages <b>${fmtRs2(row.totalWagesNoBonus)}</b></span>` : ''}<span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry || '\u2013'}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
@@ -239,6 +248,16 @@ function wagesSalCardHtml(d, from, to, asOf){
 }
 // "Pay this week": one row per employee for the selected period. Tap a row to pay (amount pre-filled with what is due);
 // a paid row gets a Share slip button. Unpaid people come first, biggest amount first.
+// People who would get the weekly bonus: active per-meter staff with earnings in the period and no bonus logged in it yet.
+function wagesBonusTargets(items, from, to){
+  return items.filter(d => !isSalariedEmp(d.name) && d.net.earned > 0.004 && (DATA.employees.find(e => e.name === d.name) || {}).active !== false
+    && !(DATA.wageBonuses || []).some(b => b.employee === d.name && (!from || b.date >= from) && (!to || b.date <= to))).map(d => d.name);
+}
+function wagesBonusAllHtml(items, from, to){
+  const names = wagesBonusTargets(items, from, to); if(!names.length) return '';
+  const last = (DATA.wageBonuses || []).slice().sort((a, b) => a.date < b.date ? -1 : 1).pop();
+  return `<div class="wg-pw-bonus"><input id="wg_bonusAll" type="number" inputmode="decimal" min="0" value="${last ? Number(last.amount) || 500 : 500}" aria-label="Bonus amount (Rs)"><button type="button" class="ghost" data-wg-bonus-all>Add bonus to ${names.length} ${names.length === 1 ? 'person' : 'people'}</button></div>`;
+}
 function wagesPayListHtml(data, from, to){
   const items = data.filter(d => d.net.earned > 0.004 || Math.abs(d.net.net) > 0.004);
   if(!items.length) return '';
@@ -254,8 +273,9 @@ function wagesPayListHtml(data, from, to){
     return `<div class="wg-pw-row"><div class="wg-pw-name"><b>${name}</b><small>Earned ${fmtRs2(d.net.earned)} · Paid ${fmtRs2(d.net.paid)}</small></div><div class="wg-pw-amt${owed ? '' : ' done'}">${amt}</div>${btn}</div>`;
   };
   return `<div class="card"><div class="card-head"><h2>${isWeek ? 'Pay this week' : 'Pay this period'}</h2></div>
-    <p class="wg-pw-sum">${due.length ? `${due.length} to pay · ${fmtRs2(total)} due` : 'Everyone is paid up'} · ${fmtDate(from)} to ${fmtDate(to)}</p>
-    ${due.concat(rest).map(row).join('')}</div>`;
+    <div class="wg-pw-tot"><div><small>Earned</small><b>${fmtRs(items.reduce((a, d) => a + d.net.earned, 0))}</b></div><div><small>Paid</small><b>${fmtRs(items.reduce((a, d) => a + d.net.paid, 0))}</b></div><div><small>Still due</small><b>${fmtRs(total)}</b></div></div>
+    <p class="wg-pw-sum">${due.length ? `${due.length} to pay` : 'Everyone is paid up'} · ${fmtDate(from)} to ${fmtDate(to)}</p>
+    ${due.concat(rest).map(row).join('')}${wagesBonusAllHtml(items, from, to)}</div>`;
 }
 function renderWages(){
   const from = v('wg_from'), to = v('wg_to');
@@ -315,8 +335,8 @@ function renderWages(){
       <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
       <p class="note info-note" id="info-wgemps" hidden>Tap a name for the breakdown by quality: own meters, the share of unassigned Difference, the rate and the wages. "Earned" and "Paid" are for the selected period only (earned includes bonus), and "Net" reaches 0 once you have paid what was earned there. "Owed" is the running balance since the employee's last settlement, whatever period is selected. "Credit" means paid ahead of wages earned. Advances to employees are in the Employee Loans page.</p>
-      ${data.filter(d => !isSalariedEmp(d.name)).map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No per-meter employees</div>'}</div>
-    ${data.some(d => isSalariedEmp(d.name)) ? `<div class="card"><div class="card-head"><h2>Salaried staff</h2></div><p class="note" style="margin:0 0 6px">Weekly salary accrues daily. Salary, bonus and paid are for the selected period; "Owed" is the running balance since the last settlement.</p>${data.filter(d => isSalariedEmp(d.name)).map(d => wagesSalCardHtml(d, from, to, asOf)).join('')}</div>` : ''}
+      ${data.filter(d => !isSalariedEmp(d.name)).sort(wagesDueFirst).map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No per-meter employees</div>'}</div>
+    ${data.some(d => isSalariedEmp(d.name)) ? `<div class="card"><div class="card-head"><h2>Salaried staff</h2></div><p class="note" style="margin:0 0 6px">Weekly salary accrues daily. Salary, bonus and paid are for the selected period; "Owed" is the running balance since the last settlement.</p>${data.filter(d => isSalariedEmp(d.name)).sort(wagesDueFirst).map(d => wagesSalCardHtml(d, from, to, asOf)).join('')}</div>` : ''}
     <div class="card"><h2>This period by quality</h2>
       ${act.length ? `<div class="wg-scroll"><table class="wg-q"><thead><tr><th>Quality</th><th>Own m</th><th>Diff m</th><th>Rate</th><th>Wages Rs</th></tr></thead><tbody>${qBody}</tbody><tfoot><tr><td>Total</td><td>${fmtQtyMtr(gM - gD)}</td><td>${gD ? fmtQtyMtr(gD) : '–'}</td><td></td><td>${fmtRs2(gW).replace('Rs ', '')}</td></tr></tfoot></table></div>${qChanged ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}<div class="wg-fine">Diff = each employee's share of unassigned loom output, already included in the totals and paid at that quality's own rate.</div>` : '<div class="empty">No production in this period.</div>'}</div>
     <details class="card wg-full"><summary>Full tables (all columns)</summary>
@@ -328,6 +348,27 @@ function renderWages(){
 }
 
 /* ---------------- Wiring (called by wiring.js each time the Wages page is drawn) ---------------- */
+// Add the same weekly bonus for everyone listed. Tap once to arm, again to add (native confirm() is blocked in places).
+async function wagesBonusAll(btn){
+  const amt = Number(v('wg_bonusAll') || 0);
+  if(!(amt > 0)){ showToast('Enter the bonus amount first.'); return; }
+  if(!btn.__armed){
+    btn.__armed = true; const txt = btn.textContent; btn.textContent = `Tap again: Rs ${amt} each`;
+    setTimeout(() => { btn.__armed = false; btn.textContent = txt; }, 5000); return;
+  }
+  const from = v('wg_from'), to = v('wg_to'), t = todayStr();
+  const date = (from && t < from) ? from : (to && t > to) ? to : t; // a date inside the period, so the bonus lands in it
+  const items = wageRelevantEmployees().map(e => ({ name: e.name, net: computeEmployeeWageNetForPeriod(e.name, from, to) }));
+  const names = wagesBonusTargets(items, from, to);
+  if(!names.length){ showToast('Everyone already has a bonus in this period.'); return; }
+  EDITING = null;
+  names.forEach(name => addWageBonusEntry({ date, employee: name, amount: amt, remarks: 'Weekly bonus' }, false, uid));
+  PAGE.wageBonuses = 1;
+  await save();
+  showToast(`Bonus Rs ${amt} added for ${names.length} ${names.length === 1 ? 'person' : 'people'}`);
+  const sc = document.getElementById('panels'), y = sc ? sc.scrollTop : 0;
+  switchTab('wages'); if(sc) sc.scrollTop = y;
+}
 function wagesUiWire(){
   const root = document.getElementById('wagesRoot'); if(!root) return;
   const scroller = document.getElementById('panels');
@@ -335,13 +376,20 @@ function wagesUiWire(){
     WAGES_UI.tab = k;
     root.querySelectorAll('[data-wtab-btn]').forEach(b => b.classList.toggle('on', b.dataset.wtabBtn === k));
     root.querySelectorAll('[data-wpane]').forEach(p => p.classList.toggle('on', p.dataset.wpane === k));
+    const more = k === 'rates' || k === 'settle', mb = root.querySelector('[data-wtab-more]'), mm = document.getElementById('wg_more');
+    if(mb) mb.classList.toggle('on', more);
+    if(mm && more) mm.hidden = false;
     if(scroller) scroller.scrollTop = 0;
   };
   const refreshChips = () => { const c = document.getElementById('wg_chips'); if(c) c.innerHTML = wagesChipsHtml(v('wg_from'), v('wg_to')); };
   ['wg_from', 'wg_to'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('change', () => { refreshChips(); if(WAGES_UI.sheet) wagesSheetFill(false); }); });
   root.addEventListener('click', (e) => {
     const t = e.target;
+    const moreBtn = t.closest('[data-wtab-more]');
+    if(moreBtn){ const mm = document.getElementById('wg_more'); if(mm){ mm.hidden = !mm.hidden; moreBtn.setAttribute('aria-expanded', String(!mm.hidden)); } return; }
     const tabBtn = t.closest('[data-wtab-btn]'); if(tabBtn){ showTab(tabBtn.dataset.wtabBtn); return; }
+    const ba = t.closest('[data-wg-bonus-all]');
+    if(ba){ wagesBonusAll(ba); return; }
     const chip = t.closest('[data-wg-from]');
     if(chip){
       document.getElementById('wg_from').value = chip.dataset.wgFrom;
