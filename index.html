@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.90-four-employees-per-loom-entry">
+<meta name="app-build" content="v3.18.91-employee4-row-width">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1150,7 +1150,7 @@
   .mb-df{font-size:13px;font-weight:600}
   .mb-rw{display:flex;gap:6px;align-items:center}
   .mb-line{flex:0 0 14px;height:1.5px;background:currentColor;opacity:.45}
-  .mb-tg{margin-top:6px}
+  .mb-tg,.mb-tg4{margin-top:6px}
   /* v3.17.61 — aligned loom checkboxes (Multiple Entries + Settings), wider/clearer dropdowns, shorter Overview Period card */
   .loom-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:10px 6px;margin:6px 0 10px}
   .loom-pick{display:flex;align-items:center;gap:8px;margin:0;font-weight:400;font-size:14px}
@@ -1158,7 +1158,7 @@
   .sel-wrap .sel-fake{padding-right:46px}
   .sel-fake::after{right:18px}
   .mb-rw .sel-wrap{flex:1 1 62%;min-width:0}
-  .mb-rw input.mb_m1,.mb-rw input.mb_m2,.mb-rw input.mb_m3{flex:1 1 30%;min-width:0}
+  .mb-rw input.mb_m1,.mb-rw input.mb_m2,.mb-rw input.mb_m3,.mb-rw input.mb_m4{flex:1 1 30%;min-width:0}
   .ov-period-card{padding:10px 14px}
   .ov-period-card .card-head{margin-bottom:6px;padding-bottom:6px}
   .ov-period-card .card-head h2{font-size:16px}
@@ -1518,7 +1518,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.90</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.91</span></span>
     </div>
   </header>
 
