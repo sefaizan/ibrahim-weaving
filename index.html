@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.87-wages-pay-week">
+<meta name="app-build" content="v3.18.88-wages-status-bonus-more">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -857,6 +857,11 @@
   .wg-pw-row:first-of-type{ border-top:0; }
   .wg-pw-name{ flex:1; min-width:0; } .wg-pw-name b{ display:block; } .wg-pw-name small{ opacity:.75; }
   .wg-pw-amt{ font-weight:800; white-space:nowrap; } .wg-pw-amt.done{ opacity:.6; font-weight:600; }
+  .wg-pw-tot{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0 0 8px; text-align:center; }
+  .wg-pw-tot small{ display:block; opacity:.7; font-size:12px; } .wg-pw-tot b{ font-size:15px; }
+  .wg-pw-bonus{ display:flex; gap:8px; align-items:center; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .wg-pw-bonus input{ width:90px; margin:0; } .wg-pw-bonus button{ flex:1; margin:0; }
+  .wg-more{ display:flex; gap:8px; margin:-4px 0 12px; } .wg-more[hidden]{ display:none; }
   .wg-pw-sum{ margin:0 0 6px; opacity:.8; font-size:13px; }
   #appToast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
   .toast-undo{ margin-left:10px; padding:4px 12px; border-radius:8px; border:1px solid rgba(255,255,255,.55);
@@ -1509,7 +1514,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.87</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.88</span></span>
     </div>
   </header>
 
