@@ -19,3 +19,17 @@ describe('wages page flow (v3.18.87)', () => {
     assert.ok(rd('js/core.js').includes('function showToast(msg, ms, action)'));
   });
 });
+
+describe('wages page flow, part 2 (v3.18.88)', () => {
+  const w = rd('js/wages-ui.js');
+  test('status chip, due-first sorting, totals strip', () => {
+    assert.ok(w.includes('function wagesStatusTag') && w.includes('.sort(wagesDueFirst)') && w.includes('wg-pw-tot'));
+  });
+  test('bonus to all: arm-then-add, skips anyone with a bonus in the period, date stays inside the period', () => {
+    assert.ok(w.includes('data-wg-bonus-all') && w.includes('btn.__armed') && w.includes("remarks: 'Weekly bonus'"));
+    assert.ok(w.includes('!(DATA.wageBonuses || []).some(b => b.employee === d.name'));
+  });
+  test('Rates and Settle live under More', () => {
+    assert.ok(w.includes("[['sum', 'Summary'], ['pay', 'Payments']]") && w.includes('data-wtab-more'));
+  });
+});

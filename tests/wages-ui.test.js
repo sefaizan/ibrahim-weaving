@@ -116,7 +116,7 @@ describe('Summary tab', () => {
     const t = load(ledger());
     t.vals.wg_from = '2026-09-28'; t.vals.wg_to = '2026-10-02';
     t.run('renderWages()');
-    const aliCard = t.el('wagesWrap').innerHTML.match(/data-wg-emp="Ali"[^]*?data-wg-emp="Bilal"/)[0];
+    const aliCard = t.el('wagesWrap').innerHTML.match(/data-wg-emp="Ali"[^]*?(?=data-wg-emp="|<div class="card|<details|$)/)[0];
     assert.match(aliCard, /<td>B<\/td><td>45<\/td>/); // own 40 + Diff share 5 (the 10 m is split between Ali and Bilal)
     assert.doesNotMatch(aliCard, /Diff m|Own m/); assert.match(aliCard, /<span>Bonus <b>/);   // Bonus sits in the card's summary line
   });
