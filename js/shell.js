@@ -418,7 +418,7 @@ const MASTER_REF_FIELDS = {
   clients:   [['sale','client'], ['recovery','client']],
   qualities: [['production','quality'], ['sale','quality'], ['loomAssignments','q']],
   employees: [['wageBonuses','employee'], ['wagePayments','employee'], ['wageSettlements','employee'], ['loanPayments','employee'],
-              ['production','e1'], ['production','e2'], ['production','e3'], ['loomAssignments','e1'], ['loomAssignments','e2']],
+              ['production','e1'], ['production','e2'], ['production','e3'], ['production','e4'], ['loomAssignments','e1'], ['loomAssignments','e2']],
   looms:     [['production','loom'], ['warpBeams','loom'], ['loomAssignments','loom']],
   warpTypes: [['warp','type'], ['warpBeams','warpType'], ['qualities','warpType']],
   weftTypes: [['weft','type']],

@@ -162,7 +162,9 @@ function mbCardHtml(name){
     <div class="mb-rw"><input placeholder="Total meters" class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
     ${row(1,'Employee 1',a.e1)}${row(2,'Employee 2',a.e2)}
     <div class="mb-e3" style="display:none">${row(3,'Employee 3','')}</div>
-    <button type="button" class="ghost mb-tg" tabindex="-1">+ Add a third employee</button></div>`;
+    <div class="mb-e4" style="display:none">${row(4,'Employee 4','')}</div>
+    <button type="button" class="ghost mb-tg" tabindex="-1">+ Add a third employee</button>
+    <button type="button" class="ghost mb-tg4" tabindex="-1" style="display:none">+ Add a fourth employee</button></div>`;
 }
 function multiEntryCardHtml(){
   const looms = mbLoomList();
@@ -201,6 +203,11 @@ function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
     </div>
     ${table('By Quality', sm.byQuality, 'Quality')}${table('By Loom', sm.byLoom, 'Loom', true)}${sm.byLoom.length ? '<p class="note" style="margin:6px 0 0">Avg / Day = meters ÷ the days between a loom\'s entries. Days after its last entry are not counted, and its first entry is skipped.</p>' : ''}${table('By Employee', sm.byEmployee, 'Employee')}` : '<div class="empty">No production for these filters</div>'}
   ${sumCardClose()}`;
+}
+// The Production Log's column heads. An "Emp 4" column is added (before Diff) only when a row being shown has a fourth employee,
+// so the table looks exactly as before until someone uses the fourth slot.
+function prodLogHead(head, rows){
+  return rows.some(r=>r.e4) ? head.slice(0, 9).concat(['Emp 4'], head.slice(9)) : head;
 }
 function productionPanel(){
   const qualityVal = FILTER.production || '';
@@ -254,6 +261,11 @@ function productionPanel(){
       ${field('Employee 3 Meters','p_e3m','number')}
     </div>
     <button type="button" class="ghost" id="p_toggleE3" style="margin-top:10px;display:none">+ Add a third employee</button>
+    <div id="p_e4wrap" class="grid cols-2" style="display:none;margin-top:12px">
+      ${employeeSelectField('Employee 4','p_e4','',true)}
+      ${field('Employee 4 Meters','p_e4m','number')}
+    </div>
+    <button type="button" class="ghost" id="p_toggleE4" style="margin-top:10px;display:none">+ Add a fourth employee</button>
     <div class="calc-amount" id="p_remainingPreview">Remaining to assign: —</div>
     <div class="hint" style="font-size:12px;opacity:.75;margin:2px 0 8px">Employee 2 gets whole meters. Any leftover (e.g. 1/16ths) stays in Diff and is shared equally between all employees on the entry.</div>
     <p class="note">Time helps tell entries apart when several looms are logged the same day — it doesn't need to be exact. Employee 2's meters auto-fill from what's left once Employee 1's are entered — still editable if the split isn't even.</p>
@@ -271,7 +283,7 @@ function productionPanel(){
         ${selectField('Quality (applies to all rows)','pb_quality',DATA.qualities)}
       </div>
       <div class="field" style="margin-top:12px">
-        <label>Rows — one per line: Loom, Qty, Employee1, Meters1[, Employee2, Meters2[, Employee3, Meters3]]</label>
+        <label>Rows — one per line: Loom, Qty, Employee1, Meters1[, Employee2, Meters2[, Employee3, Meters3[, Employee4, Meters4]]]</label>
         <textarea id="pb_rows" rows="8" placeholder="8, 202, Riaz, 90, Gafar, 112
 7, 156, Riaz, 90, Gafar, 66
 6, 167, Riaz, 90, Gafar, 77"></textarea>
@@ -284,12 +296,13 @@ function productionPanel(){
     <div class="card"><h2>Production Log</h2>
       ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
-      ['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''],
+      prodLogHead(['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''], filteredProduction),
       filteredProduction.slice().reverse(),
       r=>{
-        const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
+        const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0)+(r.e4m||0));
+        const showE4 = filteredProduction.some(x=>x.e4);
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), r.time||'—', `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—', fmtQtyMtr(diff), actionBtns('production',r.id)];
+        return [fmtDate(r.date), r.time||'—', `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—'].concat(showE4 ? [r.e4?`<span class="name">${escHtml(r.e4)}</span> (${fmtQtyMtr(r.e4m)})`:'—'] : [], [fmtQtyMtr(diff), actionBtns('production',r.id)]);
       }
     )}</div>`;
 }

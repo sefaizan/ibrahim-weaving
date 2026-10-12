@@ -39,13 +39,13 @@ const I18N_UR = {
   'Quantity Produced (mtr)':'تیار شدہ مقدار (میٹر)', 'Employees & Their Meters':'ملازمین اور ان کے میٹر',
   'Employee 1':'ملازم 1', 'Employee 1 Meters':'ملازم 1 کے میٹر', 'Employee 2 (optional)':'ملازم 2 (اختیاری)',
   'Employee 2 Meters':'ملازم 2 کے میٹر', 'Employee 3':'ملازم 3', 'Employee 3 Meters':'ملازم 3 کے میٹر',
-  '+ Add a third employee':'+ تیسرا ملازم شامل کریں', 'Add & next loom →':'شامل کریں اور اگلا لوم ←',
+  '+ Add a third employee':'+ تیسرا ملازم شامل کریں', 'Employee 4':'ملازم 4', 'Employee 4 Meters':'ملازم 4 کے میٹر', '+ Add a fourth employee':'+ چوتھا ملازم شامل کریں', '− Remove fourth employee':'− چوتھا ملازم ہٹائیں', '− Remove third employee':'− تیسرا ملازم ہٹائیں', 'Add & next loom →':'شامل کریں اور اگلا لوم ←',
   'Add Entry':'اندراج شامل کریں', 'Cancel Edit':'ترمیم منسوخ کریں',
   // Production: bulk import and log
   'Bulk Import':'اکٹھا درآمد', 'Import Rows':'قطاریں درآمد کریں', 'Production Log':'پیداوار کا ریکارڈ',
   'Filter by Quality':'کوالٹی کے مطابق فلٹر', 'All Qualities':'تمام کوالٹیز', 'All Time':'تمام وقت',
   'This Month':'اس مہینے', 'Last Month':'پچھلے مہینے', 'This Year':'اس سال', 'Custom…':'اپنی مرضی…',
-  'From':'سے', 'To':'تک', 'Qty':'مقدار', 'Beam':'بیم', 'Emp 1':'ملازم 1', 'Emp 2':'ملازم 2', 'Emp 3':'ملازم 3', 'Diff':'فرق',
+  'From':'سے', 'To':'تک', 'Qty':'مقدار', 'Beam':'بیم', 'Emp 1':'ملازم 1', 'Emp 2':'ملازم 2', 'Emp 3':'ملازم 3', 'Emp 4':'ملازم 4', 'Diff':'فرق',
   // Settings lists
   'General':'عمومی', 'Security & sync':'سیکیورٹی اور سنک', 'People':'افراد', 'Looms & materials':'لومز اور مال',
   'Qualities':'کوالٹیز', 'Looms':'لومز', 'Employees':'ملازمین', 'Name':'نام',
@@ -533,6 +533,7 @@ const I18N_UR_EXTRA = {"Ibrahim Weaving — Power Loom Ledger":"ابراہیم �
 "Cash Received (Rs)":"وصول شدہ نقد (روپے)",
 "Cash Position uses checkpoint from":"کیش پوزیشن چیک پوائنٹ استعمال کرتی ہے از",
 "Rows — one per line: Loom, Qty, Employee1, Meters1[, Employee2, Meters2[, Employee3, Meters3]]":"قطاریں — ہر لائن میں ایک: لوم، مقدار، ملازم1، میٹر1[، ملازم2، میٹر2[، ملازم3، میٹر3]]",
+"Rows — one per line: Loom, Qty, Employee1, Meters1[, Employee2, Meters2[, Employee3, Meters3[, Employee4, Meters4]]]":"قطاریں — ہر لائن میں ایک: لوم، مقدار، ملازم1، میٹر1[، ملازم2، میٹر2[، ملازم3، میٹر3[، ملازم4، میٹر4]]]",
 "L (AIL) OK":"L (AIL) ٹھیک",
 "Quantity (mtr)":"مقدار (میٹر)",
 "Total Sale (All Time)":"کل فروخت (تمام وقت)",

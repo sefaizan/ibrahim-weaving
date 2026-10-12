@@ -132,7 +132,7 @@ function removeRateHistoryEntry(quality, date){
 
 // For each employee+quality: meters = their own logged meters, plus their equal share of
 // the per-entry Difference (Qty Produced - sum of all logged employee meters on that
-// entry) — split evenly across however many employees (1, 2, or 3) are logged on it.
+// entry) — split evenly across however many employees (1 to 4) are logged on it.
 // Wages are accumulated per production entry using the rate that was actually in effect on
 // that entry's own date, rather than one flat rate applied to the whole period.
 function computeWageMeters(empName, qualityName, fromDate, toDate){
@@ -143,12 +143,13 @@ function computeWageMeters(empName, qualityName, fromDate, toDate){
     if(toDate && r.date > toDate) return;
     if(r.quality !== qualityName) return;
     const rate = rateForQualityOn(qualityName, r.date);
-    const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0));
-    const empCount = [r.e1,r.e2,r.e3].filter(Boolean).length || 1;
+    const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0)+(r.e4m||0));
+    const empCount = [r.e1,r.e2,r.e3,r.e4].filter(Boolean).length || 1;
     const diffPortion = diff / empCount;
     if(r.e1 === empName){ own += (r.e1m||0); diffShare += diffPortion; ownWages += (r.e1m||0)*rate; diffWages += diffPortion*rate; }
     if(r.e2 === empName){ own += (r.e2m||0); diffShare += diffPortion; ownWages += (r.e2m||0)*rate; diffWages += diffPortion*rate; }
     if(r.e3 === empName){ own += (r.e3m||0); diffShare += diffPortion; ownWages += (r.e3m||0)*rate; diffWages += diffPortion*rate; }
+    if(r.e4 === empName){ own += (r.e4m||0); diffShare += diffPortion; ownWages += (r.e4m||0)*rate; diffWages += diffPortion*rate; }
   });
   return {own, diffShare, total: own+diffShare, wages: ownWages+diffWages, diffWages};
 }
@@ -1323,9 +1324,10 @@ function computeEmployeeWageNetForPeriod(empName, fromDate, toDate){
 }
 
 // Production entry forms: Employee 2's automatic meters. Whole meters only — whatever is left after
-// Employee 1 (and Employee 3, if typed) minus this, including any 1/16ths, stays in the entry's
+// Employee 1 (and Employees 3 and 4, if typed) minus this, including any 1/16ths, stays in the entry's
 // Difference, which wages split equally between all employees named on the entry.
-// Returns 0 when nothing is left; null when Employee 1 + 3 already exceed the total (fix by hand).
+// Returns 0 when nothing is left; null when Employee 1 + 3 (+ 4) already exceed the total (fix by hand).
+// The third argument is the meters typed for everyone else (Employee 3, plus Employee 4 when there is one).
 function entryEmployee2Meters(total, e1m, e3m){
   const left = (Number(total)||0) - (Number(e1m)||0) - (Number(e3m)||0);
   if(left < -1e-6) return null;
@@ -1660,7 +1662,7 @@ function weftStockEstimate(){
 
 // Production Summary (Production page): totals and per-quality / per-loom / per-employee splits for the rows passed in
 // (the page passes the rows its filters currently show). Meters are summed as stored (exact 1/16ths). Employee meters are the
-// e1m/e2m/e3m credited meters.
+// e1m/e2m/e3m/e4m credited meters.
 // Averages follow how the mill logs: entries are NOT daily (often 2-3 days apart), so an entry covers the days since that
 // loom's PREVIOUS entry. Per loom: avg/day = meters of the entries ÷ the days between logs. Days after the loom's last entry
 // (e.g. today, not logged yet) are never counted, and a loom's very first entry has nothing before it, so it is skipped.
@@ -1675,7 +1677,7 @@ function productionSummary(rows, allRows, range){
   rows.forEach(r=>{
     const q = Number(r.qty) || 0; meters += q; if(r.date) dates.add(r.date);
     add(by.quality, r.quality, q); add(by.loom, String(r.loom == null ? '' : r.loom), q);
-    [['e1','e1m'],['e2','e2m'],['e3','e3m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0); });
+    [['e1','e1m'],['e2','e2m'],['e3','e3m'],['e4','e4m']].forEach(([n,m])=>{ if(r[n]) add(by.employee, r[n], Number(r[m]) || 0); });
   });
   const dayNo = d => Math.round(Date.parse(d + 'T00:00:00Z') / 86400000);
   // Each loom's log dates from ALL its entries (any quality), so a quality filter can't shrink the days.

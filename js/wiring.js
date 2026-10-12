@@ -76,9 +76,16 @@ function wirePanel(id){
     renderStats('');
   }
   if(id==='production'){
-    const readProductionForm = ()=>({date:v('p_date'), time:v('p_time'), loom:v('p_loom'), quality:v('p_quality'), qty:combineMtr16(v('p_qty'), v('p_qty_16')), beam:v('p_beam'),
-      e1:v('p_e1'), e1m:Number(v('p_e1m')||0), e2:v('p_e2'), e2m:Number(v('p_e2m')||0),
-      e3:v('p_e3'), e3m:Number(v('p_e3m')||0)});
+    const readProductionForm = ()=>{
+      const rec = {date:v('p_date'), time:v('p_time'), loom:v('p_loom'), quality:v('p_quality'), qty:combineMtr16(v('p_qty'), v('p_qty_16')), beam:v('p_beam'),
+        e1:v('p_e1'), e1m:Number(v('p_e1m')||0), e2:v('p_e2'), e2m:Number(v('p_e2m')||0),
+        e3:v('p_e3'), e3m:Number(v('p_e3m')||0)};
+      // Employee 4 is only written when there is one (or when an entry that had one is being edited, so removing them sticks) —
+      // every other entry is saved exactly as it always was.
+      const old = (EDITING && EDITING.key==='production') ? DATA.production.find(r=>r.id===EDITING.id) : null;
+      if(v('p_e4') || (old && old.e4)){ rec.e4 = v('p_e4'); rec.e4m = Number(v('p_e4m')||0); }
+      return rec;
+    };
     // Both Add buttons need a date, loom, quality and quantity, so a stray tap can't save a blank
     // entry (which would also count towards wages).
     const productionChecks = rec => [
@@ -151,20 +158,34 @@ function wirePanel(id){
     // again hides it and clears whatever was typed, so a hidden field never gets submitted.
     const e3wrap = document.getElementById('p_e3wrap');
     const e3btn = document.getElementById('p_toggleE3');
+    // Employee 4 works the same way, one step further: its button only appears once Employee 3 is open.
+    const e4wrap = document.getElementById('p_e4wrap');
+    const e4btn = document.getElementById('p_toggleE4');
     // Employee 2 is tucked away until it is needed: it opens by itself whenever Employee 2 (or their meters) has a value
     // -- the loom's usual pair, an edit, a typed entry -- or when "+ Add a second employee" is tapped.
     const e2wrap = document.getElementById('p_e2wrap'), e2btn = document.getElementById('p_toggleE2');
     let e2Open = false;
     const syncE2 = ()=>{
-      const need = e2Open || !!v('p_e2') || !!v('p_e2m') || e3wrap.style.display !== 'none';
+      const e3Open = e3wrap.style.display !== 'none', e4Open = e4wrap.style.display !== 'none';
+      const need = e2Open || !!v('p_e2') || !!v('p_e2m') || e3Open;
       e2wrap.style.display = need ? 'grid' : 'none';
       e2btn.style.display = need ? 'none' : '';
-      e3btn.style.display = need ? '' : 'none';
+      e3btn.style.display = (need && !e4Open) ? '' : 'none';   // the third can only be removed after the fourth
+      e4btn.style.display = e3Open ? '' : 'none';              // the fourth can only be added once the third is open
     };
     e2btn.addEventListener('click', ()=>{ e2Open = true; syncE2(); });
     document.getElementById('p_e2').addEventListener('change', syncE2);
     const showE3 = ()=>{ e3wrap.style.display = 'grid'; e3btn.textContent = '− Remove third employee'; syncE2(); };
+    const showE4 = ()=>{ if(e3wrap.style.display === 'none') showE3(); e4wrap.style.display = 'grid'; e4btn.textContent = '− Remove fourth employee'; syncE2(); };
+    const hideE4 = ()=>{
+      e4wrap.style.display = 'none'; e4btn.textContent = '+ Add a fourth employee';
+      document.getElementById('p_e4').value = '';
+      document.getElementById('p_e4m').value = '';
+      document.getElementById('p_e4m').dataset.manual = '';
+      syncE2();
+    };
     const hideE3 = ()=>{
+      hideE4();
       e3wrap.style.display = 'none'; e3btn.textContent = '+ Add a third employee';
       document.getElementById('p_e3').value = '';
       document.getElementById('p_e3m').value = '';
@@ -180,19 +201,24 @@ function wirePanel(id){
     const updateRemaining = ()=>{
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
       const assigned = Number(v('p_e1m')||0) + Number(v('p_e2m')||0)
-        + (e3wrap.style.display !== 'none' ? Number(v('p_e3m')||0) : 0);
+        + (e3wrap.style.display !== 'none' ? Number(v('p_e3m')||0) : 0)
+        + (e4wrap.style.display !== 'none' ? Number(v('p_e4m')||0) : 0);
       if(!total){ remainingEl.textContent = 'Remaining to assign: —'; remainingEl.classList.remove('over'); return; }
       const remaining = total - assigned;
       remainingEl.textContent = `Remaining to assign: ${fmtQtyMtr(remaining)} mtr`;
       remainingEl.classList.toggle('over', remaining < -1e-6); // more assigned than produced — flag it
     };
-    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{
+    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m','p_e4m'].forEach(id=>{
       const inp = document.getElementById(id);
       if(inp) inp.addEventListener('input', updateRemaining);
     });
     e3btn.addEventListener('click', ()=>{
       e3wrap.style.display === 'none' ? showE3() : hideE3();
       updateRemaining(); // e3's meters just came into (or dropped out of) the total
+    });
+    e4btn.addEventListener('click', ()=>{
+      e4wrap.style.display === 'none' ? showE4() : hideE4();
+      updateRemaining(); // e4's meters just came into (or dropped out of) the total
     });
     updateRemaining();
     // Employee 2 Meters stays fully editable — marking it "manual" the moment it's typed into
@@ -233,19 +259,22 @@ function wirePanel(id){
     // Needs both Employee 2 and Employee 3 picked. Removing the third employee gives the rest back to Employee 2.
     const p_e2m = document.getElementById('p_e2m'), p_e3m = document.getElementById('p_e3m');
     p_e3m.addEventListener('input', function(){ this.dataset.manual = this.value.trim() ? '1' : ''; });
+    const p_e4m = document.getElementById('p_e4m');
+    p_e4m.addEventListener('input', function(){ this.dataset.manual = this.value.trim() ? '1' : ''; });
     const autoSplitThird = ()=>{
       if(e3wrap.style.display === 'none') return;
       const total = combineMtr16(v('p_qty'), v('p_qty_16'));
       if(!(total > 0) || !v('p_e2')) return;
       if(p_e2m.dataset.manual) return; // Employee 2 typed by hand — leave it alone
-      // Employee 2 keeps everything Employee 1 didn't weave, minus whatever is typed for Employee 3.
-      const e2 = entryEmployee2Meters(total, v('p_e1m'), v('p_e3m')) || 0;
+      // Employee 2 keeps everything Employee 1 didn't weave, minus whatever is typed for Employee 3 (and Employee 4, when open).
+      const e2 = entryEmployee2Meters(total, v('p_e1m'), Number(v('p_e3m')||0) + (e4wrap.style.display !== 'none' ? Number(v('p_e4m')||0) : 0)) || 0;
       p_e2m.value = e2 > 0 ? fmtQtyPlain(e2) : '';
       updateRemaining();
     };
-    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', autoSplitThird); });
-    ['p_e2','p_e3'].forEach(id=>document.getElementById(id).addEventListener('change', autoSplitThird));
+    ['p_qty','p_qty_16','p_e1m','p_e2m','p_e3m','p_e4m'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', autoSplitThird); });
+    ['p_e2','p_e3','p_e4'].forEach(id=>document.getElementById(id).addEventListener('change', autoSplitThird));
     e3btn.addEventListener('click', ()=>{ e3wrap.style.display === 'none' ? autoSplitRemaining() : autoSplitThird(); });
+    e4btn.addEventListener('click', ()=>{ autoSplitThird(); });
     // Once Employee 1's figure is typed in (leaving the field, e.g. by Tab), control moves
     // straight to the save button instead of stopping at Employee 2's already-filled fields —
     // the split is on screen to check, and Enter from there saves the entry.
@@ -272,7 +301,7 @@ function wirePanel(id){
     syncE2(); // first paint, and coming back from "Add & next loom" with the next loom's pair already filled in
     // Enter is the form's default action: "Add & next loom" for a new entry, and
     // Update Entry while a row is being edited (the next-loom button is hidden then).
-    ['p_date','p_quality','p_loom','p_qty','p_qty_16','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m'].forEach(id=>{
+    ['p_date','p_quality','p_loom','p_qty','p_qty_16','p_e1','p_e1m','p_e2','p_e2m','p_e3','p_e3m','p_e4','p_e4m'].forEach(id=>{
       const inp = document.getElementById(id);
       if(!inp) return;
       inp.addEventListener('keydown', e=>{
@@ -286,9 +315,9 @@ function wirePanel(id){
     // plain select/date/employee/etc fields go through the generic value=rec[field] fill. The
     // Qty/16ths boxes are split out from that decimal by hand in afterFill below.
     wireEditGeneric('production','addProduction','cancelProduction',
-      {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m'},
+      {p_date:'date',p_time:'time',p_quality:'quality',p_loom:'loom',p_beam:'beam',p_e1:'e1',p_e1m:'e1m',p_e2:'e2',p_e2m:'e2m',p_e3:'e3',p_e3m:'e3m',p_e4:'e4',p_e4m:'e4m'},
       (rec)=>{
-        renderBeamToggle(false); updBeamLeft(); syncE2(); if(v('p_e3')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; } nextBtn.style.display = 'none';
+        renderBeamToggle(false); updBeamLeft(); syncE2(); if(v('p_e3') || v('p_e4')){ showE3(); if(v('p_e3m')) p_e3m.dataset.manual = '1'; if(v('p_e2m')) p_e2m.dataset.manual = '1'; if(v('p_e4')){ showE4(); if(v('p_e4m')) p_e4m.dataset.manual = '1'; } } nextBtn.style.display = 'none';
         document.getElementById('addProduction').className = 'primary'; // Update Entry is the main action while editing
         const s = splitMtr16(rec.qty);
         document.getElementById('p_qty').value = s.whole;
@@ -381,11 +410,13 @@ function wirePanel(id){
         }
         if(lineHadError) return;
         if(!empPairs.length){ errors.push(`Line ${idx+1}: no employee/meters given.`); return; }
+        if(empPairs.length > 4){ errors.push(`Line ${idx+1}: at most 4 employees per loom — got ${empPairs.length}.`); return; }
         newRecords.push({
           date, loom: loomName, quality, qty, beam:'',
           e1: empPairs[0]?empPairs[0][0]:'', e1m: empPairs[0]?empPairs[0][1]:0,
           e2: empPairs[1]?empPairs[1][0]:'', e2m: empPairs[1]?empPairs[1][1]:0,
           e3: empPairs[2]?empPairs[2][0]:'', e3m: empPairs[2]?empPairs[2][1]:0,
+          ...(empPairs[3] ? {e4: empPairs[3][0], e4m: empPairs[3][1]} : {}),
         });
       });
       if(errors.length){
@@ -410,9 +441,10 @@ function wirePanel(id){
       const cards = ()=>[...mbRoot.querySelectorAll('.mb-card')];
       const shown = ()=>cards().filter(c=>c.style.display!=='none');
       const e3On = c=>q(c,'.mb-e3').style.display!=='none';
+      const e4On = c=>q(c,'.mb-e4').style.display!=='none';
       const total = c=>combineMtr16(q(c,'.mb_g').value, q(c,'.mb_s').value);
       const cardQ = c=>q(c,'.mb_q').value || v('mb_quality');
-      const assigned = c=>num(q(c,'.mb_m1'))+num(q(c,'.mb_m2'))+(e3On(c)?num(q(c,'.mb_m3')):0);
+      const assigned = c=>num(q(c,'.mb_m1'))+num(q(c,'.mb_m2'))+(e3On(c)?num(q(c,'.mb_m3')):0)+(e4On(c)?num(q(c,'.mb_m4')):0);
       const autoSplit = c=>{
         const m2 = q(c,'.mb_m2'), t = total(c);
         if(m2.dataset.man || e3On(c) || !q(c,'.mb_n2').value || !(t>0)) return;
@@ -425,7 +457,7 @@ function wirePanel(id){
         if(!e3On(c)) return;
         const m2 = q(c,'.mb_m2'), t = total(c);
         if(!(t>0) || !q(c,'.mb_n2').value || m2.dataset.man) return;
-        const left = entryEmployee2Meters(t, num(q(c,'.mb_m1')), num(q(c,'.mb_m3'))) || 0;
+        const left = entryEmployee2Meters(t, num(q(c,'.mb_m1')), num(q(c,'.mb_m3')) + (e4On(c) ? num(q(c,'.mb_m4')) : 0)) || 0;
         m2.value = left > 0 ? left : '';
       };
       const calc = ()=>{
@@ -459,14 +491,15 @@ function wirePanel(id){
         const c = e.target.closest('.mb-card'); if(!c) return;
         if(e.target.classList.contains('mb_m2')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
         if(e.target.classList.contains('mb_m3')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
+        if(e.target.classList.contains('mb_m4')) e.target.dataset.man = e.target.value.trim() ? '1' : '';
         if(e.target.matches('.mb_g,.mb_s,.mb_m1')) autoSplit(c);
-        if(e.target.matches('.mb_g,.mb_s,.mb_m1,.mb_m2,.mb_m3')) autoSplit3(c);
+        if(e.target.matches('.mb_g,.mb_s,.mb_m1,.mb_m2,.mb_m3,.mb_m4')) autoSplit3(c);
         calc();
       });
       mbRoot.addEventListener('change', e=>{
         const c = e.target.closest('.mb-card');
         if(c && e.target.matches('.mb_q')) calc();
-        if(c && e.target.matches('.mb_n2,.mb_n3')){ autoSplit3(c); calc(); }
+        if(c && e.target.matches('.mb_n2,.mb_n3,.mb_n4')){ autoSplit3(c); calc(); }
       });
       mbRoot.addEventListener('focusin', e=>{ if(e.target.classList.contains('mb_f')) e.target.select(); });
       mbRoot.addEventListener('keydown', e=>{
@@ -476,10 +509,22 @@ function wirePanel(id){
         (n || document.getElementById('saveMultiProduction')).focus();
       });
       mbRoot.addEventListener('click', e=>{
+        // Employee 4 (button shows once Employee 3 is open): same add / remove behaviour, one step further.
+        if(e.target.classList.contains('mb-tg4')){
+          const c = e.target.closest('.mb-card'), w = q(c,'.mb-e4'), on = w.style.display==='none';
+          w.style.display = on ? 'block' : 'none';
+          e.target.textContent = on ? '− Remove fourth employee' : '+ Add a fourth employee';
+          q(c,'.mb-tg').style.display = on ? 'none' : '';   // the third can only be removed after the fourth
+          if(!on){ q(c,'.mb_n4').value=''; q(c,'.mb_m4').value=''; q(c,'.mb_m4').dataset.man=''; }
+          autoSplit3(c);
+          calc();
+          return;
+        }
         if(!e.target.classList.contains('mb-tg')) return;
         const c = e.target.closest('.mb-card'), w = q(c,'.mb-e3'), on = w.style.display==='none';
         w.style.display = on ? 'block' : 'none';
         e.target.textContent = on ? '− Remove third employee' : '+ Add a third employee';
+        q(c,'.mb-tg4').style.display = on ? '' : 'none';
         if(!on){ q(c,'.mb_n3').value=''; q(c,'.mb_m3').value=''; q(c,'.mb_m3').dataset.man=''; autoSplit(c); }
         else autoSplit3(c);
         calc();
@@ -495,7 +540,7 @@ function wirePanel(id){
           if(!(t>0)) return fail(`Loom ${loom}: enter the Gzana (total meters) first.`);
           if(!quality) return fail(`Loom ${loom}: Pick a quality first.`);
           const r = {date, time:nowStr(), loom, quality, qty:t, beam:'', e1:'', e1m:0, e2:'', e2m:0, e3:'', e3m:0};
-          for(const n of (e3On(c)?[1,2,3]:[1,2])){
+          for(const n of (e4On(c)?[1,2,3,4]:e3On(c)?[1,2,3]:[1,2])){
             const name = q(c,'.mb_n'+n).value, m = num(q(c,'.mb_m'+n));
             if(!name && m) return fail(`Loom ${loom}: pick Employee ${n} for ${m} meters.`);
             r['e'+n] = name; r['e'+n+'m'] = m;
