@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.88-wages-status-bonus-more">
+<meta name="app-build" content="v3.18.89-urdu-rtl-figures-ltr">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -221,9 +221,13 @@
     background:var(--card); box-shadow:var(--elev-3); overflow-y:auto; -webkit-overflow-scrolling:touch;
     overscroll-behavior:contain;
     transform:translateX(-100%); transition:transform 220ms cubic-bezier(.2,.8,.2,1);
-    padding:8px 0 20px; display:block;
+    padding:0 0 20px; display:block;
   }
   nav.tabs.open{ transform:translateX(0); }
+  /* v3.18.89: Urdu (right-to-left) — the menu slides in from the right, next to the menu button. The padding above is 0 so no white strip shows above the green header. */
+  html[dir="rtl"] nav.tabs{ left:auto; right:0; transform:translateX(100%); }
+  html[dir="rtl"] nav.tabs.open{ transform:translateX(0); }
+  bdi.ltr-fig{ unicode-bidi:isolate; direction:ltr; }
   /* PIN Lock overlay — sits above everything (drawer included) so the ledger is fully
      covered and unreachable until the correct PIN is entered. Mounted directly on <body>,
      outside #appShell, so it survives even if #appShell's own content gets re-rendered. */
@@ -1514,7 +1518,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.88</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.89</span></span>
     </div>
   </header>
 
