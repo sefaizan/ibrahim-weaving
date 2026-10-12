@@ -79,4 +79,9 @@ describe('the forms', () => {
     const i = read('js/i18n.js');
     ['Employee 4', 'Employee 4 Meters', '+ Add a fourth employee', '− Remove fourth employee', 'Emp 4'].forEach(k => assert.ok(i.includes("'" + k + "':"), k));
   });
+  test('Multiple Entries: the Employee 4 row is sized like rows 1-3 (name box wide, meters box beside it)', () => {
+    const css = read('index.html');
+    assert.match(css, /\.mb-rw input\.mb_m3,\.mb-rw input\.mb_m4\{flex:1 1 30%;min-width:0\}/);
+    assert.match(css, /\.mb-tg,\.mb-tg4\{margin-top:6px\}/);
+  });
 });
