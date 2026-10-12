@@ -11,52 +11,65 @@ function alertNum(n, dec){ return (Number(n) || 0).toLocaleString('en-IN', { max
 /* ---- language: the messages follow the app language (Urdu when the header button is on "English"), built fresh each time ---- */
 function alertUr(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_LANG === 'ur'; }catch(e){ return false; } }
 const AL_MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
-// key -> [English, Urdu]; {0} {1} are filled in by al(). Names, quality names, order numbers and dates are never translated.
+// ---- Reading direction (v3.18.92) ----
+// Urdu reads right to left. Every Urdu line starts with a right-to-left mark so the whole message lines up on the right (no line
+// jumps to the left), and every figure (1234-12 meters, 33%, a date, ORD-12, a quality like 62/44) is wrapped so it always reads
+// left to right exactly as in English - never 12-1234 or %33. English messages are not touched.
+const AL_RLM = '\u200F', AL_LRE = '\u202A', AL_PDF = '\u202C';
+function alertLtr(s){ return alertUr() ? AL_LRE + String(s) + AL_PDF : String(s); }
+function alertRtlLines(text){ return alertUr() ? String(text).split('\n').map(l => l.trim() ? AL_RLM + l : l).join('\n') : String(text); }
+const RULE_LINE = '━━━━━━━━━━━━━━';
+// key -> [English, Urdu]; {0} {1} {2} {3} are filled in by al(). Names, quality names, order numbers and dates are never translated.
 const AL = {
-  stockTitle: ['📦 STOCK IN HAND', '📦 اسٹاک موجود'], noStock: ['No stock in hand.', 'اسٹاک موجود نہیں ہے۔'],
-  total: ['Total', 'کل اسٹاک'], more: ['more', 'مزید'], moreOrders: ['more orders', 'مزید آرڈرز'], orders: ['ORDERS', 'آرڈرز'], order: ['Order', 'آرڈر'],
-  legend: ['🟩 Sent   🟨 In stock   ⬜ To weave', '🟩 بھیجا گیا   🟨 اسٹاک   ⬜ بننا باقی'],
-  sent: ['Sent: *{0}%*', 'بھیجا گیا: *{0}%*'], fromStock: ['From stock: *{0}%*', 'اسٹاک سے: *{0}%*'], toWeave: ['Still to weave: *{0}%*', 'بننا باقی: *{0}%*'],
-  weftTitle: ['🧵 WEFT STOCK', '🧵 بانا اسٹاک'], weftLow: ['🚨 WEFT RUNNING LOW 🚨', '🚨 بانا ختم ہو رہا ہے 🚨'],
+  stockTitle: ['📦 STOCK IN HAND 📦', '📦 اسٹاک موجود 📦'], noStock: ['🔴 *NO STOCK IN HAND*', '🔴 *اسٹاک موجود نہیں ہے*'],
+  total: ['TOTAL', 'کل اسٹاک'], arrow: ['➜', '⬅️'], more: ['more', 'مزید'], moreOrders: ['more orders', 'مزید آرڈرز'], orders: ['ORDERS', 'آرڈرز'], order: ['Order', 'آرڈر'],
+  legend: ['🟩 Delivered   🟨 In stock for it   ⬜ To weave', '🟩 ڈیلیور   🟨 اسٹاک میں   ⬜ بننا باقی'],
+  delLine: ['📤 *{0} delivered* ({1} of {2})', '📤 *{0} ڈیلیور* ({2} میں سے {1})'], remLine: ['⏳ Still to deliver: *{0}*', '⏳ ڈیلیور باقی: *{0}*'],
+  ready: ['🟢 *READY - stock covers it, send now*', '🟢 *تیار - اسٹاک موجود ہے، ابھی بھیجیں*'],
+  part: ['🟠 *Stock covers only {0} - weave {1} more*', '🟠 *اسٹاک صرف {0} پورا کرتا ہے - {1} مزید بنائیں*'],
+  none: ['🔴 *NO STOCK - weave {0}*', '🔴 *اسٹاک نہیں - {0} بنائیں*'], done: ['✅ *COMPLETED*', '✅ *مکمل*'],
+  ordShort: ['⚠️ *{0} of {1} orders need more weaving*', '⚠️ *{1} میں سے {0} آرڈرز کے لیے مزید بُنائی ضروری ہے*'],
+  ordOk: ['✅ *Stock covers every open order*', '✅ *اسٹاک تمام کھلے آرڈرز کے لیے کافی ہے*'],
+  weftTitle: ['🧵 WEFT STOCK 🧵', '🧵 بانا اسٹاک 🧵'], weftLow: ['🚨🚨 WEFT RUNNING LOW 🚨🚨', '🚨🚨 بانا ختم ہو رہا ہے 🚨🚨'],
   noWeft: ['No weft purchases recorded yet.', 'ابھی تک بانے کی کوئی خریداری درج نہیں ہے۔'],
   weftQty: ['*{0} bags* ({1} lbs)', '*{0} بیگ* ({1} پاؤنڈ)'], noPace: ['⏳ No recent production to measure the pace.', '⏳ رفتار جانچنے کے لیے حالیہ پیداوار موجود نہیں ہے۔'],
   weftDays: ['⏳ About *{0} days* left at {1} lbs per day', '⏳ تقریباً *{0} دن* باقی ({1} پاؤنڈ روزانہ کے حساب سے)'],
-  weftOrder: ['👉 *Order weft NOW* - stock is running low!', '👉 *بانا ابھی منگوائیں* - اسٹاک کم ہو رہا ہے!'],
-  beamTitle: ['🔧 WARP BEAMS', '🔧 تانا بیم'], beamSoon: ['🚨 BEAMS ENDING SOON 🚨', '🚨 بیم جلد ختم ہو رہے ہیں 🚨'],
-  beamNext: ['👉 Get the next beam ready', '👉 اگلا بیم تیار رکھیں'], noBeam: ['✅ No beam is ending within {0} days.', '✅ اگلے {0} دنوں میں کوئی بیم ختم نہیں ہو رہا۔'],
-  chqOver: ['🚨 CHEQUES OVERDUE 🚨', '🚨 چیک کی میعاد گزر چکی 🚨'], chqSoon: ['⏰ CHEQUES DUE SOON', '⏰ چیک جلد واجب الادا'], chqTitle: ['✅ CHEQUES', '✅ چیک'],
-  chqOverN: ['❌ *{0} OVERDUE:* {1}', '❌ *{0} چیک کی میعاد گزر چکی:* {1}'], chqDueN: ['⏰ *{0} due within 7 days:* {1}', '⏰ *{0} چیک 7 دن کے اندر واجب الادا:* {1}'],
+  weftOrder: ['👉 *ORDER WEFT NOW - stock is running low!*', '👉 *بانا ابھی منگوائیں - اسٹاک کم ہو رہا ہے!*'],
+  beamTitle: ['🔧 WARP BEAMS 🔧', '🔧 تانا بیم 🔧'], beamSoon: ['🚨🚨 BEAMS ENDING SOON 🚨🚨', '🚨🚨 بیم جلد ختم ہو رہے ہیں 🚨🚨'],
+  beamNext: ['👉 *Get the next beam ready*', '👉 *اگلا بیم تیار رکھیں*'], noBeam: ['✅ No beam is ending within {0} days.', '✅ اگلے {0} دنوں میں کوئی بیم ختم نہیں ہو رہا۔'],
+  chqOver: ['🚨🚨 CHEQUES OVERDUE 🚨🚨', '🚨🚨 چیک کی میعاد گزر چکی 🚨🚨'], chqSoon: ['⏰ CHEQUES DUE SOON ⏰', '⏰ چیک جلد واجب الادا ⏰'], chqTitle: ['✅ CHEQUES', '✅ چیک'],
+  chqOverN: ['🔴 *{0} OVERDUE - {1}*', '🔴 *{0} چیک کی میعاد گزر چکی - {1}*'], chqDueN: ['🟠 *{0} due within 7 days - {1}*', '🟠 *{0} چیک 7 دن کے اندر واجب الادا - {1}*'],
   chqNone: ['✅ No cheques overdue or due within 7 days.', '✅ کوئی چیک میعاد گزرا ہوا یا 7 دن کے اندر واجب الادا نہیں ہے۔'],
-  overdueTag: [' (OVERDUE)', ' (میعاد گزر چکی)'], followUp: ['👉 _Follow up today_', '👉 _آج ہی رابطہ کریں_'],
-  openTitle: ['📋 OPEN ORDERS', '📋 کھلے آرڈرز'], noOrders: ['✅ No open orders.', '✅ کوئی کھلا آرڈر نہیں ہے۔'], ofQty: ['↳ {0} of {1}', '↳ {1} میں سے {0} ڈیلیور'],
-  recvTitle: ['💰 MONEY TO RECEIVE', '💰 وصول ہونے والی رقم'], recv: ['🟡 *{0}* to receive from clients', '🟡 گاہکوں سے *{0}* وصول ہونے ہیں'],
+  overBy: ['{0} overdue', '{0} لیٹ'], dueIn: ['due in {0}', '{0} میں واجب الادا'], dueToday: ['due TODAY', 'آج واجب الادا'],
+  followUp: ['👉 *Follow up TODAY*', '👉 *آج ہی رابطہ کریں*'],
+  openTitle: ['📋 OPEN ORDERS 📋', '📋 کھلے آرڈرز 📋'], noOrders: ['✅ No open orders.', '✅ کوئی کھلا آرڈر نہیں ہے۔'],
+  recvTitle: ['💰 MONEY TO RECEIVE 💰', '💰 وصول ہونے والی رقم 💰'], recv: ['🟡 *{0}* to receive from clients', '🟡 گاہکوں سے *{0}* وصول ہونے ہیں'],
   noRecv: ['✅ Nothing to receive from clients', '✅ گاہکوں سے کچھ وصول نہیں ہونا'],
-  profitTitle: ['📊 PROFIT AND CASH', '📊 منافع اور نقد'], profit: ['Profit {0}: {1}', 'منافع {0}: {1}'], cash: ['Cash in hand: {0}', 'نقد موجود: {0}'],
+  profitTitle: ['📊 PROFIT AND CASH 📊', '📊 منافع اور نقد 📊'], profit: ['📈 *PROFIT {0}: {1}*', '📈 *منافع {0}: {1}*'], loss: ['📉 *LOSS {0}: {1}* 🔴', '📉 *نقصان {0}: {1}* 🔴'], cash: ['💵 Cash in hand: *{0}*', '💵 نقد موجود: *{0}*'],
   shNone: ['Nothing is ticked yet - the Share button will ask you to choose.', 'ابھی کچھ منتخب نہیں ہے - شیئر بٹن آپ سے انتخاب کے لیے کہے گا۔'],
   shChars: ['({0} characters)', '({0} حروف)'], shLong: ['({0} characters - long, WhatsApp may cut it)', '({0} حروف - پیغام لمبا ہے، واٹس ایپ اسے کاٹ سکتا ہے)'],
   shChoose: ['Choose what to share in Settings first.', 'پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔'], shFail: ['Could not build the message.', 'پیغام نہیں بن سکا۔']
 };
-function al(k, a, b){
+function al(k, a, b, c, d){
   const v = AL[k], t = v ? (alertUr() ? v[1] : v[0]) : String(k), f = x => String(x == null ? '' : x);
-  return t.replace('{0}', () => f(a)).replace('{1}', () => f(b));
+  return t.replace('{0}', () => f(a)).replace('{1}', () => f(b)).replace('{2}', () => f(c)).replace('{3}', () => f(d));
 }
 // Meters: the app's own formatter gives a bare number ("1240" or "1240-8" in sixteenths); the message adds commas and the unit.
 function alertMtr(n){
   const base = typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : alertNum(n, 1);
   const num = String(base).replace(/^(-?)(\d+)/, (m, sg, d) => sg + Number(d).toLocaleString('en-IN'));
   // Urdu: the quantity is forced left-to-right so 123-12 never flips to 12-123; only the unit word is Urdu.
-  return alertUr() ? '\u202A' + num + '\u202C ' + 'میٹر' : num + ' m';
+  return alertUr() ? alertLtr(num) + ' میٹر' : num + ' m';
 }
-function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + alertNum(n); return alertUr() ? t.replace(/^Rs\s*/, '') + ' روپے' : t; }
-function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + d.getFullYear() : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
+function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + alertNum(n); return alertUr() ? alertLtr(t.replace(/^Rs\s*/, '')) + ' روپے' : t; }
+function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + alertLtr(d.getFullYear()) : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
 function alertAsOf(){
   const d = new Date();
   if(!alertUr()) return '🕙 *As of ' + d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/i, m => m.toUpperCase()) + '*';
   const h = d.getHours(), part = h < 12 ? 'صبح' : h < 16 ? 'دوپہر' : h < 20 ? 'شام' : 'رات';
-  return '🕙 *تازہ ترین: ' + d.getDate() + ' ' + AL_MONTHS_UR[d.getMonth()] + '، ' + (h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + part + '*';
+  return '🕙 *تازہ ترین: ' + d.getDate() + ' ' + AL_MONTHS_UR[d.getMonth()] + '، ' + alertLtr((h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0')) + ' ' + part + '*';
 }
-const ALERT_ASOF_RE = /\n*(?:🕙 \*|_)(?:As of|تازہ ترین:) [^\n]*[*_]\s*$/;
-function alertBar(p){ const n = Math.max(0, Math.min(10, Math.round((Number(p) || 0) * 10))); return '▓'.repeat(n) + '░'.repeat(10 - n); }
+const ALERT_ASOF_RE = /\n*\u200F?(?:🕙 \*|_)(?:As of|تازہ ترین:) [^\n]*[*_]\s*$/;
 // Order bar: 🟩 already delivered, 🟨 covered by the stock in hand, ⬜ still to weave (10 squares = the whole order).
 function alertOrderBar(sentPct, stockPct){
   const d = Math.max(0, Math.min(10, Math.round(sentPct / 10))), c = Math.max(0, Math.min(10 - d, Math.round(stockPct / 10)));
@@ -69,66 +82,90 @@ function alertShortNames(names){
   const map = {}; names.forEach(n => { map[n] = count[short(n)] > 1 ? String(n) : short(n); });
   return map;
 }
+function alertDmy(s){ const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(s || '')); return m ? m[3] + '-' + m[2] + '-' + m[1] : String(s || ''); }
+function alertDayDiff(from, to){
+  const p = s => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(s || '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+  return Math.round((p(to) - p(from)) / 86400000);
+}
+function alertDays(n){ n = Math.abs(Number(n) || 0); return alertUr() ? alertLtr(n) + ' دن' : n + (n === 1 ? ' day' : ' days'); }
+// One order, as the lines of its block. The progress is what is DELIVERED; stock (when given) only decides the colour of the last line:
+// ready to send / partly covered (weave the rest) / nothing in stock - so "100% done" can never be shown for an order that is not delivered.
+function alertOrderBlock(o, stk, quality){
+  const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), rem = Math.max(0, qty - got);
+  const sent = Math.round(got / qty * 100), cover = Math.min(Math.max(0, Number(stk) || 0), rem), stkPct = Math.round(cover / qty * 100);
+  const head = '📋 *' + alertLtr(o.no || al('order')) + '*' + (quality ? '  ·  *' + alertLtr(quality) + '*' : '');
+  const lines = [head, alertLtr(alertOrderBar(sent, stk == null ? 0 : stkPct)), al('delLine', alertLtr(sent + '%'), alertMtr(got), alertMtr(qty))];
+  if(rem <= 0.0001) lines.push(al('done'));
+  else{
+    lines.push(al('remLine', alertMtr(rem)));
+    if(stk != null) lines.push(cover >= rem - 0.0001 ? al('ready') : cover > 0.0001 ? al('part', alertMtr(cover), alertMtr(rem - cover)) : al('none', alertMtr(rem)));
+  }
+  return lines;
+}
 // orders: open orders [{quality, no, date, qty, got}]. One quality's stock is shared out oldest order first, so it is never counted twice.
 function alertOrderLines(quality, stock, orders){
   let left = Number(stock) || 0;
   const mine = (orders || []).filter(o => o.quality === quality && Number(o.qty) > 0).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true }));
-  const out = [];
-  mine.slice(0, 3).forEach((o, i) => {
-    const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), take = Math.min(left, Math.max(0, qty - got));
+  const out = []; let short = 0;
+  mine.forEach((o, i) => {
+    const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), rem = Math.max(0, qty - got), take = Math.min(left, rem);
     left -= take;
-    const sent = Math.round(got / qty * 100), stk = Math.round(take / qty * 100), total = Math.min(100, sent + stk);
-    if(i) out.push('');
-    out.push('*' + (o.no || al('order')) + '*', alertOrderBar(sent, stk) + '  *' + total + '%*' + (total >= 100 ? ' ✅' : ''), al('sent', sent), al('fromStock', stk), al('toWeave', Math.max(0, 100 - total)));
+    if(rem > 0.0001 && take < rem - 0.0001) short++;
+    if(i < 3){ if(i) out.push(''); out.push(...alertOrderBlock(o, take)); }
   });
   if(mine.length > 3) out.push('', '+ ' + (mine.length - 3) + ' ' + al('moreOrders'));
+  out.short = short; out.count = mine.length;
   return out;
 }
 function alertStockText(rows, total, orders){
   const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
   if(!list.length){ lines.push(al('noStock'), '', alertAsOf()); return { title: al('stockTitle'), body: lines.join('\n') }; }
-  const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name));
-  const nameW = Math.max(...shown.map(r => nm[r.name].length)), mtrs = shown.map(r => alertMtr(r.stock)), vis = x => x.replace(/[\u200E\u202A\u202C]/g, ''), mW = Math.max(...mtrs.map(x => vis(x).length));
-  const lrm = alertUr() ? '\u200E' : '';   // keeps the name-then-meters columns left to right even though the unit is Urdu
-  const HAND = '   👉   ', RULE = '━━━━━━━━━━━━━━';   // spaces round the hand so the number stands apart
-  const block = shown.map((r, i) => lrm + '*' + nm[r.name] + '*\n' + HAND + '*' + mtrs[i] + '*').join('\n\n');   // quality on one line, its quantity on the next
-  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', '', RULE, '', block + (list.length > 8 ? '\n\n+ ' + (list.length - 8) + ' ' + al('more') : ''));
-  const og = [];
-  shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length) og.push('*' + nm[r.name] + '*', '', ...ol, ''); });
-  if(og.length) lines.push('', RULE, '', '📋 *' + al('orders') + '*', '', ...og, al('legend'));
-  lines.push('', RULE, alertAsOf());
+  const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name)), arrow = al('arrow');
+  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', RULE_LINE);
+  shown.forEach(r => lines.push('▪️ *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtr(r.stock) + '*'));
+  if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('more'));
+  const og = []; let short = 0, count = 0;
+  shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length){ short += ol.short; count += ol.count; og.push('🧵 *' + alertLtr(nm[r.name]) + '*', ...ol, ''); } });
+  if(og.length) lines.push(RULE_LINE, '📋 *' + al('orders') + '*', short ? al('ordShort', alertLtr(short), alertLtr(count)) : al('ordOk'), '', ...og, al('legend'));
+  lines.push(RULE_LINE, alertAsOf());
   return { title: al('stockTitle'), body: lines.join('\n') };
 }
 function alertWeftText(e){
   if(!e || !e.hasData) return { title: al('weftTitle'), body: al('noWeft') + '\n\n' + alertAsOf() };
-  const lines = [(e.low ? '🔴 ' : '🟢 ') + al('weftQty', alertNum(Math.max(e.bags, 0), 1), alertNum(Math.max(e.lbs, 0)))];
-  lines.push(e.cover === null ? al('noPace') : al('weftDays', alertNum(e.cover, 1), alertNum(e.perDay)));
+  const lines = [(e.low ? '🔴 ' : '🟢 ') + al('weftQty', alertLtr(alertNum(Math.max(e.bags, 0), 1)), alertLtr(alertNum(Math.max(e.lbs, 0))))];
+  lines.push(e.cover === null ? al('noPace') : al('weftDays', alertLtr(alertNum(e.cover, 1)), alertLtr(alertNum(e.perDay))));
   if(e.low) lines.push('', al('weftOrder'));
   lines.push('', alertAsOf());
   return { title: e.low ? al('weftLow') : al('weftTitle'), body: lines.join('\n') };
 }
 // One beam line; in Urdu it is worded here, otherwise the app's own wording is used.
 function alertBeamLine(f){
-  if(!alertUr()) return typeof beamAlertText === 'function' ? beamAlertText(f) : '';
-  if(f.state === 'full') return 'لوم ' + f.loom + ' کا بیم پورا بُنا جا چکا ہے — اگلا بیم چڑھائیں یا اسے مکمل کریں';
-  const when = f.daysLeft <= 0.5 ? 'آج' : f.daysLeft <= 1.5 ? 'کل' : 'تقریباً ' + Math.round(f.daysLeft) + ' دن میں';
-  return 'لوم ' + f.loom + ' کا بیم ' + when + ' ختم ہوگا (~' + Math.round(f.expectedRemaining) + ' میٹر باقی)';
+  const icon = f.state === 'full' ? '🚨 ' : '⏰ ';
+  if(!alertUr()) return icon + (typeof beamAlertText === 'function' ? beamAlertText(f) : '');
+  if(f.state === 'full') return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم پورا بُنا جا چکا ہے - *ابھی* اگلا بیم چڑھائیں یا اسے مکمل کریں';
+  const when = f.daysLeft <= 0.5 ? '*آج*' : f.daysLeft <= 1.5 ? '*کل*' : 'تقریباً *' + alertLtr(Math.round(f.daysLeft)) + ' دن* میں';
+  return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم ' + when + ' ختم ہوگا (تقریباً ' + alertLtr(Math.round(f.expectedRemaining)) + ' میٹر باقی)';
 }
 function alertBeamText(list, days){
   const has = list && list.length;
-  const body = has ? list.map(f => '⏰ ' + alertBeamLine(f)).join('\n') + '\n\n' + al('beamNext') : al('noBeam', days);
+  const body = has ? list.map(alertBeamLine).join('\n') + '\n\n' + al('beamNext') : al('noBeam', alertLtr(days));
   return { title: has ? al('beamSoon') : al('beamTitle'), body: body + '\n\n' + alertAsOf() };
 }
 function alertChequeText(pending, today, soon){
-  const withDate = pending.filter(c => c.chequeDate);
-  const over = withDate.filter(c => c.chequeDate < today), due = withDate.filter(c => c.chequeDate >= today && c.chequeDate <= soon);
+  const withDate = pending.filter(c => c.chequeDate), byDate = (a, b) => String(a.chequeDate).localeCompare(String(b.chequeDate));
+  const over = withDate.filter(c => c.chequeDate < today).sort(byDate), due = withDate.filter(c => c.chequeDate >= today && c.chequeDate <= soon).sort(byDate);
   const sum = l => l.reduce((s, c) => s + (Number(c.amount) || 0), 0), shown = over.concat(due), lines = [];
-  if(over.length) lines.push(al('chqOverN', over.length, alertRs(sum(over))));
-  if(due.length) lines.push(al('chqDueN', due.length, alertRs(sum(due))));
+  if(over.length) lines.push(al('chqOverN', alertLtr(over.length), alertRs(sum(over))));
+  if(due.length) lines.push(al('chqDueN', alertLtr(due.length), alertRs(sum(due))));
   if(!shown.length) lines.push(al('chqNone'));
   else lines.push('');
-  shown.slice(0, 8).forEach(c => lines.push((c.chequeDate < today ? '❌ ' : '⏰ ') + (c.client || '?') + ' - ' + alertRs(c.amount) + ' - ' + c.chequeDate + (c.chequeDate < today ? al('overdueTag') : '')));
-  if(shown.length > 8) lines.push('+ ' + (shown.length - 8) + ' ' + al('more'));
+  shown.slice(0, 8).forEach((c, i) => {
+    const isOver = c.chequeDate < today, n = isOver ? alertDayDiff(c.chequeDate, today) : alertDayDiff(today, c.chequeDate);
+    const when = isOver ? al('overBy', alertDays(n)) : n === 0 ? al('dueToday') : al('dueIn', alertDays(n));
+    if(i) lines.push('');
+    lines.push((isOver ? '❌ *' : '⏰ *') + (c.client || '?') + '*', '     💰 ' + alertRs(c.amount), '     📅 *' + when + '*  ·  ' + alertLtr(alertDmy(c.chequeDate)));
+  });
+  if(shown.length > 8) lines.push('', '+ ' + (shown.length - 8) + ' ' + al('more'));
   if(over.length) lines.push('', al('followUp'));
   return { title: over.length ? al('chqOver') : (due.length ? al('chqSoon') : al('chqTitle')), body: lines.join('\n') };
 }
@@ -136,12 +173,10 @@ function alertOrdersText(orders){
   const list = (orders || []).filter(o => Number(o.qty) > 0).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true })), lines = [];
   if(!list.length) lines.push(al('noOrders'));
   else{
-    list.slice(0, 8).forEach((o, i) => {
-      const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty);
-      if(i) lines.push('');
-      lines.push((o.no || al('order')) + ' ' + alertBar(got / qty) + ' *' + Math.round(got / qty * 100) + '%*', al('ofQty', alertMtr(got), alertMtr(qty)));
-    });
+    const nm = alertShortNames(Array.from(new Set(list.map(o => o.quality))));
+    list.slice(0, 8).forEach((o, i) => { if(i) lines.push(''); lines.push(...alertOrderBlock(o, null, o.quality ? nm[o.quality] : '')); });
     if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('moreOrders'));
+    lines.push('', al('legend'));
   }
   lines.push('', alertAsOf());
   return { title: al('openTitle'), body: lines.join('\n') };
@@ -152,7 +187,7 @@ function alertReceivableText(total){
 }
 function alertProfitText(profit, cash, label){
   const p = Number(profit) || 0;
-  return { title: al('profitTitle'), body: (p >= 0 ? '📈 ' : '📉 ') + '*' + al('profit', label, alertRs(p)) + '*\n💵 ' + al('cash', alertRs(Number(cash) || 0)) + '\n\n' + alertAsOf() };
+  return { title: al('profitTitle'), body: (p >= 0 ? al('profit', label, alertRs(p)) : al('loss', label, alertRs(Math.abs(p)))) + '\n' + al('cash', alertRs(Number(cash) || 0)) + '\n\n' + alertAsOf() };
 }
 // Open orders with what is already delivered (from orderStats); empty when the app has none.
 function alertOpenOrders(){
@@ -172,7 +207,7 @@ function alertBuild(kind, opts){
   else return '';
   return alertJoin(m);
 }
-function alertJoin(m){ return '*' + m.title + '*\n━━━━━━━━━━━━━━\n' + m.body; }
+function alertJoin(m){ return alertRtlLines('*' + m.title + '*\n' + RULE_LINE + '\n' + m.body); }
 // phone (optional): opens that person's chat directly. 03xx... is read as a Pakistan number (92...). Groups cannot be opened from a link.
 function alertPhoneDigits(phone){
   let d = String(phone || '').replace(/\D/g, '');
@@ -241,7 +276,7 @@ function shareBuild(p){
     const t = alertBuild(x[0]);
     if(t) parts.push(t.replace(ALERT_ASOF_RE, '').trim());
   });
-  if(parts.length && SHARE_SECTIONS.some(x => p[x[0]])) parts.push(alertAsOf());
+  if(parts.length && SHARE_SECTIONS.some(x => p[x[0]])) parts.push(alertRtlLines(alertAsOf()));
   return parts.join('\n\n');
 }
 function shareFabNow(){
