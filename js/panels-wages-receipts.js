@@ -56,6 +56,8 @@ function rateHistoryBlockHtml(){
 }
 function wagesPanel(){
   const dates = DATA.production.map(r=>r.date).filter(Boolean).sort();
+  // First time the Wages page is opened in a session: land on the current wage week (Fri-Thu) so paying needs no date picking.
+  if(!WAGES_UI.weekInit){ WAGES_UI.weekInit = true; const w = currentWageWeek(todayStr()); DATA.wageFrom = w.from; DATA.wageTo = w.to; }
   const from = DATA.wageFrom || dates[0] || todayStr();
   const to = DATA.wageTo || dates[dates.length-1] || todayStr();
   const rateRows = qualityRateRowsHtml(from, to);

@@ -173,7 +173,7 @@ async function wagesSheetSave(){
   const kept = DATA[list].some(r => r.id === id);
   let next = '';
   if(kept){
-    showToast(`${{ pay: 'Paid', bonus: 'Bonus', settle: 'Settled' }[k]} ${k === 'settle' ? fmtRs2(amt) + ' carried' : fmtRs2(amt)} · ${emp}`);
+    showToast(`${{ pay: 'Paid', bonus: 'Bonus', settle: 'Settled' }[k]} ${k === 'settle' ? fmtRs2(amt) + ' carried' : fmtRs2(amt)} · ${emp}`, k === 'pay' ? 10000 : undefined, k === 'pay' ? { label: 'Share slip', fn: () => shareWageReceipt(id) } : undefined);
     if(k === 'pay') next = wagesNextDueEmployee(emp, v('wg_from'), v('wg_to'));
   }
   // Paying several people in a row: stay open on the next person who is still due; otherwise close.
@@ -237,6 +237,26 @@ function wagesSalCardHtml(d, from, to, asOf){
     <div class="wg-det"><div class="wg-lines"><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span>${row && row.totalWagesNoBonus > 0 ? `<span>Wages <b>${fmtRs2(row.totalWagesNoBonus)}</b></span>` : ''}<span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry || '\u2013'}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
 }
+// "Pay this week": one row per employee for the selected period. Tap a row to pay (amount pre-filled with what is due);
+// a paid row gets a Share slip button. Unpaid people come first, biggest amount first.
+function wagesPayListHtml(data, from, to){
+  const items = data.filter(d => d.net.earned > 0.004 || Math.abs(d.net.net) > 0.004);
+  if(!items.length) return '';
+  const wk = wagePeriodPresets()[0], isWeek = from === wk.from && to === wk.to;
+  const due = items.filter(d => d.net.net > 0.004).sort((a, b) => b.net.net - a.net.net), rest = items.filter(d => !(d.net.net > 0.004));
+  const total = due.reduce((s, d) => s + d.net.net, 0);
+  const row = d => {
+    const owed = d.net.net > 0.004, cr = d.net.net < -0.004, name = escHtml(d.name);
+    const last = !owed ? wagesPeriodPayment(d.name, from, to) : null;
+    const amt = owed ? fmtRs2(d.net.net) : cr ? fmtRs2(-d.net.net) + ' extra' : 'Paid';
+    const btn = owed ? `<button type="button" class="wg-pay" data-wage-add="pay" data-wage-emp="${name}">Pay</button>`
+      : last ? `<button type="button" class="ghost wg-pay" data-wage-share="${escHtml(last.id)}">Share slip</button>` : '';
+    return `<div class="wg-pw-row"><div class="wg-pw-name"><b>${name}</b><small>Earned ${fmtRs2(d.net.earned)} · Paid ${fmtRs2(d.net.paid)}</small></div><div class="wg-pw-amt${owed ? '' : ' done'}">${amt}</div>${btn}</div>`;
+  };
+  return `<div class="card"><div class="card-head"><h2>${isWeek ? 'Pay this week' : 'Pay this period'}</h2></div>
+    <p class="wg-pw-sum">${due.length ? `${due.length} to pay · ${fmtRs2(total)} due` : 'Everyone is paid up'} · ${fmtDate(from)} to ${fmtDate(to)}</p>
+    ${due.concat(rest).map(row).join('')}</div>`;
+}
 function renderWages(){
   const from = v('wg_from'), to = v('wg_to');
   const wrap = document.getElementById('wagesWrap'); if(!wrap) return;
@@ -287,7 +307,7 @@ function renderWages(){
       return `<div class="wg-prod-row"><span class="q">${escHtml(qualities[i].name)}</span><span class="m">${fmtQtyMtr(tMeters[i])}</span><span class="bar"><i style="width:${pct}%"></i></span></div>`;
     }).join('')}${prodRows.length > 1 ? `<div class="wg-prod-row tot"><span class="q">Total production</span><span class="m">${fmtQtyMtr(gM)}</span></div>` : ''}</div>` : '';
 
-  wrap.innerHTML = `
+  wrap.innerHTML = wagesPayListHtml(data, from, to) + `
     <div class="card wg-hero"><div class="wg-hero-l">Still owed to employees (this period)</div><div class="wg-hero-big">${fmtRs(owed)}</div>
             <div class="wg-hero-row3"><span>Earned <b>${fmtRs(earned - bonus)}</b></span><span>Bonus <b>${fmtRs(bonus)}</b></span><span>Paid extra <b>${fmtRs(credit)}</b></span></div>
       <div class="wg-hero-grand"><span>Grand total</span><b>${fmtRs(earned + credit)}</b></div>

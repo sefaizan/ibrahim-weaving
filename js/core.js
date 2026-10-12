@@ -314,10 +314,15 @@ function showSaveTick(){
     clearTimeout(_tickTimer); _tickTimer = setTimeout(()=> el.classList.remove('show'), 1400);
   }catch(e){ typeof logErr==='function' && logErr('core', e); /* cosmetic only */ }
 }
-function showToast(msg, ms){
+function showToast(msg, ms, action){
   let el = document.getElementById('appToast');
   if(!el){ el = document.createElement('div'); el.id = 'appToast'; el.setAttribute('role','status'); document.body.appendChild(el); }
   el.textContent = msg; el.classList.add('show');
+  if(action && action.label){ // optional one-tap action, e.g. { label: 'Share slip', fn }
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+    b.addEventListener('click', ()=>{ el.classList.remove('show'); try{ action.fn(); }catch(err){} });
+    el.appendChild(b);
+  }
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(()=> el.classList.remove('show'), ms || 4500);
 }
