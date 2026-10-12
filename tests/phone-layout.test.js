@@ -54,3 +54,14 @@ test('v3.18.82: UI review fixes 1-5', () => {
   assert.match(html, /:root\[data-theme="dark"\] button\.primary[^{]*\{ background:var\(--rust-deep\);/); // (5) dark contrast
   assert.match(html, /:root\[data-theme="dark"\] label \.req/);
 });
+
+test('v3.18.89: Urdu mirrors the layout (dir=rtl) and figures such as 1234-12 stay left-to-right', () => {
+  const i18n = read('js/i18n.js');
+  assert.match(i18n, /setAttribute\('dir', 'rtl'\); else document\.documentElement\.removeAttribute\('dir'\)/);
+  assert.match(i18n, /const I18N_FIG = /);
+  assert.match(i18n, /function i18nIsolateFigures\(n\)/);
+  assert.match(i18n, /function i18nUnisolateFigures\(root\)/);
+  assert.match(i18n, /i18nUnisolateFigures\(root\);\s*\n\s*const w = document\.createTreeWalker/);   // English restores the plain text
+  assert.match(html, /bdi\.ltr-fig\{ unicode-bidi:isolate; direction:ltr; \}/);
+  assert.match(html, /html\[dir="rtl"\] nav\.tabs\{ left:auto; right:0; transform:translateX\(100%\); \}/);
+});
