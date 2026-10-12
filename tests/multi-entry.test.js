@@ -53,11 +53,11 @@ describe('loom cards', () => {
     assert.match(html, /<option selected>Gafar<\/option>/); assert.match(html, /<option selected>Riaz<\/option>/);
     assert.doesNotMatch(html, /Old/);
   });
-  test('cursor order: Gzana meters, sixteenths, Employee 1, Employee 2, Employee 3; names and the add button are skipped', () => {
+  test('cursor order: Gzana meters, sixteenths, Employee 1, Employee 2, Employee 3, Employee 4; names and the add buttons are skipped', () => {
     const html = load(data).mbCardHtml('9');
     const order = [...html.matchAll(/class="(mb_[gsm]\d?) mb_f"/g)].map(m => m[1]);
-    assert.deepEqual(order, ['mb_g', 'mb_s', 'mb_m1', 'mb_m2', 'mb_m3']);
-    assert.equal((html.match(/tabindex="-1"/g) || []).length, 5); // quality + 3 name dropdowns + the add-third button
+    assert.deepEqual(order, ['mb_g', 'mb_s', 'mb_m1', 'mb_m2', 'mb_m3', 'mb_m4']);
+    assert.equal((html.match(/tabindex="-1"/g) || []).length, 7); // quality + 4 name dropdowns + the add-third and add-fourth buttons
   });
   test('the sixteenths box has no "/16" watermark and sits after a line, not dashes', () => {
     const html = load(data).mbCardHtml('9');
