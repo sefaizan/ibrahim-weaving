@@ -766,6 +766,7 @@ function i18nSkipNode(el){
   return !!(el.closest && el.closest('[data-no-i18n],[contenteditable="true"]'));
 }
 function i18nTextNode(n){
+  if(n.__ltrFig) return;                             // a piece of a text node that was split around a figure (see i18nIsolateFigures)
   const cur = n.nodeValue;
   const rec = I18N_NODES.get(n);
   if(rec && cur === rec.ur) return;                  // already Urdu
@@ -788,15 +789,56 @@ function i18nAttrsOf(el){
     el.setAttribute(a, ur);
   });
 }
+// v3.18.89: in Urdu (right-to-left) a figure such as 1234-12 (meters-16ths), a date 10-10-2026 or a time 09:00 that follows Urdu
+// letters could be shown back to front (12-1234). Every number that has a - / : . or , inside it is wrapped in a left-to-right
+// isolate, so figures always read the same as in English. The text itself is unchanged (textContent stays identical).
+const I18N_FIG = /\d+(?:[-\/:.,]\d+)+/g;
+function i18nIsolateFigures(n){
+  const par = n.parentElement; if(!par) return;
+  if(par.closest && par.closest('svg,bdi.ltr-fig,[data-no-i18n]')) return;
+  const t = n.nodeValue; if(!/\d[-\/:.,]\d/.test(t)) return;
+  I18N_FIG.lastIndex = 0;
+  const hits = []; let m;
+  while((m = I18N_FIG.exec(t))) hits.push([m.index, m[0]]);
+  if(!hits.length) return;
+  // Inside a flex/grid box (e.g. the week badge) every piece would become its own flex item and the spaces around the figure
+  // would vanish, so the pieces are kept together inside one inline <span class="ltr-host">.
+  let host = par;
+  if(/flex|grid/.test(getComputedStyle(par).display)){ host = document.createElement('span'); host.className = 'ltr-host'; par.insertBefore(host, n); host.appendChild(n); }
+  // The ORIGINAL text node stays as the first piece (even if empty) so the English/Urdu bookkeeping still finds it.
+  n.nodeValue = t.slice(0, hits[0][0]); n.__ltrFig = true;
+  let ref = n.nextSibling;
+  hits.forEach(([idx, fig], k) => {
+    const b = document.createElement('bdi'); b.className = 'ltr-fig'; b.setAttribute('dir', 'ltr'); b.textContent = fig;
+    host.insertBefore(b, ref);
+    const end = idx + fig.length, nxt = k + 1 < hits.length ? hits[k + 1][0] : t.length;
+    const tn = document.createTextNode(t.slice(end, nxt)); tn.__ltrFig = true;
+    host.insertBefore(tn, ref);
+  });
+}
+function i18nUnisolateFigures(root){
+  root.querySelectorAll('bdi.ltr-fig').forEach(b => {
+    const prev = b.previousSibling;
+    if(prev && prev.nodeType === 3){
+      prev.nodeValue += b.textContent; prev.__ltrFig = false;
+      let nx = b.nextSibling;
+      if(nx && nx.nodeType === 3 && nx.__ltrFig){ prev.nodeValue += nx.nodeValue; nx.remove(); }
+      b.remove();
+    } else b.replaceWith(document.createTextNode(b.textContent));
+  });
+  root.querySelectorAll('span.ltr-host').forEach(h => { while(h.firstChild) h.parentNode.insertBefore(h.firstChild, h); h.remove(); });
+}
 function i18nWalk(root){
   const w = document.createTreeWalker(root, 1 | 4, null);   // elements and text
-  let n;
+  let n; const figs = [];
   while((n = w.nextNode())){
-    if(n.nodeType === 3){ if(!i18nSkipNode(n.parentElement)) i18nTextNode(n); }
+    if(n.nodeType === 3){ if(!i18nSkipNode(n.parentElement)){ i18nTextNode(n); figs.push(n); } }
     else if(!/^(SCRIPT|STYLE)$/.test(n.tagName)) i18nAttrsOf(n);
   }
+  figs.forEach(i18nIsolateFigures);   // after the walk, because it swaps text nodes for text + <bdi> pieces
 }
 function i18nRestore(root){
+  i18nUnisolateFigures(root);
   const w = document.createTreeWalker(root, 1 | 4, null);
   let n;
   while((n = w.nextNode())){
@@ -835,6 +877,7 @@ function i18nSetLang(l){
   I18N_LANG = (l === 'ur') ? 'ur' : 'en';
   try{ localStorage.setItem(I18N_KEY, I18N_LANG); }catch(e){ /* the choice just will not be remembered */ }
   document.documentElement.setAttribute('lang', I18N_LANG);
+  if(I18N_LANG === 'ur') document.documentElement.setAttribute('dir', 'rtl'); else document.documentElement.removeAttribute('dir'); // v3.18.89: Urdu mirrors the whole layout
   i18nButtonLabel();
   if(typeof setTimeout === 'function') setTimeout(()=>{ if(typeof alertLangRefresh === 'function') alertLangRefresh(); }, 80); // rebuild any WhatsApp message on screen in the new language
   if(I18N_LANG === 'ur') i18nRun();
