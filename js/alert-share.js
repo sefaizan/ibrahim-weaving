@@ -21,7 +21,7 @@ function alertRtlLines(text){ return alertUr() ? String(text).split('\n').map(l 
 const RULE_LINE = '━━━━━━━━━━━━━━';
 // key -> [English, Urdu]; {0} {1} {2} {3} are filled in by al(). Names, quality names, order numbers and dates are never translated.
 const AL = {
-  stockTitle: ['📦 STOCK IN HAND 📦', '📦 اسٹاک موجود 📦'], noStock: ['🔴 *NO STOCK IN HAND*', '🔴 *اسٹاک موجود نہیں ہے*'],
+  stockTitle: ['📦📦 STOCK IN HAND 📦📦', '📦📦 اسٹاک موجود 📦📦'], noStock: ['🔴 *NO STOCK IN HAND*', '🔴 *اسٹاک موجود نہیں ہے*'],
   total: ['TOTAL', 'کل اسٹاک'], arrow: ['➜', '⬅️'], more: ['more', 'مزید'], moreOrders: ['more orders', 'مزید آرڈرز'], orders: ['ORDERS', 'آرڈرز'], order: ['Order', 'آرڈر'],
   legend: ['🟩 Delivered   🟨 In stock for it   ⬜ To weave', '🟩 ڈیلیور   🟨 اسٹاک میں   ⬜ بننا باقی'],
   delLine: ['📤 *{0} delivered* ({1} of {2})', '📤 *{0} ڈیلیور* ({2} میں سے {1})'], remLine: ['⏳ Still to deliver: *{0}*', '⏳ ڈیلیور باقی: *{0}*'],
@@ -30,22 +30,22 @@ const AL = {
   none: ['🔴 *NO STOCK - weave {0}*', '🔴 *اسٹاک نہیں - {0} بنائیں*'], done: ['✅ *COMPLETED*', '✅ *مکمل*'],
   ordShort: ['⚠️ *{0} of {1} orders need more weaving*', '⚠️ *{1} میں سے {0} آرڈرز کے لیے مزید بُنائی ضروری ہے*'],
   ordOk: ['✅ *Stock covers every open order*', '✅ *اسٹاک تمام کھلے آرڈرز کے لیے کافی ہے*'],
-  weftTitle: ['🧵 WEFT STOCK 🧵', '🧵 بانا اسٹاک 🧵'], weftLow: ['🚨🚨 WEFT RUNNING LOW 🚨🚨', '🚨🚨 بانا ختم ہو رہا ہے 🚨🚨'],
+  weftTitle: ['🧵🧵 WEFT STOCK 🧵🧵', '🧵🧵 بانا اسٹاک 🧵🧵'], weftLow: ['🚨🚨 WEFT RUNNING LOW 🚨🚨', '🚨🚨 بانا ختم ہو رہا ہے 🚨🚨'],
   noWeft: ['No weft purchases recorded yet.', 'ابھی تک بانے کی کوئی خریداری درج نہیں ہے۔'],
   weftQty: ['*{0} bags* ({1} lbs)', '*{0} بیگ* ({1} پاؤنڈ)'], noPace: ['⏳ No recent production to measure the pace.', '⏳ رفتار جانچنے کے لیے حالیہ پیداوار موجود نہیں ہے۔'],
   weftDays: ['⏳ About *{0} days* left at {1} lbs per day', '⏳ تقریباً *{0} دن* باقی ({1} پاؤنڈ روزانہ کے حساب سے)'],
   weftOrder: ['👉 *ORDER WEFT NOW - stock is running low!*', '👉 *بانا ابھی منگوائیں - اسٹاک کم ہو رہا ہے!*'],
-  beamTitle: ['🔧 WARP BEAMS 🔧', '🔧 تانا بیم 🔧'], beamSoon: ['🚨🚨 BEAMS ENDING SOON 🚨🚨', '🚨🚨 بیم جلد ختم ہو رہے ہیں 🚨🚨'],
+  beamTitle: ['🔧🔧 WARP BEAMS 🔧🔧', '🔧🔧 تانا بیم 🔧🔧'], beamSoon: ['🚨🚨 BEAMS ENDING SOON 🚨🚨', '🚨🚨 بیم جلد ختم ہو رہے ہیں 🚨🚨'],
   beamNext: ['👉 *Get the next beam ready*', '👉 *اگلا بیم تیار رکھیں*'], noBeam: ['✅ No beam is ending within {0} days.', '✅ اگلے {0} دنوں میں کوئی بیم ختم نہیں ہو رہا۔'],
-  chqOver: ['🚨🚨 CHEQUES OVERDUE 🚨🚨', '🚨🚨 چیک کی میعاد گزر چکی 🚨🚨'], chqSoon: ['⏰ CHEQUES DUE SOON ⏰', '⏰ چیک جلد واجب الادا ⏰'], chqTitle: ['✅ CHEQUES', '✅ چیک'],
+  chqOver: ['🚨🚨 CHEQUES OVERDUE 🚨🚨', '🚨🚨 چیک کی میعاد گزر چکی 🚨🚨'], chqSoon: ['⏰⏰ CHEQUES DUE SOON ⏰⏰', '⏰⏰ چیک جلد واجب الادا ⏰⏰'], chqTitle: ['✅✅ CHEQUES ✅✅', '✅✅ چیک ✅✅'],
   chqOverN: ['🔴 *{0} OVERDUE - {1}*', '🔴 *{0} چیک کی میعاد گزر چکی - {1}*'], chqDueN: ['🟠 *{0} due within 7 days - {1}*', '🟠 *{0} چیک 7 دن کے اندر واجب الادا - {1}*'],
   chqNone: ['✅ No cheques overdue or due within 7 days.', '✅ کوئی چیک میعاد گزرا ہوا یا 7 دن کے اندر واجب الادا نہیں ہے۔'],
   overBy: ['{0} overdue', '{0} لیٹ'], dueIn: ['due in {0}', '{0} میں واجب الادا'], dueToday: ['due TODAY', 'آج واجب الادا'],
   followUp: ['👉 *Follow up TODAY*', '👉 *آج ہی رابطہ کریں*'],
-  openTitle: ['📋 OPEN ORDERS 📋', '📋 کھلے آرڈرز 📋'], noOrders: ['✅ No open orders.', '✅ کوئی کھلا آرڈر نہیں ہے۔'],
-  recvTitle: ['💰 MONEY TO RECEIVE 💰', '💰 وصول ہونے والی رقم 💰'], recv: ['🟡 *{0}* to receive from clients', '🟡 گاہکوں سے *{0}* وصول ہونے ہیں'],
+  openTitle: ['📋📋 OPEN ORDERS 📋📋', '📋📋 کھلے آرڈرز 📋📋'], noOrders: ['✅ No open orders.', '✅ کوئی کھلا آرڈر نہیں ہے۔'],
+  recvTitle: ['💰💰 MONEY TO RECEIVE 💰💰', '💰💰 وصول ہونے والی رقم 💰💰'], recv: ['🟡 *{0}* to receive from clients', '🟡 گاہکوں سے *{0}* وصول ہونے ہیں'],
   noRecv: ['✅ Nothing to receive from clients', '✅ گاہکوں سے کچھ وصول نہیں ہونا'],
-  profitTitle: ['📊 PROFIT AND CASH 📊', '📊 منافع اور نقد 📊'], profit: ['📈 *PROFIT {0}: {1}*', '📈 *منافع {0}: {1}*'], loss: ['📉 *LOSS {0}: {1}* 🔴', '📉 *نقصان {0}: {1}* 🔴'], cash: ['💵 Cash in hand: *{0}*', '💵 نقد موجود: *{0}*'],
+  profitTitle: ['📊📊 PROFIT AND CASH 📊📊', '📊📊 منافع اور نقد 📊📊'], profit: ['📈 *PROFIT {0}: {1}*', '📈 *منافع {0}: {1}*'], loss: ['📉 *LOSS {0}: {1}* 🔴', '📉 *نقصان {0}: {1}* 🔴'], cash: ['💵 Cash in hand: *{0}*', '💵 نقد موجود: *{0}*'],
   shNone: ['Nothing is ticked yet - the Share button will ask you to choose.', 'ابھی کچھ منتخب نہیں ہے - شیئر بٹن آپ سے انتخاب کے لیے کہے گا۔'],
   shChars: ['({0} characters)', '({0} حروف)'], shLong: ['({0} characters - long, WhatsApp may cut it)', '({0} حروف - پیغام لمبا ہے، واٹس ایپ اسے کاٹ سکتا ہے)'],
   shChoose: ['Choose what to share in Settings first.', 'پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔'], shFail: ['Could not build the message.', 'پیغام نہیں بن سکا۔']
@@ -121,8 +121,8 @@ function alertStockText(rows, total, orders){
   const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
   if(!list.length){ lines.push(al('noStock'), '', alertAsOf()); return { title: al('stockTitle'), body: lines.join('\n') }; }
   const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name)), arrow = al('arrow');
-  lines.push('🟢 *' + al('total') + ': ' + alertMtr(t) + '*', RULE_LINE);
-  shown.forEach(r => lines.push('▪️ *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtr(r.stock) + '*'));
+  lines.push('🟢🟢 *' + al('total') + ': ' + alertMtr(t) + '*', RULE_LINE);
+  shown.forEach(r => lines.push('🔸 *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtr(r.stock) + '*'));
   if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('more'));
   const og = []; let short = 0, count = 0;
   shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length){ short += ol.short; count += ol.count; og.push('🧵 *' + alertLtr(nm[r.name]) + '*', ...ol, ''); } });
@@ -207,7 +207,8 @@ function alertBuild(kind, opts){
   else return '';
   return alertJoin(m);
 }
-function alertJoin(m){ return alertRtlLines('*' + m.title + '*\n' + RULE_LINE + '\n' + m.body); }
+const LOUD_LINE = '🔥🔥🔥🔥🔥🔥🔥🔥';
+function alertJoin(m){ return alertRtlLines(LOUD_LINE + '\n*' + m.title + '*\n' + LOUD_LINE + '\n' + m.body); }
 // phone (optional): opens that person's chat directly. 03xx... is read as a Pakistan number (92...). Groups cannot be opened from a link.
 function alertPhoneDigits(phone){
   let d = String(phone || '').replace(/\D/g, '');
