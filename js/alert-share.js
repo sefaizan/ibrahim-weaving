@@ -146,7 +146,7 @@ function alertBeamLine(f){
   if(!alertUr()) return icon + (typeof beamAlertText === 'function' ? beamAlertText(f) : '');
   if(f.state === 'full') return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم پورا بُنا جا چکا ہے - *ابھی* اگلا بیم چڑھائیں یا اسے مکمل کریں';
   const when = f.daysLeft <= 0.5 ? '*آج*' : f.daysLeft <= 1.5 ? '*کل*' : 'تقریباً *' + alertLtr(Math.round(f.daysLeft)) + ' دن* میں';
-  return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم ' + when + ' ختم ہوگا (تقریباً ' + alertLtr(Math.round(f.expectedRemaining)) + ' میٹر باقی)';
+  return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم ' + when + ' ختم ہوگا (تقریباً ' + alertLtr(Math.round(f.expectedRemaining)) + ' میٹر کپڑا باقی)';
 }
 function alertBeamText(list, days){
   const has = list && list.length;

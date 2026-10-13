@@ -189,7 +189,7 @@ function beamForecastRows(list){
     const r = beamForecastRightCell(f);
     const detail = f.state === 'full'
       ? `${fmtNum(Math.round(f.woven))} of ${fmtNum(f.length)} m woven`
-      : [`~${fmtNum(Math.round(f.expectedRemaining))} m left`, f.rate ? `${fmtNum(Math.round(f.rate))} m/day` : ''].filter(Boolean).join(' · ');
+      : [`~${fmtNum(Math.round(f.expectedRemaining))} m cloth left`, f.rate ? `${fmtNum(Math.round(f.rate))} m/day` : ''].filter(Boolean).join(' · ');
     return `<div style="${rowStyle}">
       <span><b>Loom ${escHtml(f.loom)}</b>${f.warpType ? ' · ' + escHtml(f.warpType) : ''}<br><span style="color:var(--ink-soft);font-size:12px">${detail}</span></span>
       <span style="text-align:right;color:${r.color}"><b>${r.label}</b>${r.sub ? `<br><span style="font-size:12px">${r.sub}</span>` : ''}</span>
@@ -198,9 +198,9 @@ function beamForecastRows(list){
 }
 function beamForecastBasisNote(f){
   const yieldPart = f && f.yieldBasis >= 2
-    ? `beams ending at about ${Math.round(f.yieldRatio * 100)}% of their logged length (median of your last ${f.yieldBasis} finished beams)`
-    : 'each beam being woven to its full logged length (until two beams have finished)';
-  return `Estimate from each loom's output over its last ${BEAM_RATE_WINDOW_DAYS} days, with ${yieldPart}. Treat it as a guide — it moves as output changes.`;
+    ? `about ${Math.round(f.yieldRatio * 100)}% of the warp length, learned from your last ${f.yieldBasis} finished beams`
+    : '100% of the warp length, until two beams have finished';
+  return `"m cloth left" is the grey cloth still to be woven on the beam, not warp. Expected cloth = beam length × usual yield (${yieldPart}), minus cloth already woven. Days left = cloth left ÷ the loom's daily average over its last ${BEAM_RATE_WINDOW_DAYS} days. It is a guide — it moves as output changes.`;
 }
 // Overview: only shows when a beam is ending / fully woven / due within a week; silent otherwise.
 // Dismissible like the other Overview warning banners — the signature is the exact set of

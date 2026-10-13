@@ -956,7 +956,7 @@ document.addEventListener('click', e=>{
   const left = Number(bt.dataset.left) || 0, loom = bt.dataset.loom;
   const msg = left <= 0
     ? `\u26A0\uFE0F Loom ${loom}'s beam is fully woven \u2014 please check, and chain the next beam or mark it finished.`
-    : `\u26A0\uFE0F Loom ${loom}'s beam is about to finish \u2014 only ~${fmtNum(left)} m left (beam chained ${bt.dataset.date ? fmtDate(bt.dataset.date) : 'earlier'}). Please check.`;
+    : `\u26A0\uFE0F Loom ${loom}'s beam is about to finish \u2014 only ~${fmtNum(left)} m of cloth left (beam chained ${bt.dataset.date ? fmtDate(bt.dataset.date) : 'earlier'}). Please check.`;
   if(typeof haptic === 'function') haptic([30,40,30]);
   showActionToast(msg, 'Beams', ()=> switchTab('warpbeams'), 9000);
 });
@@ -1081,6 +1081,15 @@ function renderYieldPanel(r, beamDetails){
       finishedOnCell(d), d.isActive ? '<b>Active</b>' : 'Finished'
     ];
   });
+  // In-progress purchases: grey cloth still expected from their running beams, and warp length not yet woven.
+  let leftStats = '';
+  if(!r.complete){
+    const fc = computeBeamForecasts(beamAlertDays() || 3);
+    const act = r.beams.map(b=>fc.find(f=>f.id===b.id)).filter(Boolean);
+    const clothLeft = act.reduce((s,f)=>s+(f.expectedRemaining||0),0), warpLeft = act.reduce((s,f)=>s+(f.remaining||0),0);
+    leftStats = `<div class="stat"><div class="label">Grey Cloth Still Expected</div><div class="value">~${fmtNum(Math.round(clothLeft))}m</div></div>
+      <div class="stat"><div class="label">Warp Length Left</div><div class="value">${fmtNum(Math.round(warpLeft))}m</div></div>`;
+  }
   return `
   <div class="purchase-panel">
     <div class="ptitle">${escHtml(purchaseText(r.purchase))}</div>
@@ -1092,6 +1101,7 @@ function renderYieldPanel(r, beamDetails){
       <div class="stat"><div class="label">Shrinkage</div><div class="value">${shrinkStat}</div></div>
       <div class="stat"><div class="label">Yield</div><div class="value">${yieldStat}</div></div>
       <div class="stat"><div class="label">Cost / Meter</div><div class="value">${costStat}</div></div>
+      ${leftStats}
     </div>
     <div class="panel-subhead" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">Beam-Level Detail</div>
     <div class="log-scroll log-cards">${table(['Beam Date','Warp Type','Loom','Length (m)','Woven (m)','Shrinkage (m)','Shrinkage %','Days Taken','Finished On','Status'], beamRows, true)}</div>

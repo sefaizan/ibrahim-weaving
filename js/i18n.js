@@ -43,7 +43,7 @@ const I18N_UR = {
   'Add Entry':'اندراج شامل کریں', 'Cancel Edit':'ترمیم منسوخ کریں',
   // Production: bulk import and log
   'Bulk Import':'اکٹھا درآمد', 'Import Rows':'قطاریں درآمد کریں', 'Production Log':'پیداوار کا ریکارڈ',
-  'Filter by Quality':'کوالٹی کے مطابق فلٹر', 'Filter by Loom #':'لوم نمبر کے مطابق فلٹر', 'All Looms':'تمام لومز', 'All Qualities':'تمام کوالٹیز', 'All Time':'تمام وقت',
+  'Filter by Quality':'کوالٹی کے مطابق فلٹر', 'Grey Cloth Still Expected':'متوقع باقی گرے کپڑا', 'Warp Length Left':'باقی تانا لمبائی', 'Filter by Loom #':'لوم نمبر کے مطابق فلٹر', 'All Looms':'تمام لومز', 'All Qualities':'تمام کوالٹیز', 'All Time':'تمام وقت',
   'This Month':'اس مہینے', 'Last Month':'پچھلے مہینے', 'This Year':'اس سال', 'Custom…':'اپنی مرضی…',
   'From':'سے', 'To':'تک', 'Qty':'مقدار', 'Beam':'بیم', 'Emp 1':'ملازم 1', 'Emp 2':'ملازم 2', 'Emp 3':'ملازم 3', 'Emp 4':'ملازم 4', 'Diff':'فرق',
   // Settings lists

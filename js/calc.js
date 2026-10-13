@@ -1291,7 +1291,7 @@ function beamWhenText(f){
 }
 function beamAlertText(f){
   if(f.state === 'full') return `Loom ${f.loom} beam is fully woven — chain the next beam or mark it finished`;
-  return `Loom ${f.loom} beam ends ${beamWhenText(f)} (~${Math.round(f.expectedRemaining)} m left)`;
+  return `Loom ${f.loom} beam ends ${beamWhenText(f)} (~${Math.round(f.expectedRemaining)} m of cloth left)`;
 }
 // One line for the alert toast: a single beam in full, or a short list when several are due.
 function beamAlertSummary(list){
