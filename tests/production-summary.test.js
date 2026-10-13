@@ -41,7 +41,7 @@ describe('the card on the Production page', () => {
     assert.match(src, /function productionSummaryCard[\s\S]*?sumCardOpen\('summary','Production Summary', badge\)[\s\S]*?sumCardClose\(\)/);
   });
   test('is fed the same filtered rows as the Production Log, just above it', () => {
-    assert.match(src, /\$\{productionSummaryCard\(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml, loomVal\)\}\s*<div class="card"><h2>Production Log<\/h2>/);
+    assert.match(src, /\$\{productionSummaryCard\(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml\)\}\s*<div class="card"><h2>Production Log<\/h2>/);
   });
   test('a fresh launch has nothing remembered open', () => {
     assert.match(read('js/core.js'), /let OPEN_SUMMARIES = new Set\(\);/);
