@@ -110,8 +110,8 @@ describe('alert texts', () => {
     const u = load(`var I18N_LANG = 'ur'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44 (Micro)', stock: 1240 }], receivable: 250000, profitMonth: 84500, cash: 3000 }); var DATA = { orders: [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 600 });`);
     const L = x => '\u202A' + x + '\u202C';   // a figure, kept left-to-right
     const st = u.alertJoin(u.alertStockText([{ name: '62/44 (Micro)', stock: 1240 }], 1540, [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000, got: 600 }]));
-    assert.ok(st.startsWith('\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F*📦📦 اسٹاک موجود 📦📦*\n\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F🟢🟢 *کل اسٹاک: ' + L('1,540') + ' میٹر*'));
-    assert.ok(st.includes('🔸 *' + L('62/44') + '*  ⬅️  *' + L('1,240') + ' میٹر*') && st.includes('📋 *آرڈرز*') && st.includes('📋 *' + L('ORD-12') + '*'));
+    assert.ok(st.startsWith('\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F*📦📦 اسٹاک موجود 📦📦*\n\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F🟢🟢 *کل اسٹاک: \u202A1,540 میٹر\u202C*'));
+    assert.ok(st.includes('🔸 *' + L('62/44') + '*  ⬅️  *\u202A1,240 میٹر\u202C*') && st.includes('📋 *آرڈرز*') && st.includes('📋 *' + L('ORD-12') + '*'));
     assert.ok(st.includes('📤 *' + L('30%') + ' ڈیلیور* (' + L('2,000') + ' میٹر میں سے ' + L('600') + ' میٹر)') && st.includes('ڈیلیور باقی: *' + L('1,400') + ' میٹر*') && st.includes('🟠 *اسٹاک صرف ' + L('1,240') + ' میٹر پورا کرتا ہے - ' + L('160') + ' میٹر مزید بنائیں*'));
     assert.ok(st.includes('🟩 ڈیلیور   🟨 اسٹاک میں   ⬜ بننا باقی') && /🕙 \*تازہ ترین: \d+ \S+، \u202A\d+:\d\d\u202C \S+\*$/.test(st));
     assert.ok(!/[A-Za-z]{4}/.test(st.replace('Micro', '')), 'no English words left: ' + st);
@@ -134,7 +134,7 @@ describe('alert texts', () => {
     const u = load(`var I18N_LANG = 'ur'; var fmtQtyMtr = n => '1240-12'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44', stock: 1240.75 }], receivable: 250000 });`);
     const msg = u.alertBuild('stock');
     assert.ok(msg.split('\n').filter(l => l.trim()).every(l => l.startsWith('\u200F')), 'every non-empty line starts with a right-to-left mark');
-    assert.ok(msg.includes('\u202A1,240-12\u202C میٹر'), 'meters-and-sixteenths stay 1,240-12, never 12-1,240');
+    assert.ok(msg.includes('\u202A1,240-12 میٹر\u202C'), 'meters-and-sixteenths stay 1,240-12, never 12-1,240');
     const both = u.shareBuild({ stock: true, receivable: true });
     assert.equal((both.match(/تازہ ترین:/g) || []).length, 1);
     assert.ok(both.split('\n').filter(l => l.trim()).every(l => l.startsWith('\u200F')));
