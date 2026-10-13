@@ -299,8 +299,9 @@ function productionPanel(){
     <div class="card"><h2>Production Log</h2>
       <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><div class="chip-row" id="pf_looms" style="margin-top:6px"><button type="button" class="chip${loomSel.length?'':' active'}" data-loom="">All Looms</button>${DATA.looms.map(l=>`<button type="button" class="chip${loomSel.includes(String(l))?' active':''}" data-loom="${escHtml(l)}">${escHtml(l)}</button>`).join('')}</div></div>
       ${(qualityVal || loomSel.length || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${logRows.length} entr${logRows.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomSel.length?` on loom${loomSel.length===1?'':'s'} <b>${loomSel.map(escHtml).join(', ')}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
+      <p class="note" style="margin:0 0 10px">Qty = meters woven in that entry · Diff = Qty − meters credited to the employees · Beam Date = the day that beam was started.</p>
       ${logTable('production',
-      prodLogHead(['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam',''], logRows),
+      prodLogHead(['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam Date',''], logRows),
       logRows.slice().reverse(),
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0)+(r.e4m||0));
@@ -1087,8 +1088,8 @@ function renderYieldPanel(r, beamDetails){
     const fc = computeBeamForecasts(beamAlertDays() || 3);
     const act = r.beams.map(b=>fc.find(f=>f.id===b.id)).filter(Boolean);
     const clothLeft = act.reduce((s,f)=>s+(f.expectedRemaining||0),0), warpLeft = act.reduce((s,f)=>s+(f.remaining||0),0);
-    leftStats = `<div class="stat"><div class="label">Grey Cloth Still Expected</div><div class="value">~${fmtNum(Math.round(clothLeft))}m</div></div>
-      <div class="stat"><div class="label">Warp Length Left</div><div class="value">${fmtNum(Math.round(warpLeft))}m</div></div>`;
+    leftStats = `<div class="stat"><div class="label">Grey Cloth Still Expected</div><div class="value">~${fmtNum(Math.round(clothLeft))}m</div><div class="hint">Cloth still to be woven on the running beams</div></div>
+      <div class="stat"><div class="label">Warp Length Left</div><div class="value">${fmtNum(Math.round(warpLeft))}m</div><div class="hint">Warp length not yet woven</div></div>`;
   }
   return `
   <div class="purchase-panel">
@@ -1096,11 +1097,11 @@ function renderYieldPanel(r, beamDetails){
     <div class="psub">${fmtRs(r.purchase.amount)} · ${r.beams.length} beam${r.beams.length===1?'':'s'} · ${r.complete?'<span class="badge month">Complete</span>':'<span class="badge progress">In Progress</span>'}</div>
     <div class="panel-subhead">Overall Summary</div>
     <div class="grid cols-3">
-      <div class="stat"><div class="label">Length Logged</div><div class="value">${fmtNum(r.totalLength)}m</div></div>
-      <div class="stat"><div class="label">Woven${r.complete?'':' So Far'}</div><div class="value">${fmtNum(r.totalWoven)}m</div></div>
-      <div class="stat"><div class="label">Shrinkage</div><div class="value">${shrinkStat}</div></div>
-      <div class="stat"><div class="label">Yield</div><div class="value">${yieldStat}</div></div>
-      <div class="stat"><div class="label">Cost / Meter</div><div class="value">${costStat}</div></div>
+      <div class="stat"><div class="label">Length Logged</div><div class="value">${fmtNum(r.totalLength)}m</div><div class="hint">Warp length entered on the beams</div></div>
+      <div class="stat"><div class="label">Woven${r.complete?'':' So Far'}</div><div class="value">${fmtNum(r.totalWoven)}m</div><div class="hint">Grey cloth woven from these beams</div></div>
+      <div class="stat"><div class="label">Shrinkage</div><div class="value">${shrinkStat}</div><div class="hint">Length − Woven: warp that did not become cloth</div></div>
+      <div class="stat"><div class="label">Yield</div><div class="value">${yieldStat}</div><div class="hint">Woven ÷ Length</div></div>
+      <div class="stat"><div class="label">Cost / Meter</div><div class="value">${costStat}</div><div class="hint">Purchase amount ÷ woven meters</div></div>
       ${leftStats}
     </div>
     <div class="panel-subhead" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">Beam-Level Detail</div>

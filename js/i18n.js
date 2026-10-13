@@ -160,6 +160,8 @@ const I18N_UR_MORE = {
   "Complete": "مکمل",
   "Overall Summary": "مجموعی خلاصہ",
   "Length Logged": "درج شدہ لمبائی",
+  "Warp length entered on the beams": "بیمز پر درج کی گئی تانے کی لمبائی", "Grey cloth woven from these beams": "ان بیمز سے بُنا گیا گرے کپڑا", "Length − Woven: warp that did not become cloth": "لمبائی − بُنا ہوا: تانا جو کپڑا نہیں بنا", "Woven ÷ Length": "بُنا ہوا ÷ لمبائی", "Purchase amount ÷ woven meters": "خریداری کی رقم ÷ بُنے ہوئے میٹر", "Cloth still to be woven on the running beams": "چلتے بیمز پر ابھی بُنا جانے والا کپڑا", "Warp length not yet woven": "تانے کی وہ لمبائی جو ابھی نہیں بُنی", "The rate to charge: warp and weft cost plus additions": "فی میٹر چارج کرنے کا ریٹ: تانا اور بانا لاگت جمع اضافے", "Beam Date": "بیم کی تاریخ",
+  "Qty = meters woven in that entry · Diff = Qty − meters credited to the employees · Beam Date = the day that beam was started.": "مقدار = اس اندراج میں بُنے گئے میٹر · فرق = مقدار − ملازمین کو دیے گئے میٹر · بیم کی تاریخ = بیم شروع ہونے کا دن۔",
   "Shrinkage": "کمی",
   "Yield": "حاصل",
   "Cost / Meter": "لاگت / میٹر",

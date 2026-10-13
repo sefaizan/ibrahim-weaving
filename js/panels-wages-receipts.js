@@ -749,6 +749,7 @@ function renderRateCalcResult(){
       </div>
       <div class="stat balance" style="margin-top:14px">
         <div class="label">Final Rate per Meter</div>
+        <div class="hint">The rate to charge: warp and weft cost plus additions</div>
         <div class="value pos" style="font-size:34px">${(r.warpValid && r.weftValid) ? fmtRs2(r.finalRate) : '—'}</div>
         <div class="legend">Yarn Cost (${yarnCostValid?fmtRs2(yarnCost):'—'}) + Picks Addition (${fmtRs(r.picksAddition)}) + Extra Addition (${fmtRs2(inp.extra)})</div>
       </div>
