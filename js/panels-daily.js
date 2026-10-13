@@ -207,7 +207,7 @@ function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
 // The Production Log's column heads. An "Emp 4" column is added (before Diff) only when a row being shown has a fourth employee,
 // so the table looks exactly as before until someone uses the fourth slot.
 function prodLogHead(head, rows){
-  return rows.some(r=>r.e4) ? head.slice(0, 9).concat(['Emp 4'], head.slice(9)) : head;
+  return rows.some(r=>r.e4) ? head.slice(0, 7).concat(['Emp 4'], head.slice(7)) : head;
 }
 function productionPanel(){
   const qualityVal = FILTER.production || '';
@@ -217,8 +217,8 @@ function productionPanel(){
   if(fromVal) filteredProduction = filteredProduction.filter(r=>r.date >= fromVal);
   if(toVal) filteredProduction = filteredProduction.filter(r=>r.date <= toVal);
   // The Production Log has its own Loom # filter on top of the quality / date filters; the summary above ignores it.
-  const loomVal = FILTER.productionLoom || '';
-  const logRows = loomVal ? filteredProduction.filter(r=>String(r.loom)===String(loomVal)) : filteredProduction;
+  const loomSel = (FILTER.productionLooms || []).map(String);   // one or more looms; empty = all looms
+  const logRows = loomSel.length ? filteredProduction.filter(r=>loomSel.includes(String(r.loom))) : filteredProduction;
   const filterQty = logRows.reduce((s,r)=>s+(Number(r.qty)||0),0);
   const productionFilterHtml = `      <div class="field"><label>Filter by Quality</label><select id="pf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
       <div class="chip-row" id="pf_chips" style="margin-top:12px">
@@ -297,16 +297,16 @@ function productionPanel(){
     </div>
     ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml)}
     <div class="card"><h2>Production Log</h2>
-      <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><select id="pf_loom"><option value="">All Looms</option>${opts(DATA.looms)}</select></div>
-      ${(qualityVal || loomVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${logRows.length} entr${logRows.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomVal?` on loom <b>${escHtml(loomVal)}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
+      <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><div class="chip-row" id="pf_looms" style="margin-top:6px"><button type="button" class="chip${loomSel.length?'':' active'}" data-loom="">All Looms</button>${DATA.looms.map(l=>`<button type="button" class="chip${loomSel.includes(String(l))?' active':''}" data-loom="${escHtml(l)}">${escHtml(l)}</button>`).join('')}</div></div>
+      ${(qualityVal || loomSel.length || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${logRows.length} entr${logRows.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomSel.length?` on loom${loomSel.length===1?'':'s'} <b>${loomSel.map(escHtml).join(', ')}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
-      prodLogHead(['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''], logRows),
+      prodLogHead(['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam',''], logRows),
       logRows.slice().reverse(),
       r=>{
         const diff = (r.qty||0) - ((r.e1m||0)+(r.e2m||0)+(r.e3m||0)+(r.e4m||0));
         const showE4 = logRows.some(x=>x.e4);
         const beamRec = r.beam ? DATA.warpBeams.find(b=>b.id===r.beam) : null;
-        return [fmtDate(r.date), r.time||'—', `<span class="loom-no">${escHtml(r.loom)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), beamRec?fmtDate(beamRec.date):'—', `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—'].concat(showE4 ? [r.e4?`<span class="name">${escHtml(r.e4)}</span> (${fmtQtyMtr(r.e4m)})`:'—'] : [], [fmtQtyMtr(diff), actionBtns('production',r.id)]);
+        return [fmtDate(r.date), r.time||'—', `<span class="loom-no">${escHtml(r.loom)}</span>`, fmtQtyMtr(r.qty), `<span class="name">${escHtml(r.e1||'')}</span> (${fmtQtyMtr(r.e1m)})`, r.e2?`<span class="name">${escHtml(r.e2)}</span> (${fmtQtyMtr(r.e2m)})`:'—', r.e3?`<span class="name">${escHtml(r.e3)}</span> (${fmtQtyMtr(r.e3m)})`:'—'].concat(showE4 ? [r.e4?`<span class="name">${escHtml(r.e4)}</span> (${fmtQtyMtr(r.e4m)})`:'—'] : [], [fmtQtyMtr(diff), escHtml(r.quality), beamRec?fmtDate(beamRec.date):'—', actionBtns('production',r.id)]);
       }
     )}</div>`;
 }
