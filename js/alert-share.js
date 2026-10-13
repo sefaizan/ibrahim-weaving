@@ -61,6 +61,8 @@ function alertMtr(n){
   // Urdu: the quantity is forced left-to-right so 123-12 never flips to 12-123; only the unit word is Urdu.
   return alertUr() ? alertLtr(num) + ' میٹر' : num + ' m';
 }
+// Stock lines (v3.18.95): number and unit are ONE left-to-right piece, so it always shows as "2,502-12 میٹر" (number first), never the unit in front.
+function alertMtrFlat(n){ const m = alertMtr(n); return alertUr() ? AL_LRE + m.split(AL_LRE).join('').split(AL_PDF).join('') + AL_PDF : m; }
 function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + alertNum(n); return alertUr() ? alertLtr(t.replace(/^Rs\s*/, '')) + ' روپے' : t; }
 function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + alertLtr(d.getFullYear()) : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
 function alertAsOf(){
@@ -121,8 +123,8 @@ function alertStockText(rows, total, orders){
   const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
   if(!list.length){ lines.push(al('noStock'), '', alertAsOf()); return { title: al('stockTitle'), body: lines.join('\n') }; }
   const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name)), arrow = al('arrow');
-  lines.push('🟢🟢 *' + al('total') + ': ' + alertMtr(t) + '*', RULE_LINE);
-  shown.forEach(r => lines.push('🔸 *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtr(r.stock) + '*'));
+  lines.push('🟢🟢 *' + al('total') + ': ' + alertMtrFlat(t) + '*', RULE_LINE);
+  shown.forEach(r => lines.push('🔸 *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtrFlat(r.stock) + '*'));
   if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('more'));
   const og = []; let short = 0, count = 0;
   shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length){ short += ol.short; count += ol.count; og.push('🧵 *' + alertLtr(nm[r.name]) + '*', ...ol, ''); } });
