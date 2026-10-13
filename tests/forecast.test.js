@@ -193,9 +193,9 @@ describe('alert wording', () => {
   test('a beam a few days out, tomorrow, today, and fully woven', () => {
     const app = loadApp();
     const f = (o) => ({ loom: '3', state: 'ending', daysLeft: 3, expectedRemaining: 300, ...o });
-    assert.equal(app.beamAlertText(f()), 'Loom 3 beam ends in about 3 days (~300 m left)');
-    assert.equal(app.beamAlertText(f({ daysLeft: 1.2, expectedRemaining: 118.4 })), 'Loom 3 beam ends tomorrow (~118 m left)');
-    assert.equal(app.beamAlertText(f({ daysLeft: 0.3, expectedRemaining: 41 })), 'Loom 3 beam ends today (~41 m left)');
+    assert.equal(app.beamAlertText(f()), 'Loom 3 beam ends in about 3 days (~300 m of cloth left)');
+    assert.equal(app.beamAlertText(f({ daysLeft: 1.2, expectedRemaining: 118.4 })), 'Loom 3 beam ends tomorrow (~118 m of cloth left)');
+    assert.equal(app.beamAlertText(f({ daysLeft: 0.3, expectedRemaining: 41 })), 'Loom 3 beam ends today (~41 m of cloth left)');
     assert.equal(app.beamAlertText(f({ state: 'full', daysLeft: 0 })), 'Loom 3 beam is fully woven — chain the next beam or mark it finished');
   });
 
@@ -205,7 +205,7 @@ describe('alert wording', () => {
     const b = { loom: '2', state: 'ending', daysLeft: 1.2, expectedRemaining: 100 };
     const c = { loom: '5', state: 'full', daysLeft: 0, expectedRemaining: 0 };
     assert.equal(app.beamAlertSummary([]), '');
-    assert.equal(app.beamAlertSummary([a]), '⚠ Loom 1 beam ends in about 3 days (~300 m left)');
+    assert.equal(app.beamAlertSummary([a]), '⚠ Loom 1 beam ends in about 3 days (~300 m of cloth left)');
     assert.equal(app.beamAlertSummary([a, b, c]), '⚠ 3 beams ending soon: Loom 1 (~3 days), Loom 2 (tomorrow), Loom 5 (fully woven)');
   });
 });

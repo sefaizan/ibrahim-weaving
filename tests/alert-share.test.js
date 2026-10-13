@@ -118,7 +118,7 @@ describe('alert texts', () => {
     const w = u.alertJoin(u.alertWeftText({ hasData: true, bags: 12.3, lbs: 1234, cover: 4.2, perDay: 300, low: true }));
     assert.ok(w.includes('🚨🚨 بانا ختم ہو رہا ہے 🚨🚨') && w.includes('*' + L('12.3') + ' بیگ* (' + L('1,234') + ' پاؤنڈ)') && w.includes('*بانا ابھی منگوائیں'));
     const b = u.alertBeamText([{ loom: 4, state: 'ending', daysLeft: 2.4, expectedRemaining: 120 }], 3);
-    assert.ok(b.body.includes('لوم *' + L('4') + '* کا بیم تقریباً *' + L('2') + ' دن* میں ختم ہوگا (تقریباً ' + L('120') + ' میٹر باقی)') && b.title.includes('بیم جلد ختم'));
+    assert.ok(b.body.includes('لوم *' + L('4') + '* کا بیم تقریباً *' + L('2') + ' دن* میں ختم ہوگا (تقریباً ' + L('120') + ' میٹر کپڑا باقی)') && b.title.includes('بیم جلد ختم'));
     assert.ok(u.alertBeamText([], 3).body.includes('اگلے ' + L('3') + ' دنوں میں کوئی بیم ختم نہیں ہو رہا'));
     const c = u.alertChequeText([{ client: 'Ali', amount: 1000, chequeDate: '2026-10-01' }, { client: 'Bilal', amount: 500, chequeDate: '2026-10-12' }], '2026-10-09', '2026-10-16');
     assert.ok(c.body.includes('🔴 *' + L('1') + ' چیک کی میعاد گزر چکی - ' + L('1000') + ' روپے*') && c.body.includes('🟠 *' + L('1') + ' چیک 7 دن کے اندر واجب الادا - ' + L('500') + ' روپے*'));
