@@ -1208,6 +1208,59 @@ function computeBeamDetails(){
   return details;
 }
 
+/* ---------------- Production entry check against the loom's beam ----------------
+ * Used by every production form (single, Add & next loom, edit, Multiple Entries):
+ *  1. If the loom's newest beam is marked finished and the entry is dated after it finished, the entry is
+ *     refused until the new warp beam is logged (otherwise it would pile onto a beam that is already done).
+ *  2. A beam can only give about its length minus the usual shrinkage (BEAM_ENTRY_SHRINKAGE_PCT). An entry that
+ *     would take the beam's woven meters past that is refused: "about to finish" while some meters are left,
+ *     "finished" once none are. Editing an old entry is only refused if the edit makes the beam fuller.
+ * Returns {ok:true} or {ok:false, msg}. Loom with no beam logged = no check.
+ */
+const BEAM_ENTRY_SHRINKAGE_PCT = 2.5;
+function beamEntryCheck(rec, skipId){
+  const loom = rec && rec.loom, qty = Number(rec && rec.qty) || 0;
+  if(!loom || !(qty > 0)) return {ok:true};
+  const list = DATA.warpBeams.filter(b=> b.loom === loom).sort((a,b)=> dtOf(a)-dtOf(b));
+  if(!list.length) return {ok:true};
+  const newLog = `Please log the new warp beam against a new purchase first, then add production for this loom.`;
+  const last = list[list.length-1];
+  if(last.finished && rec.date && rec.date > (last.finishedDate || last.date)){
+    return {ok:false, msg:`Loom ${loom}: this beam is finished. ${newLog}`};
+  }
+  // Which beam would this entry belong to (same rule as beamProductionLinks)
+  let beam = rec.beam ? list.find(b=> b.id === rec.beam) : null;
+  if(!beam){
+    for(let i=list.length-1;i>=0;i--){
+      const cand = list[i];
+      if(rec.date < cand.date) continue;
+      const next = list[i+1];
+      const windowEnd = next ? next.date : (cand.finished ? (cand.finishedDate||cand.date) : null);
+      if(windowEnd != null && rec.date > windowEnd) continue;
+      beam = cand; break;
+    }
+  }
+  if(!beam) return {ok:true};
+  const len = Number(beam.length) || 0;
+  if(!(len > 0)) return {ok:true};
+  const cap = len * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100);
+  let woven = (computeWarpBeamUsage()[beam.id] || {woven:0}).woven;
+  if(skipId){
+    const link = beamProductionLinks().find(l=> l.r.id === skipId && l.beam.id === beam.id);
+    if(link){
+      if(qty <= (Number(link.r.qty)||0) + 1e-9) return {ok:true};   // not making an old entry bigger
+      woven -= Number(link.r.qty) || 0;
+    }
+  }
+  if(woven + qty <= cap + 1e-6) return {ok:true};
+  const f = n => Math.round(n).toLocaleString('en-IN');   // same look as fmtNum
+  const left = cap - woven;
+  if(left <= 0.5){
+    return {ok:false, msg:`Loom ${loom}: this beam is finished (${f(woven)} m woven of about ${f(cap)} m expected cloth). ${newLog}`};
+  }
+  return {ok:false, msg:`Loom ${loom}: this beam is about to finish. It is ${f(len)} m of warp, about ${f(cap)} m of cloth after ${BEAM_ENTRY_SHRINKAGE_PCT}% shrinkage, and ${f(woven)} m is already woven, so only ${f(left)} m more fits — ${f(qty)} m is invalid.`};
+}
+
 /* ---------------- Warp beams: forecast of which beam runs out next ---------------- */
 // For every beam still on a loom, estimates when it will be finished so an order for warp (or the
 // next beam) can be lined up in time. Two numbers drive it:

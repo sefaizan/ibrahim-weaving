@@ -88,12 +88,17 @@ function wirePanel(id){
     };
     // Both Add buttons need a date, loom, quality and quantity, so a stray tap can't save a blank
     // entry (which would also count towards wages).
-    const productionChecks = rec => [
-      [rec.date, 'Pick the date first.', 'p_date'],
-      [rec.loom, 'Pick a loom first.', 'p_loom'],
-      [rec.quality, 'Pick a quality first.', 'p_quality'],
-      [rec.qty > 0, 'Enter the quantity produced first.', 'p_qty'],
-    ];
+    const productionChecks = rec => {
+      // The loom's beam must have room for it (see beamEntryCheck); an edit is checked against the entry being edited.
+      const bc = beamEntryCheck(rec, (EDITING && EDITING.key==='production') ? EDITING.id : null);
+      return [
+        [rec.date, 'Pick the date first.', 'p_date'],
+        [rec.loom, 'Pick a loom first.', 'p_loom'],
+        [rec.quality, 'Pick a quality first.', 'p_quality'],
+        [rec.qty > 0, 'Enter the quantity produced first.', 'p_qty'],
+        [bc.ok, bc.msg, 'p_qty'],
+      ];
+    };
     // "Add & next loom": saves this entry, then reopens the form on the next loom with the same
     // date and quality (see PRODUCTION_PREFILL below) so a whole day's looms can be keyed in
     // one after another. It needs a loom and a quantity so a stray second tap can't save a blank
@@ -559,6 +564,7 @@ function wirePanel(id){
           }
           if(!r.e1) return fail(`Loom ${loom}: pick Employee 1.`);
           if(assigned(c) - t > 1e-9) return fail(`Loom ${loom}: employee meters exceed the Gzana.`);
+          const bc = beamEntryCheck(r); if(!bc.ok) return fail(bc.msg);
           recs.push(r);
         }
         recs.forEach(r=>DATA.production.push({id:uid(), ...r}));
@@ -2093,7 +2099,7 @@ function runInlineChecks(){
 function requireFields(checks){
   for(const [ok, msg, fieldId] of checks){
     if(ok) continue;
-    showToast(msg);
+    showToast(msg, msg.length > 80 ? 8000 : undefined);   // long explanations (e.g. a finished beam) stay up long enough to read
     const raw = fieldId ? document.getElementById(fieldId) : null;
     if(raw){
       try{
