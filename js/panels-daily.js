@@ -186,9 +186,9 @@ function multiEntryCardHtml(){
     `;
 }
 // Collapsed-by-default summary of whatever the Production Log filters below are showing.
-function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml){
+function productionSummaryCard(rows, qualityVal, fromVal, toVal, filterHtml, loomVal){
   const sm = productionSummary(rows, DATA.production, {from: fromVal, to: toVal});
-  const filt = [qualityVal ? escHtml(qualityVal) : '', (fromVal || toVal) ? (fromVal ? fmtDate(fromVal) : 'the start') + ' to ' + (toVal ? fmtDate(toVal) : 'today') : ''].filter(Boolean);
+  const filt = [qualityVal ? escHtml(qualityVal) : '', loomVal ? 'Loom ' + escHtml(loomVal) : '', (fromVal || toVal) ? (fromVal ? fmtDate(fromVal) : 'the start') + ' to ' + (toVal ? fmtDate(toVal) : 'today') : ''].filter(Boolean);
   const table = (title, list, first, avg) => list.length ? `<div class="group-label" style="margin-top:14px">${title}</div><div class="log-scroll"><table><thead><tr><th>${first}</th><th>Meters</th><th>Entries</th>${avg ? '<th>Avg / Day</th>' : ''}</tr></thead>
     <tbody>${list.map(r=>`<tr><td><span class="name">${escHtml(r.name)}</span></td><td><b>${fmtQtyMtr(r.meters)}</b></td><td>${r.entries}</td>${avg ? (r.days ? `<td><b>${fmtQtyMtr(r.perDay)}</b><div class="note" style="margin:2px 0 0">over ${r.days} day${r.days === 1 ? '' : 's'}</div></td>` : '<td>—<div class="note" style="margin:2px 0 0">needs 2 logs</div></td>') : ''}</tr>`).join('')}</tbody></table></div>` : '';
   const badge = filt.length ? '<span class="note" style="margin:0;color:var(--rust)"><b>Filtered</b></span>' : '';
@@ -214,10 +214,13 @@ function productionPanel(){
   const fromVal = FILTER.productionFrom || '';
   const toVal = FILTER.productionTo || '';
   let filteredProduction = qualityVal ? DATA.production.filter(r=>r.quality===qualityVal) : DATA.production;
+  const loomVal = FILTER.productionLoom || '';
+  if(loomVal) filteredProduction = filteredProduction.filter(r=>String(r.loom)===String(loomVal));
   if(fromVal) filteredProduction = filteredProduction.filter(r=>r.date >= fromVal);
   if(toVal) filteredProduction = filteredProduction.filter(r=>r.date <= toVal);
   const filterQty = filteredProduction.reduce((s,r)=>s+(Number(r.qty)||0),0);
   const productionFilterHtml = `      <div class="field"><label>Filter by Quality</label><select id="pf_quality"><option value="">All Qualities</option>${opts(DATA.qualities)}</select></div>
+      <div class="field" style="margin-top:12px"><label>Filter by Loom #</label><select id="pf_loom"><option value="">All Looms</option>${opts(DATA.looms)}</select></div>
       <div class="chip-row" id="pf_chips" style="margin-top:12px">
         <button type="button" class="chip" data-period="">All Time</button>
         <button type="button" class="chip" data-period="this-week">This Week</button>
@@ -292,9 +295,9 @@ function productionPanel(){
       <div class="note" id="pb_result" style="margin-top:8px"></div>
       </div>
     </div>
-    ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml)}
+    ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml, loomVal)}
     <div class="card"><h2>Production Log</h2>
-      ${(qualityVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
+      ${(qualityVal || loomVal || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${filteredProduction.length} entr${filteredProduction.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomVal?` on loom <b>${escHtml(loomVal)}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       ${logTable('production',
       prodLogHead(['Date','Time','Loom','Quality','Qty','Beam','Emp 1','Emp 2','Emp 3','Diff',''], filteredProduction),
       filteredProduction.slice().reverse(),

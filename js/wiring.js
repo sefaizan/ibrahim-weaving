@@ -327,6 +327,9 @@ function wirePanel(id){
     const pfQuality = document.getElementById('pf_quality');
     pfQuality.value = FILTER.production || '';
     pfQuality.addEventListener('change', ()=>{ FILTER.production = pfQuality.value; PAGE.production = 1; switchTab('production'); });
+    const pfLoom = document.getElementById('pf_loom');
+    pfLoom.value = FILTER.productionLoom || '';
+    pfLoom.addEventListener('change', ()=>{ FILTER.productionLoom = pfLoom.value; PAGE.production = 1; switchTab('production'); });
     const pfFrom = document.getElementById('pf_from');
     const pfTo = document.getElementById('pf_to');
     const pfCustom = document.getElementById('pf_custom');
