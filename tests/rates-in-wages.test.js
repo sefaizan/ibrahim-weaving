@@ -105,7 +105,7 @@ describe('the pages an operator can open show no money', () => {
     const b = body(daily, 'productionPanel');
     assert.ok(b.length > 500, 'found productionPanel');
     assert.doesNotMatch(b, /fmtRs|rateForQualityOn|currentRateForQuality|wageRateHistory|computeWage|computeEmployee|earned|earning/);
-    assert.match(b, /\['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam',''\]/);
+    assert.match(b, /\['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam Date',''\]/);
   });
   test('the Settings lists (qualities, employees, looms) are name-only', () => {
     const b = body(shell, 'settingsPanel');

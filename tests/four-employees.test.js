@@ -73,7 +73,7 @@ describe('the forms', () => {
   });
   test('The Production Log shows an Emp 4 column only when a shown entry has a fourth employee', () => {
     assert.match(panels, /function prodLogHead\(head, rows\)/);
-    assert.match(panels, /prodLogHead\(\['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam',''\], logRows\)/);
+    assert.match(panels, /prodLogHead\(\['Date','Time','Loom','Qty','Emp 1','Emp 2','Emp 3','Diff','Quality','Beam Date',''\], logRows\)/);
   });
   test('Urdu has the new labels', () => {
     const i = read('js/i18n.js');
