@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.92-alerts-redesign-rtl-order-status">
+<meta name="app-build" content="v3.18.93-pin-ltr-update-banner-urdu">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -241,7 +241,7 @@
   .pin-lock-overlay .mark{ font-size:40px; }
   .pin-lock-overlay h1{ font-size:19px; font-weight:700; }
   .pin-lock-overlay p.hint{ font-size:13px; color:rgba(255,255,255,0.82); margin:0; max-width:280px; }
-  .pin-dots{ display:flex; gap:16px; margin:6px 0; }
+  .pin-dots{ display:flex; gap:16px; margin:6px 0; direction:ltr; } /* PIN dots and keypad always run left to right (1 2 3 / 4 5 6 / 7 8 9), also in Urdu */
   .pin-dots span{
     width:16px; height:16px; border-radius:50%; border:2px solid rgba(255,255,255,0.7);
     background:transparent; transition:background 120ms ease;
@@ -249,7 +249,7 @@
   .pin-dots span.filled{ background:#fff; }
   .pin-dots.shake{ animation:pinShake 380ms ease; }
   @keyframes pinShake{ 0%,100%{transform:translateX(0);} 20%{transform:translateX(-8px);} 40%{transform:translateX(8px);} 60%{transform:translateX(-6px);} 80%{transform:translateX(6px);} }
-  .pin-keypad{ display:grid; grid-template-columns:repeat(3,64px); gap:14px; }
+  .pin-keypad{ display:grid; grid-template-columns:repeat(3,64px); gap:14px; direction:ltr; }
   .pin-key{
     width:64px; height:64px; border-radius:50%; border:1px solid rgba(255,255,255,0.35);
     background:rgba(255,255,255,0.08); color:#fff; font-size:22px; font-weight:600;
@@ -1518,7 +1518,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.92</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.93</span></span>
     </div>
   </header>
 
