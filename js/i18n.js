@@ -699,13 +699,10 @@ I18N_UR_RE_ORD.push(
   [/^About (.+) m\/week( · under a week to finish| · ~(\d+) weeks to finish)?$/, m => 'تقریباً ' + m[1] + ' میٹر فی ہفتہ' + (m[3] ? ' · مکمل ہونے میں ~' + m[3] + ' ہفتے' : m[2] ? ' · ایک ہفتے سے کم میں مکمل' : '')]
 );
 I18N_UR_RE_ORD.forEach(p => I18N_UR_RE74.push(p));
-// v3.18.46: Share button, its Settings card and the alert card (the message text itself is worded in js/alert-share.js)
+// v3.18.46 / v3.18.103: Share button and its Settings card (the words on the pictures themselves are in js/alert-share.js)
 Object.assign(I18N_UR, {
   "Floating Share button": "فلوٹنگ شیئر بٹن",
-  "Tap the round button at the bottom of any screen, then Share. WhatsApp opens with the message below, built fresh from the ledger. Tick what to include. These choices are kept on this phone only.": "کسی بھی اسکرین پر نیچے گول بٹن دبائیں، پھر شیئر چنیں۔ نیچے والا پیغام کھاتے سے تازہ بنتا ہے اور واٹس ایپ کھل جاتا ہے۔ جو شامل کرنا ہو اس پر نشان لگائیں۔ یہ انتخاب صرف اسی فون پر محفوظ رہتے ہیں۔",
   "Stock by quality": "کوالٹی کے لحاظ سے اسٹاک",
-  "with how much of each open order it covers": "ہر کھلے آرڈر کا کتنا حصہ پورا ہو سکتا ہے",
-  "how much of each is delivered": "ہر آرڈر کا کتنا ڈیلیور ہو چکا",
   "Warp beams": "تانا بیم",
   "beams ending soon": "جلد ختم ہونے والے بیم",
   "Weft stock": "بانا اسٹاک",
@@ -716,32 +713,28 @@ Object.assign(I18N_UR, {
   "total owed by clients": "گاہکوں کی طرف کل بقایا",
   "Profit and cash": "منافع اور نقد",
   "this month, and cash in hand": "اس مہینے کا، اور نقد موجود",
-  "Your own line on top (optional)": "اوپر اپنی لکھی ہوئی سطر (اختیاری)",
-  "e.g. Today's update": "مثلاً آج کی تازہ صورتحال",
-  "Send to this number (optional)": "اس نمبر پر بھیجیں (اختیاری)",
-  "03xx xxxxxxx - leave empty to choose in WhatsApp": "03xx xxxxxxx - خالی چھوڑیں تاکہ واٹس ایپ میں خود چنیں",
-  "A number opens that chat directly. A WhatsApp group cannot be opened from a link, so leave this empty and pick the group in WhatsApp.": "نمبر دینے سے وہی چیٹ سیدھی کھلتی ہے۔ واٹس ایپ گروپ لنک سے نہیں کھل سکتا، اس لیے گروپ کے لیے اسے خالی چھوڑیں اور واٹس ایپ میں گروپ چنیں۔",
   "Preview": "پیش منظر",
-  "Share now": "ابھی شیئر کریں",
-  "Refresh preview": "پیش منظر تازہ کریں",
   "Email a backup now": "ابھی بیک اپ ای میل کریں",
   "Backup / Share": "بیک اپ / شیئر",
-  "Share (alerts)": "شیئر (الرٹس)",
   "Backup": "بیک اپ",
   "Share on WhatsApp": "واٹس ایپ پر شیئر کریں",
-  "Send an alert": "الرٹ بھیجیں",
-  "Builds the message from the ledger on this phone and opens WhatsApp with it ready. Choose a person or a group and send. Keep one WhatsApp group per kind of person (for example Stock viewers) so each group gets only what it should see.": "پیغام اسی فون پر کھاتے سے بنتا ہے اور واٹس ایپ تیار پیغام کے ساتھ کھل جاتا ہے۔ کوئی شخص یا گروپ چن کر بھیج دیں۔ ہر قسم کے افراد کے لیے الگ واٹس ایپ گروپ رکھیں (مثلاً اسٹاک دیکھنے والے) تاکہ ہر گروپ کو صرف وہی ملے جو اسے دیکھنا چاہیے۔",
-  "What to send": "کیا بھیجنا ہے",
-  "My own message": "میرا اپنا پیغام",
-  "Message (you can edit it)": "پیغام (آپ ترمیم کر سکتے ہیں)",
-  "Send in WhatsApp": "واٹس ایپ میں بھیجیں",
-  "Refresh figures": "اعداد و شمار تازہ کریں",
-  "Send alerts": "الرٹس بھیجیں",
-  "Include orders (how much of each open order the stock covers)": "آرڈرز شامل کریں (اسٹاک ہر کھلے آرڈر کا کتنا پورا کرتا ہے)",
-  "Stock message: include orders": "اسٹاک پیغام: آرڈرز شامل کریں",
-  "adds how much of each open order the stock covers": "ہر کھلے آرڈر کا کتنا حصہ اسٹاک سے پورا ہوتا ہے",
-  "Floating button": "فلوٹنگ بٹن"
+  "Floating button": "فلوٹنگ بٹن",
+  "Tap the round button at the bottom of any screen, then Share on WhatsApp. Each ticked option is made into its own picture from the ledger on this phone, and the phone's share sheet opens: choose WhatsApp, then a person or a group. These choices are kept on this phone only.": "کسی بھی اسکرین کے نیچے گول بٹن دبائیں، پھر واٹس ایپ پر شیئر کریں۔ ہر منتخب آپشن کی لیجر سے اسی فون پر اپنی الگ تصویر بنتی ہے، اور فون کی شیئر شیٹ کھلتی ہے: واٹس ایپ چنیں، پھر کوئی شخص یا گروپ۔ یہ انتخاب صرف اسی فون پر محفوظ رہتے ہیں۔",
+  "how much stock of each quality": "ہر کوالٹی کا کتنا اسٹاک ہے",
+  "client, quality and how much is delivered": "گاہک، کوالٹی اور کتنا ڈیلیور ہو چکا",
+  "Pictures are ready": "تصاویر تیار ہیں",
+  "Making pictures…": "تصاویر بن رہی ہیں…",
+  "Could not make the pictures - tap Share again.": "تصاویر نہیں بن سکیں - دوبارہ شیئر دبائیں۔",
+  "Sharing pictures is not supported on this phone.": "اس فون پر تصاویر شیئر نہیں ہو سکتیں۔",
+  "This phone can't share that many pictures at once - untick some options in Settings.": "یہ فون اتنی تصاویر ایک ساتھ شیئر نہیں کر سکتا - سیٹنگز میں کچھ آپشن ہٹا دیں۔",
+  "Choose what to share in Settings first.": "پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔",
+  "Shared ✓": "شیئر ہو گیا ✓",
+  "Could not open share - tap Share again.": "شیئر نہیں کھل سکا - دوبارہ شیئر دبائیں۔"
 });
+[
+  [/^(\d+) pictures? to share\. Tap Share, then choose WhatsApp\.$/, '$1 تصاویر شیئر کے لیے تیار ہیں۔ شیئر دبائیں، پھر واٹس ایپ چنیں۔'],
+  [/^Shared ✓ \((\d+) pictures\)$/, 'شیئر ہو گئیں ✓ ($1 تصاویر)']
+].forEach(p => I18N_UR_RE74.push(p));
 // v3.18.48: the sync messages about a section that could not be opened, and the repair notice (section names in Urdu)
 const I18N_SEC_UR = { production: 'پیداوار', reference: 'فہرستیں', sales: 'فروخت', recovery: 'وصولی', expenses: 'اخراجات', wages: 'اجرت', loans: 'قرض', family: 'گھر', materials: 'مال', business: 'کاروبار', stock: 'اسٹاک', tools: 'ٹولز' };
 const i18nSec = n => I18N_SEC_UR[n] || n;
@@ -882,7 +875,6 @@ function i18nSetLang(l){
   document.documentElement.setAttribute('lang', I18N_LANG);
   if(I18N_LANG === 'ur') document.documentElement.setAttribute('dir', 'rtl'); else document.documentElement.removeAttribute('dir'); // v3.18.89: Urdu mirrors the whole layout
   i18nButtonLabel();
-  if(typeof setTimeout === 'function') setTimeout(()=>{ if(typeof alertLangRefresh === 'function') alertLangRefresh(); }, 80); // rebuild any WhatsApp message on screen in the new language
   if(I18N_LANG === 'ur') i18nRun();
   else {
     if(I18N_OBS) I18N_OBS.disconnect();

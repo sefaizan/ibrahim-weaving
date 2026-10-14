@@ -1,259 +1,364 @@
-/* Share an alert on WhatsApp (Settings > Send an alert, owner's phone).
- * Pick Stock (by quality), Weft, Warp beams, Cheques or your own text. The message is built here from the live ledger,
- * shown in a box you can edit, and "Send in WhatsApp" opens WhatsApp with it ready: choose a person or a group and send.
- * No server and nothing leaves the phone except what you send in WhatsApp. WhatsApp keeps a message for a person whose
- * phone is offline until it is back online. Who sees what is decided by who is in each WhatsApp group.
- * Needs (from other files): computeStats, orderStats, weftStockEstimate, computeBeamForecasts, beamAlertText, beamAlertDays,
- *   computePendingCheques, todayStr, dateAddDays, fmtRs, fmtQtyMtr, escHtml, showToast.
+/* Floating Share button: share what is ticked in Settings > Share on WhatsApp as PICTURES (v3.18.103).
+ * Each ticked option (Stock, Open orders, Warp beams, Weft, Cheques, Money to receive, Profit and cash) becomes its OWN picture, made from the
+ * ledger on this phone the moment you tap Share. A section with more rows than fit on one picture gets as many pages as it needs, worked out
+ * when the pictures are made (like the client statement). The phone's share sheet then opens with all the pictures: pick WhatsApp, then a person
+ * or a group. Nothing leaves the phone except what you send. Words follow the app language (Urdu or English); figures always read left to right
+ * (3,299-8 is never shown as 8-3,299). Text is shrunk to fit its space, so nothing is ever cut off.
+ * Needs (from other files): computeStats, orderStats, weftStockEstimate, computeBeamForecasts, beamAlertDays, computePendingCheques, todayStr,
+ *   dateAddDays, fmtQtyMtr, showToast, canShareFiles, BIZ_LOGO_PNG (the business logo shown on every picture).
  */
-function alertNum(n, dec){ return (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: dec == null ? 0 : dec }); }
-
-/* ---- language: the messages follow the app language (Urdu when the header button is on "English"), built fresh each time ---- */
 function alertUr(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_LANG === 'ur'; }catch(e){ return false; } }
-const AL_MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
-// ---- Reading direction (v3.18.92) ----
-// Urdu reads right to left. Every Urdu line starts with a right-to-left mark so the whole message lines up on the right (no line
-// jumps to the left), and every figure (1234-12 meters, 33%, a date, ORD-12, a quality like 62/44) is wrapped so it always reads
-// left to right exactly as in English - never 12-1234 or %33. English messages are not touched.
-const AL_RLM = '\u200F', AL_LRE = '\u202A', AL_PDF = '\u202C';
-function alertLtr(s){ return alertUr() ? AL_LRE + String(s) + AL_PDF : String(s); }
-function alertRtlLines(text){ return alertUr() ? String(text).split('\n').map(l => l.trim() ? AL_RLM + l : l).join('\n') : String(text); }
-const RULE_LINE = '━━━━━━━━━━━━━━';
-// key -> [English, Urdu]; {0} {1} {2} {3} are filled in by al(). Names, quality names, order numbers and dates are never translated.
-const AL = {
-  stockTitle: ['📦📦 STOCK IN HAND 📦📦', '📦📦 اسٹاک موجود 📦📦'], noStock: ['🔴 *NO STOCK IN HAND*', '🔴 *اسٹاک موجود نہیں ہے*'],
-  total: ['TOTAL', 'کل اسٹاک'], arrow: ['➜', '⬅️'], more: ['more', 'مزید'], moreOrders: ['more orders', 'مزید آرڈرز'], orders: ['ORDERS', 'آرڈرز'], order: ['Order', 'آرڈر'],
-  legend: ['🟩 Delivered   🟨 In stock for it   ⬜ To weave', '🟩 ڈیلیور   🟨 اسٹاک میں   ⬜ بننا باقی'],
-  delLine: ['📤 *{0} delivered* ({1} of {2})', '📤 *{0} ڈیلیور* ({2} میں سے {1})'], remLine: ['⏳ Still to deliver: *{0}*', '⏳ ڈیلیور باقی: *{0}*'],
-  ready: ['🟢 *READY - stock covers it, send now*', '🟢 *تیار - اسٹاک موجود ہے، ابھی بھیجیں*'],
-  part: ['🟠 *Stock covers only {0} - weave {1} more*', '🟠 *اسٹاک صرف {0} پورا کرتا ہے - {1} مزید بنائیں*'],
-  none: ['🔴 *NO STOCK - weave {0}*', '🔴 *اسٹاک نہیں - {0} بنائیں*'], done: ['✅ *COMPLETED*', '✅ *مکمل*'],
-  ordShort: ['⚠️ *{0} of {1} orders need more weaving*', '⚠️ *{1} میں سے {0} آرڈرز کے لیے مزید بُنائی ضروری ہے*'],
-  ordOk: ['✅ *Stock covers every open order*', '✅ *اسٹاک تمام کھلے آرڈرز کے لیے کافی ہے*'],
-  weftTitle: ['🧵🧵 WEFT STOCK 🧵🧵', '🧵🧵 بانا اسٹاک 🧵🧵'], weftLow: ['🚨🚨 WEFT RUNNING LOW 🚨🚨', '🚨🚨 بانا ختم ہو رہا ہے 🚨🚨'],
-  noWeft: ['No weft purchases recorded yet.', 'ابھی تک بانے کی کوئی خریداری درج نہیں ہے۔'],
-  weftQty: ['*{0} bags* ({1} lbs)', '*{0} بیگ* ({1} پاؤنڈ)'], noPace: ['⏳ No recent production to measure the pace.', '⏳ رفتار جانچنے کے لیے حالیہ پیداوار موجود نہیں ہے۔'],
-  weftDays: ['⏳ About *{0} days* left at {1} lbs per day', '⏳ تقریباً *{0} دن* باقی ({1} پاؤنڈ روزانہ کے حساب سے)'],
-  weftOrder: ['👉 *ORDER WEFT NOW - stock is running low!*', '👉 *بانا ابھی منگوائیں - اسٹاک کم ہو رہا ہے!*'],
-  beamTitle: ['🔧🔧 WARP BEAMS 🔧🔧', '🔧🔧 تانا بیم 🔧🔧'], beamSoon: ['🚨🚨 BEAMS ENDING SOON 🚨🚨', '🚨🚨 بیم جلد ختم ہو رہے ہیں 🚨🚨'],
-  beamNext: ['👉 *Get the next beam ready*', '👉 *اگلا بیم تیار رکھیں*'], noBeam: ['✅ No beam is ending within {0} days.', '✅ اگلے {0} دنوں میں کوئی بیم ختم نہیں ہو رہا۔'],
-  chqOver: ['🚨🚨 CHEQUES OVERDUE 🚨🚨', '🚨🚨 چیک کی میعاد گزر چکی 🚨🚨'], chqSoon: ['⏰⏰ CHEQUES DUE SOON ⏰⏰', '⏰⏰ چیک جلد واجب الادا ⏰⏰'], chqTitle: ['✅✅ CHEQUES ✅✅', '✅✅ چیک ✅✅'],
-  chqOverN: ['🔴 *{0} OVERDUE - {1}*', '🔴 *{0} چیک کی میعاد گزر چکی - {1}*'], chqDueN: ['🟠 *{0} due within 7 days - {1}*', '🟠 *{0} چیک 7 دن کے اندر واجب الادا - {1}*'],
-  chqNone: ['✅ No cheques overdue or due within 7 days.', '✅ کوئی چیک میعاد گزرا ہوا یا 7 دن کے اندر واجب الادا نہیں ہے۔'],
-  overBy: ['{0} overdue', '{0} لیٹ'], dueIn: ['due in {0}', '{0} میں واجب الادا'], dueToday: ['due TODAY', 'آج واجب الادا'],
-  followUp: ['👉 *Follow up TODAY*', '👉 *آج ہی رابطہ کریں*'],
-  openTitle: ['📋📋 OPEN ORDERS 📋📋', '📋📋 کھلے آرڈرز 📋📋'], noOrders: ['✅ No open orders.', '✅ کوئی کھلا آرڈر نہیں ہے۔'],
-  recvTitle: ['💰💰 MONEY TO RECEIVE 💰💰', '💰💰 وصول ہونے والی رقم 💰💰'], recv: ['🟡 *{0}* to receive from clients', '🟡 گاہکوں سے *{0}* وصول ہونے ہیں'],
-  noRecv: ['✅ Nothing to receive from clients', '✅ گاہکوں سے کچھ وصول نہیں ہونا'],
-  profitTitle: ['📊📊 PROFIT AND CASH 📊📊', '📊📊 منافع اور نقد 📊📊'], profit: ['📈 *PROFIT {0}: {1}*', '📈 *منافع {0}: {1}*'], loss: ['📉 *LOSS {0}: {1}* 🔴', '📉 *نقصان {0}: {1}* 🔴'], cash: ['💵 Cash in hand: *{0}*', '💵 نقد موجود: *{0}*'],
-  shNone: ['Nothing is ticked yet - the Share button will ask you to choose.', 'ابھی کچھ منتخب نہیں ہے - شیئر بٹن آپ سے انتخاب کے لیے کہے گا۔'],
-  shChars: ['({0} characters)', '({0} حروف)'], shLong: ['({0} characters - long, WhatsApp may cut it)', '({0} حروف - پیغام لمبا ہے، واٹس ایپ اسے کاٹ سکتا ہے)'],
-  shChoose: ['Choose what to share in Settings first.', 'پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔'], shFail: ['Could not build the message.', 'پیغام نہیں بن سکا۔']
+
+/* ---------------- what the pictures say (English / Urdu) ---------------- */
+const SP_MON_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
+const SP_MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const SP_TXT = {
+  en: {
+    stock: 'Stock', orders: 'Open orders', beams: 'Warp beams', weft: 'Weft stock', cheques: 'Cheques', receivable: 'Money to receive', profit: 'Profit and cash',
+    quality: 'Quality', meters: 'Meters', deliv: 'Delivered (m)', remain: 'Remaining (m)', loom: 'Loom', now: 'Now', today: 'Today', tomorrow: 'Tomorrow', nextBeam: 'Get the next beam ready',
+    bags: 'Bags', lbsLine: n => '(' + n + ' lbs)', daysLeft: 'Days left', perDay: n => 'About ' + n + ' lbs per day', orderWeft: 'Order weft now', rs: 'Rupees',
+    recvL: 'To receive from clients', profitL: 'Profit', lossL: 'Loss', cashL: 'Cash in hand',
+    late: n => n + (n === 1 ? ' day late' : ' days late'), inD: n => 'in ' + n + (n === 1 ? ' day' : ' days'), dayN: n => n + (n === 1 ? ' day' : ' days'),
+    noStock: 'No stock in hand', noOrders: 'No open orders', noBeam: n => 'No beam is ending within ' + n + ' days', noWeft: 'No weft purchases recorded yet', noPace: 'No recent production to measure the pace',
+    noChq: 'No cheques overdue or due within 7 days', noRecv: 'Nothing to receive from clients'
+  },
+  ur: {
+    stock: 'اسٹاک', orders: 'کھلے آرڈرز', beams: 'تانا بیم', weft: 'بانا اسٹاک', cheques: 'چیک', receivable: 'وصول ہونے والی رقم', profit: 'منافع اور نقد',
+    quality: 'کوالٹی', meters: 'میٹر', deliv: 'ڈیلیور (میٹر)', remain: 'باقی (میٹر)', loom: 'لوم', now: 'ابھی', today: 'آج', tomorrow: 'کل', nextBeam: 'اگلا بیم تیار رکھیں',
+    bags: 'بیگ', lbsLine: n => '(' + n + ' پاؤنڈ)', daysLeft: 'دن باقی', perDay: n => 'تقریباً ' + n + ' پاؤنڈ روزانہ', orderWeft: 'بانا ابھی منگوائیں', rs: 'روپے',
+    recvL: 'گاہکوں سے وصول ہونے ہیں', profitL: 'منافع', lossL: 'نقصان', cashL: 'نقد موجود',
+    late: n => 'لیٹ ' + n + ' دن', inD: n => n + ' دن میں', dayN: n => n + ' دن',
+    noStock: 'اسٹاک موجود نہیں ہے', noOrders: 'کوئی کھلا آرڈر نہیں ہے', noBeam: n => 'اگلے ' + n + ' دنوں میں کوئی بیم ختم نہیں ہو رہا', noWeft: 'ابھی تک بانے کی کوئی خریداری درج نہیں ہے', noPace: 'رفتار جانچنے کے لیے حالیہ پیداوار موجود نہیں ہے',
+    noChq: 'کوئی چیک لیٹ یا 7 دن کے اندر واجب الادا نہیں', noRecv: 'گاہکوں سے کچھ وصول نہیں ہونا'
+  }
 };
-function al(k, a, b, c, d){
-  const v = AL[k], t = v ? (alertUr() ? v[1] : v[0]) : String(k), f = x => String(x == null ? '' : x);
-  return t.replace('{0}', () => f(a)).replace('{1}', () => f(b)).replace('{2}', () => f(c)).replace('{3}', () => f(d));
-}
-// Meters: the app's own formatter gives a bare number ("1240" or "1240-8" in sixteenths); the message adds commas and the unit.
-function alertMtr(n){
-  const base = typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : alertNum(n, 1);
-  const num = String(base).replace(/^(-?)(\d+)/, (m, sg, d) => sg + Number(d).toLocaleString('en-IN'));
-  // Urdu: the quantity is forced left-to-right so 123-12 never flips to 12-123; only the unit word is Urdu.
-  return alertUr() ? alertLtr(num) + ' میٹر' : num + ' m';
-}
-// Stock lines (v3.18.95): number and unit are ONE left-to-right piece, so it always shows as "2,502-12 میٹر" (number first), never the unit in front.
-function alertMtrFlat(n){ const m = alertMtr(n); return alertUr() ? AL_LRE + m.split(AL_LRE).join('').split(AL_PDF).join('') + AL_PDF : m; }
-function alertRs(n){ const t = typeof fmtRs === 'function' ? fmtRs(n) : 'Rs ' + alertNum(n); return alertUr() ? alertLtr(t.replace(/^Rs\s*/, '')) + ' روپے' : t; }
-function alertMonthLabel(){ const d = new Date(); return alertUr() ? AL_MONTHS_UR[d.getMonth()] + ' ' + alertLtr(d.getFullYear()) : d.toLocaleString('en-GB', { month: 'short', year: 'numeric' }); }
-function alertAsOf(){
-  const d = new Date();
-  if(!alertUr()) return '🕙 *As of ' + d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/i, m => m.toUpperCase()) + '*';
-  const h = d.getHours(), part = h < 12 ? 'صبح' : h < 16 ? 'دوپہر' : h < 20 ? 'شام' : 'رات';
-  return '🕙 *تازہ ترین: ' + d.getDate() + ' ' + AL_MONTHS_UR[d.getMonth()] + '، ' + alertLtr((h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0')) + ' ' + part + '*';
-}
-const ALERT_ASOF_RE = /\n*\u200F?(?:🕙 \*|_)(?:As of|تازہ ترین:) [^\n]*[*_]\s*$/;
-// Order bar: 🟩 already delivered, 🟨 covered by the stock in hand, ⬜ still to weave (10 squares = the whole order).
-function alertOrderBar(sentPct, stockPct){
-  const d = Math.max(0, Math.min(10, Math.round(sentPct / 10))), c = Math.max(0, Math.min(10 - d, Math.round(stockPct / 10)));
-  return '🟩'.repeat(d) + '🟨'.repeat(c) + '⬜'.repeat(10 - d - c);
+function spL(){ return SP_TXT[alertUr() ? 'ur' : 'en']; }
+
+/* ---------------- small helpers ---------------- */
+function spNum(n){ return Math.round(Number(n) || 0).toLocaleString('en-IN'); }
+// Meters: the app's own formatter gives a bare number ("1240" or "1240-8" in sixteenths); the picture adds the commas.
+function spMtr(n){
+  const base = typeof fmtQtyMtr === 'function' ? fmtQtyMtr(n) : String(Math.round(Number(n) || 0));
+  return String(base).replace(/^(-?)(\d+)/, (m, sg, d) => sg + Number(d).toLocaleString('en-IN'));
 }
 // "62/44 (Micro 150.144)" -> "62/44", like the Orders page; two qualities that would look the same keep their full name.
-function alertShortNames(names){
+function spShortNames(names){
   const short = n => String(n || '').split(' (')[0], count = {};
   names.forEach(n => { count[short(n)] = (count[short(n)] || 0) + 1; });
   const map = {}; names.forEach(n => { map[n] = count[short(n)] > 1 ? String(n) : short(n); });
   return map;
 }
-function alertDmy(s){ const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(s || '')); return m ? m[3] + '-' + m[2] + '-' + m[1] : String(s || ''); }
-function alertDayDiff(from, to){
+function spDmy(s){ const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(s || '')); return m ? m[3] + '-' + m[2] + '-' + m[1] : String(s || ''); }
+function spDayDiff(from, to){
   const p = s => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(s || '')); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
   return Math.round((p(to) - p(from)) / 86400000);
 }
-function alertDays(n){ n = Math.abs(Number(n) || 0); return alertUr() ? alertLtr(n) + ' دن' : n + (n === 1 ? ' day' : ' days'); }
-// One order, as the lines of its block. The progress is what is DELIVERED; stock (when given) only decides the colour of the last line:
-// ready to send / partly covered (weave the rest) / nothing in stock - so "100% done" can never be shown for an order that is not delivered.
-function alertOrderBlock(o, stk, quality){
-  const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), rem = Math.max(0, qty - got);
-  const sent = Math.round(got / qty * 100), cover = Math.min(Math.max(0, Number(stk) || 0), rem), stkPct = Math.round(cover / qty * 100);
-  const head = '📋 *' + alertLtr(o.no || al('order')) + '*' + (quality ? '  ·  *' + alertLtr(quality) + '*' : '');
-  const lines = [head, alertLtr(alertOrderBar(sent, stk == null ? 0 : stkPct)), al('delLine', alertLtr(sent + '%'), alertMtr(got), alertMtr(qty))];
-  if(rem <= 0.0001) lines.push(al('done'));
-  else{
-    lines.push(al('remLine', alertMtr(rem)));
-    if(stk != null) lines.push(cover >= rem - 0.0001 ? al('ready') : cover > 0.0001 ? al('part', alertMtr(cover), alertMtr(rem - cover)) : al('none', alertMtr(rem)));
-  }
-  return lines;
+function spMonthLabel(){ const d = new Date(); return (alertUr() ? SP_MON_UR : SP_MON_EN)[d.getMonth()] + ' ' + d.getFullYear(); }
+
+/* ---------------- the ledger, shaped for each picture ---------------- */
+// Open orders with what is already delivered and the client (from orderStats); empty when the app has none.
+function spOpenOrders(){
+  try{
+    return (typeof DATA !== 'undefined' && DATA.orders || []).filter(o => !o.closed && !o.revoked)
+      .map(o => ({ quality: o.quality, client: o.client || '', no: o.no, date: o.date, qty: Number(o.qty) || 0, got: orderStats(o).got }))
+      .filter(o => o.qty > 0)
+      .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true }));
+  }catch(e){ return []; }
 }
-// orders: open orders [{quality, no, date, qty, got}]. One quality's stock is shared out oldest order first, so it is never counted twice.
-function alertOrderLines(quality, stock, orders){
-  let left = Number(stock) || 0;
-  const mine = (orders || []).filter(o => o.quality === quality && Number(o.qty) > 0).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true }));
-  const out = []; let short = 0;
-  mine.forEach((o, i) => {
-    const qty = Number(o.qty), got = Math.min(Number(o.got) || 0, qty), rem = Math.max(0, qty - got), take = Math.min(left, rem);
-    left -= take;
-    if(rem > 0.0001 && take < rem - 0.0001) short++;
-    if(i < 3){ if(i) out.push(''); out.push(...alertOrderBlock(o, take)); }
+function spBeamWhen(f){ return f.state === 'full' ? 'now' : f.daysLeft <= 0.5 ? 'today' : f.daysLeft <= 1.5 ? 'tomorrow' : Math.round(f.daysLeft); }
+function spCollect(id){
+  if(id === 'stock'){
+    const st = computeStats(''), list = (st.stockByQuality || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), nm = spShortNames(list.map(r => r.name));
+    return { rows: list.map(r => [nm[r.name], Number(r.stock)]) };
+  }
+  if(id === 'orders'){
+    const list = spOpenOrders(), nm = spShortNames(Array.from(new Set(list.map(o => o.quality))));
+    return { rows: list.map(o => ({ no: o.no || '', client: o.client, q: o.quality ? nm[o.quality] : '', qty: o.qty, got: Math.min(Number(o.got) || 0, o.qty) })) };
+  }
+  if(id === 'beams'){
+    const days = (typeof beamAlertDays === 'function' && beamAlertDays()) || 3, key = f => f.state === 'full' ? -1 : f.daysLeft;
+    const list = computeBeamForecasts(days).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon').sort((a, b) => key(a) - key(b));
+    return { days, rows: list.map(f => [f.loom, spBeamWhen(f)]) };
+  }
+  if(id === 'weft') return { e: weftStockEstimate() };
+  if(id === 'cheques'){
+    const t = todayStr(), soon = dateAddDays(t, 7), withDate = computePendingCheques().filter(c => c.chequeDate), byDate = (a, b) => String(a.chequeDate).localeCompare(String(b.chequeDate));
+    const over = withDate.filter(c => c.chequeDate < t).sort(byDate).map(c => ({ client: c.client || '?', amt: Number(c.amount) || 0, date: c.chequeDate, over: spDayDiff(c.chequeDate, t) }));
+    const due = withDate.filter(c => c.chequeDate >= t && c.chequeDate <= soon).sort(byDate).map(c => ({ client: c.client || '?', amt: Number(c.amount) || 0, date: c.chequeDate, over: 0, inD: spDayDiff(t, c.chequeDate) }));
+    return { rows: over.concat(due) };
+  }
+  if(id === 'receivable') return { total: Number(computeStats('').receivable) || 0 };
+  if(id === 'profit'){ const st = computeStats(todayStr().slice(0, 7)); return { profit: Number(st.profitMonth) || 0, cash: Number(st.cash) || 0, label: spMonthLabel() }; }
+  return {};
+}
+
+/* ---------------- the colours of the app (light, like the receipts, so a picture reads the same in any theme) ---------------- */
+const SP_W = 1080, SP_HEAD = 170, SP_MAXH = 1560;   // a picture stays under ~1600px tall: chat apps shrink anything bigger and the text goes soft
+const SP_C = { b1: '#204E52', b2: '#163B3D', ink: '#1B2126', soft: '#626B72', line: '#B9C2C9', tonal: '#DCEDEB', deep: '#163B3D', green: '#3D8361', red: '#B5402E', redT: '#F7E0DB', goldT: '#F3DFCB', goldInk: '#8A4A1D', zebra: '#F3F5F7', white: '#FFFFFF' };
+const SP_SANS = "Roboto, 'Segoe UI', Arial, sans-serif";
+const SP_URDU = "'Noto Naskh Arabic', 'Geeza Pro', 'Segoe UI', Tahoma, sans-serif";
+const SP_LRE = '\u202A', SP_PDF = '\u202C', SP_AR = /[\u0600-\u06FF]/;
+
+// Drawing tools on one canvas. Positions are measured from the reading-start side (right in Urdu, left in English).
+//   k: 'n' = figures and codes (always left to right), 'u' = words (right to left in Urdu), 'c' = a typed name (its own script decides).
+//   max: the text shrinks (then is shortened with "...") until it fits this width.
+//   a: 'start' (xs = distance from the start edge) | 'end' (xs = distance from the END edge, text ends there) | 'c' / 'l' / 'r' (with abs: true, xs is the exact x)
+function spHelper(ctx, W, ur, logo){
+  const h = { x: ctx, W, ur, L: SP_TXT[ur ? 'ur' : 'en'] };
+  const sx = xs => ur ? W - xs : xs;
+  h.rect = (x, y, w, hh, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, hh); };
+  h.rr = (x, y, w, hh, r, col) => {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + hh, r); ctx.arcTo(x + w, y + hh, x, y + hh, r); ctx.arcTo(x, y + hh, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  };
+  h.kind = (str, k) => k === 'c' ? (SP_AR.test(str) ? 'a' : 'n') : k;
+  h.font = (size, wt, k) => {
+    const isU = k === 'a' || (ur && k === 'u');
+    ctx.font = (wt || 700) + ' ' + size + 'px ' + (isU ? SP_URDU : SP_SANS);
+    ctx.direction = (k === 'n' || (!ur && k === 'u')) ? 'ltr' : 'rtl';
+    return isU;
+  };
+  h.w = (str, size, wt, k) => { k = h.kind(str, k || 'u'); h.font(size, wt, k); return ctx.measureText(k === 'n' ? SP_LRE + str + SP_PDF : str).width; };
+  h.t = (str, xs, y, o) => {
+    o = o || {}; let size = o.size || 64; const k = h.kind(str, o.k || 'u'), a = o.a || 'start', wt = o.wt || 700;
+    let txt = String(str), s = k === 'n' ? SP_LRE + txt + SP_PDF : txt;
+    if(o.max){
+      while(size > 26){ h.font(size, wt, k); if(ctx.measureText(s).width <= o.max) break; size -= 2; }
+      // Even the smallest size is too wide (a very long name): shorten it with "…" rather than let it run off the picture.
+      h.font(size, wt, k);
+      while(txt.length > 1 && ctx.measureText(s).width > o.max){ txt = txt.slice(0, -1).trimEnd(); s = (k === 'n' ? SP_LRE : '') + txt + '…' + (k === 'n' ? SP_PDF : ''); }
+    }
+    const isU = h.font(size, wt, k);
+    ctx.fillStyle = o.c || SP_C.ink; ctx.textBaseline = 'middle';
+    ctx.textAlign = a === 'c' ? 'center' : a === 'l' ? 'left' : a === 'r' ? 'right' : a === 'start' ? (ur ? 'right' : 'left') : (ur ? 'left' : 'right');
+    ctx.fillText(s, o.abs ? xs : a === 'end' ? (ur ? xs : W - xs) : sx(xs), y + (isU ? size * 0.06 : 0));
+    return ctx.measureText(s).width;
+  };
+  // Centred words that wrap onto more lines when too long. Returns the number of lines.
+  h.wrap = (str, cx, y, maxW, size, lh, o) => {
+    o = o || {}; const words = String(str).split(' '), lines = []; let cur = '';
+    words.forEach(w => { const test = cur ? cur + ' ' + w : w; if(!cur || h.w(test, size, o.wt || 700, 'u') <= maxW) cur = test; else { lines.push(cur); cur = w; } });
+    if(cur) lines.push(cur);
+    lines.forEach((ln, i) => h.t(ln, cx, y + i * lh, { size, c: o.c, wt: o.wt, a: 'c', abs: true, max: maxW }));
+    return lines.length;
+  };
+  // One header line: the business logo on a white card at the left, then the title centred in the space that is left, with the date under it.
+  h.band = (title, pg) => {
+    const g = ctx.createLinearGradient(0, 0, W * 0.5, SP_HEAD); g.addColorStop(0, SP_C.b1); g.addColorStop(1, SP_C.b2);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, SP_HEAD);
+    const has = !!(logo && logo.naturalWidth), lh = 100, lw = has ? lh * logo.naturalWidth / logo.naturalHeight : 319, bx = 22, by = (SP_HEAD - (lh + 24)) / 2;
+    h.rr(bx, by, lw + 24, lh + 24, 22, '#FFFFFF');
+    if(has) ctx.drawImage(logo, bx + 12, by + 12, lw, lh);
+    const x0 = bx + lw + 24 + 26, x1 = W - 26, cx = (x0 + x1) / 2, maxW = x1 - x0, d = new Date(), multi = pg && pg.total > 1;
+    const ds = d.getDate() + ' ' + (ur ? SP_MON_UR : SP_MON_EN)[d.getMonth()];
+    h.t(title, cx, ur ? 58 : 66, { size: ur ? 76 : 78, c: SP_C.white, a: 'c', abs: true, max: maxW });
+    h.t(multi ? ds + '  -  ' + pg.idx + ' / ' + pg.total : ds, cx, ur ? 138 : 130, { size: 40, c: '#DCEDEB', wt: 500, a: 'c', abs: true, max: maxW });
+    return SP_HEAD;
+  };
+  // Nothing to show: a green tick and one sentence.
+  h.empty = (title, msg) => {
+    const y = h.band(title), cy = y + 210;
+    ctx.fillStyle = SP_C.green; ctx.beginPath(); ctx.arc(W / 2, cy, 110, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 26; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(W / 2 - 52, cy + 4); ctx.lineTo(W / 2 - 12, cy + 44); ctx.lineTo(W / 2 + 56, cy - 40); ctx.stroke(); ctx.lineCap = 'butt';
+    const n = h.wrap(msg, W / 2, y + 430, W - 140, 62, 92, { c: SP_C.ink });
+    return y + 430 + n * 92 + 70;
+  };
+  return h;
+}
+
+/* ---------------- one drawer per section: draws itself and returns its height ---------------- */
+const SP_DRAW = {};
+
+SP_DRAW.stock = (h, d, pg) => {
+  const W = h.W, ur = h.ur, L = h.L;
+  if(!d.rows.length) return h.empty(L.stock, L.noStock);
+  const y = h.band(L.stock, pg), colH = 110, rowH = 150, rows = d.rows.slice(pg.from, pg.to);
+  const qW = Math.round(W * 0.40), splitX = ur ? W - qW : qW, numX = ur ? splitX - 40 : W - 40, numMax = ur ? splitX - 80 : W - qW - 80;
+  h.rect(0, y, W, colH, SP_C.tonal);
+  h.t(L.quality, 40, y + colH / 2, { size: 54, c: SP_C.deep, max: qW - 60 });
+  h.t(L.meters, numX, y + colH / 2, { size: 54, c: SP_C.deep, abs: true, a: 'r', max: numMax });
+  rows.forEach((r, i) => {
+    const ry = y + colH + i * rowH;
+    h.rect(0, ry, W, rowH, i % 2 ? SP_C.zebra : SP_C.white); h.rect(0, ry, W, 3, SP_C.line);
+    h.t(r[0], 40, ry + rowH / 2, { size: 92, k: 'n', max: qW - 60 });
+    h.t(spMtr(r[1]), numX, ry + rowH / 2, { size: 92, k: 'n', abs: true, a: 'r', max: numMax });
   });
-  if(mine.length > 3) out.push('', '+ ' + (mine.length - 3) + ' ' + al('moreOrders'));
-  out.short = short; out.count = mine.length;
+  const end = y + colH + rows.length * rowH;
+  h.rect(splitX - 2, y, 4, end - y, SP_C.line); h.rect(0, end - 3, W, 3, SP_C.line);
+  return end;
+};
+
+// One donut per order: green = delivered, pale = still to deliver. The client's name is the first line of each block.
+SP_DRAW.orders = (h, d, pg) => {
+  const W = h.W, ur = h.ur, L = h.L, ctx = h.x;
+  if(!d.rows.length) return h.empty(L.orders, L.noOrders);
+  const y = h.band(L.orders, pg), bh = 450, R = 120, ringW = 50, tx = 44 + 2 * R + 90, avail = W - 44 - tx, list = d.rows.slice(pg.from, pg.to);
+  list.forEach((o, i) => {
+    const by = y + i * bh, got = Math.min(o.got, o.qty), pct = Math.round(got / o.qty * 100), rem = Math.max(0, o.qty - got), cy = by + bh / 2;
+    const cx = ur ? W - (44 + R + ringW / 2 + 10) : 44 + R + ringW / 2 + 10;
+    h.rect(0, by, W, bh, i % 2 ? SP_C.zebra : SP_C.white); h.rect(0, by, W, 3, SP_C.line);
+    ctx.lineWidth = ringW; ctx.strokeStyle = SP_C.tonal; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    if(pct > 0){ ctx.strokeStyle = SP_C.green; ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (pct / 100)); ctx.stroke(); }
+    ctx.lineWidth = 3; ctx.strokeStyle = SP_C.line; ctx.beginPath(); ctx.arc(cx, cy, R + ringW / 2, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(cx, cy, R - ringW / 2, 0, Math.PI * 2); ctx.stroke();
+    h.t(pct + '%', cx, cy, { size: 78, k: 'n', wt: 900, a: 'c', abs: true, max: 2 * (R - ringW / 2) - 24, c: pct > 0 ? SP_C.green : SP_C.soft });
+    if(o.client) h.t(o.client, tx, by + 58, { size: 64, k: 'c', max: avail });
+    h.t(o.no, tx, by + 128, { size: 54, k: 'n', c: SP_C.b1, max: avail * 0.55 });
+    if(o.q) h.t(o.q, 44, by + 128, { size: 54, k: 'n', c: SP_C.soft, a: 'end', max: avail * 0.4 });
+    h.t(L.deliv, tx, by + 208, { size: 38, c: SP_C.soft, wt: 500, max: avail });
+    h.t(spMtr(got), tx, by + 262, { size: 62, k: 'n', c: pct > 0 ? SP_C.green : SP_C.ink, max: avail });
+    h.t(L.remain, tx, by + 328, { size: 38, c: SP_C.soft, wt: 500, max: avail });
+    h.t(spMtr(rem), tx, by + 382, { size: 62, k: 'n', max: avail });
+  });
+  return y + list.length * bh;
+};
+
+SP_DRAW.beams = (h, d, pg) => {
+  const W = h.W, L = h.L;
+  if(!d.rows.length) return h.empty(L.beams, L.noBeam(d.days));
+  const y = h.band(L.beams, pg), rowH = 118, list = d.rows.slice(pg.from, pg.to);
+  list.forEach((f, i) => {
+    const ry = y + i * rowH, urgent = typeof f[1] === 'string';
+    h.rect(0, ry, W, rowH, urgent ? SP_C.redT : (i % 2 ? SP_C.zebra : SP_C.white)); h.rect(0, ry, W, 3, SP_C.line);
+    const w = h.t(L.loom, 44, ry + rowH / 2, { size: 66, max: 330 });
+    h.t(String(f[0]), 44 + w + 20, ry + rowH / 2, { size: 80, k: 'n' });
+    h.t(urgent ? L[f[1]] : L.dayN(f[1]), 44, ry + rowH / 2, { size: 66, a: 'end', c: urgent ? SP_C.red : SP_C.ink, max: 400 });
+  });
+  const ey = y + list.length * rowH; h.rect(0, ey, W, 3, SP_C.line);
+  h.rect(0, ey, W, 140, SP_C.goldT);
+  h.t(L.nextBeam, W / 2, ey + 70, { size: 60, c: SP_C.goldInk, a: 'c', abs: true, max: W - 88 });
+  return ey + 140;
+};
+
+SP_DRAW.weft = (h, d) => {
+  const W = h.W, L = h.L, e = d.e;
+  if(!e || !e.hasData) return h.empty(L.weft, L.noWeft);
+  const y = h.band(L.weft), low = !!e.low;
+  h.t(L.bags, W / 2, y + 70, { size: 54, c: SP_C.soft, wt: 500, a: 'c', abs: true, max: W - 88 });
+  h.t(String(Math.round(Math.max(e.bags, 0) * 10) / 10), W / 2, y + 185, { size: 170, k: 'n', wt: 900, c: SP_C.deep, a: 'c', abs: true, max: W - 88 });
+  h.t(L.lbsLine(spNum(Math.max(e.lbs, 0))), W / 2, y + 305, { size: 56, c: SP_C.soft, a: 'c', abs: true, max: W - 88 });
+  const y2 = y + 380; h.rect(0, y2, W, 3, SP_C.line); h.rect(0, y2 + 3, W, 400, SP_C.zebra);
+  if(e.cover === null || e.cover === undefined){
+    h.wrap(L.noPace, W / 2, y2 + 190, W - 140, 56, 84, { c: SP_C.soft, wt: 500 });
+    return y2 + 403;
+  }
+  h.t(L.daysLeft, W / 2, y2 + 75, { size: 54, c: SP_C.soft, wt: 500, a: 'c', abs: true, max: W - 88 });
+  h.t(String(Math.round(e.cover * 10) / 10), W / 2, y2 + 215, { size: 190, k: 'n', wt: 900, c: low ? SP_C.red : SP_C.green, a: 'c', abs: true, max: W - 88 });
+  h.t(L.perDay(spNum(e.perDay)), W / 2, y2 + 345, { size: 56, c: SP_C.soft, a: 'c', abs: true, max: W - 88 });
+  let end = y2 + 403;
+  if(low){ h.rect(0, end, W, 170, SP_C.goldT); h.t(L.orderWeft, W / 2, end + 85, { size: 72, c: SP_C.goldInk, a: 'c', abs: true, max: W - 88 }); end += 170; }
+  return end;
+};
+
+SP_DRAW.cheques = (h, d, pg) => {
+  const W = h.W, ur = h.ur, L = h.L;
+  if(!d.rows.length) return h.empty(L.cheques, L.noChq);
+  const y = h.band(L.cheques, pg), rowH = 250, rows = d.rows.slice(pg.from, pg.to);
+  rows.forEach((c, i) => {
+    const ry = y + i * rowH, over = c.over > 0, today = !over && c.inD === 0;
+    h.rect(0, ry, W, rowH, over ? SP_C.redT : (i % 2 ? SP_C.zebra : SP_C.white)); h.rect(0, ry, W, 3, SP_C.line);
+    h.t(c.client, 44, ry + 62, { size: 70, k: 'c', max: W - 88 });
+    const label = over ? L.late(c.over) : today ? L.today : L.inD(c.inD), pw = Math.min(h.w(label, 50, 700, 'u') + 70, 400), px = ur ? 44 : W - 44 - pw;
+    const aw = h.t(spNum(c.amt), 44, ry + 160, { size: 88, k: 'n', max: W - 88 - pw - 40 - 150 });
+    h.t(L.rs, 44 + aw + 20, ry + 160, { size: 44, c: SP_C.soft, wt: 500, max: 140 });
+    h.rr(px, ry + 118, pw, 84, 42, over ? SP_C.red : SP_C.goldT);
+    h.t(label, px + pw / 2, ry + 160, { size: 50, c: over ? SP_C.white : SP_C.goldInk, a: 'c', abs: true, max: pw - 40 });
+    h.t(spDmy(c.date), 44, ry + 228, { size: 38, k: 'n', c: SP_C.soft, wt: 500, a: 'end' });
+  });
+  return y + rows.length * rowH;
+};
+
+SP_DRAW.receivable = (h, d) => {
+  const W = h.W, L = h.L;
+  if(!(d.total > 0.5)) return h.empty(L.receivable, L.noRecv);
+  const y = h.band(L.receivable);
+  h.t(L.recvL, W / 2, y + 100, { size: 60, c: SP_C.soft, wt: 500, a: 'c', abs: true, max: W - 88 });
+  h.t(spNum(d.total), W / 2, y + 260, { size: 190, k: 'n', wt: 900, c: SP_C.deep, a: 'c', abs: true, max: W - 88 });
+  h.t(L.rs, W / 2, y + 390, { size: 70, c: SP_C.soft, wt: 500, a: 'c', abs: true });
+  return y + 480;
+};
+
+SP_DRAW.profit = (h, d) => {
+  const W = h.W, L = h.L, y = h.band(L.profit), loss = d.profit < 0;
+  h.t((loss ? L.lossL : L.profitL) + ' - ' + d.label, W / 2, y + 85, { size: 56, c: SP_C.soft, wt: 500, a: 'c', abs: true, max: W - 88 });
+  h.t(spNum(Math.abs(d.profit)), W / 2, y + 225, { size: 170, k: 'n', wt: 900, c: loss ? SP_C.red : SP_C.green, a: 'c', abs: true, max: W - 88 });
+  h.t(L.rs, W / 2, y + 340, { size: 64, c: SP_C.soft, wt: 500, a: 'c', abs: true });
+  const y2 = y + 420; h.rect(0, y2, W, 3, SP_C.line); h.rect(0, y2 + 3, W, 440, SP_C.zebra);
+  h.t(L.cashL, W / 2, y2 + 90, { size: 56, c: SP_C.soft, wt: 500, a: 'c', abs: true, max: W - 88 });
+  h.t(spNum(Math.abs(d.cash)), W / 2, y2 + 230, { size: 170, k: 'n', wt: 900, c: d.cash < 0 ? SP_C.red : SP_C.deep, a: 'c', abs: true, max: W - 88 });
+  h.t(L.rs, W / 2, y2 + 345, { size: 64, c: SP_C.soft, wt: 500, a: 'c', abs: true });
+  return y2 + 443;
+};
+
+/* ---------------- how many pictures? worked out when they are made, from the data ---------------- */
+function spSplit(n, cap){
+  const pages = Math.max(1, Math.ceil(n / Math.max(1, cap))), per = Math.ceil(n / pages), out = [];
+  for(let i = 0; i < pages; i++) out.push({ from: i * per, to: Math.min(n, (i + 1) * per), idx: i + 1, total: pages });
   return out;
 }
-function alertStockText(rows, total, orders){
-  const list = (rows || []).filter(r => Number(r.stock) > 0.0001).sort((a, b) => b.stock - a.stock), t = Number(total) || 0, lines = [];
-  if(!list.length){ lines.push(al('noStock'), '', alertAsOf()); return { title: al('stockTitle'), body: lines.join('\n') }; }
-  const shown = list.slice(0, 8), nm = alertShortNames(shown.map(r => r.name)), arrow = al('arrow');
-  lines.push('🟢🟢 *' + al('total') + ': ' + alertMtrFlat(t) + '*', RULE_LINE);
-  shown.forEach(r => lines.push('🔸 *' + alertLtr(nm[r.name]) + '*  ' + arrow + '  *' + alertMtrFlat(r.stock) + '*'));
-  if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('more'));
-  const og = []; let short = 0, count = 0;
-  shown.forEach(r => { const ol = alertOrderLines(r.name, r.stock, orders); if(ol.length){ short += ol.short; count += ol.count; og.push('🧵 *' + alertLtr(nm[r.name]) + '*', ...ol, ''); } });
-  if(og.length) lines.push(RULE_LINE, '📋 *' + al('orders') + '*', short ? al('ordShort', alertLtr(short), alertLtr(count)) : al('ordOk'), '', ...og, al('legend'));
-  lines.push(RULE_LINE, alertAsOf());
-  return { title: al('stockTitle'), body: lines.join('\n') };
+// Rows are shared evenly across the pages (never a page with one lonely row) and a page is never cut through a row.
+function spPages(id, d){
+  const one = [{ from: 0, to: 1, idx: 1, total: 1 }], n = d && d.rows ? d.rows.length : 0;
+  if(!n) return one;
+  if(id === 'stock') return spSplit(n, Math.floor((SP_MAXH - SP_HEAD - 110) / 150));
+  if(id === 'orders') return spSplit(n, Math.floor((SP_MAXH - SP_HEAD) / 450));
+  if(id === 'beams') return spSplit(n, Math.floor((SP_MAXH - SP_HEAD - 140) / 118));
+  if(id === 'cheques') return spSplit(n, Math.floor((SP_MAXH - SP_HEAD) / 250));
+  return one;
 }
-function alertWeftText(e){
-  if(!e || !e.hasData) return { title: al('weftTitle'), body: al('noWeft') + '\n\n' + alertAsOf() };
-  const lines = [(e.low ? '🔴 ' : '🟢 ') + al('weftQty', alertLtr(alertNum(Math.max(e.bags, 0), 1)), alertLtr(alertNum(Math.max(e.lbs, 0))))];
-  lines.push(e.cover === null ? al('noPace') : al('weftDays', alertLtr(alertNum(e.cover, 1)), alertLtr(alertNum(e.perDay))));
-  if(e.low) lines.push('', al('weftOrder'));
-  lines.push('', alertAsOf());
-  return { title: e.low ? al('weftLow') : al('weftTitle'), body: lines.join('\n') };
+function spPlan(ids, data){
+  const plan = [];
+  ids.forEach(id => spPages(id, data[id]).forEach(pg => plan.push({ id, pg })));
+  return plan;
 }
-// One beam line; in Urdu it is worded here, otherwise the app's own wording is used.
-function alertBeamLine(f){
-  const icon = f.state === 'full' ? '🚨 ' : '⏰ ';
-  if(!alertUr()) return icon + (typeof beamAlertText === 'function' ? beamAlertText(f) : '');
-  if(f.state === 'full') return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم پورا بُنا جا چکا ہے - *ابھی* اگلا بیم چڑھائیں یا اسے مکمل کریں';
-  const when = f.daysLeft <= 0.5 ? '*آج*' : f.daysLeft <= 1.5 ? '*کل*' : 'تقریباً *' + alertLtr(Math.round(f.daysLeft)) + ' دن* میں';
-  return icon + 'لوم *' + alertLtr(f.loom) + '* کا بیم ' + when + ' ختم ہوگا (تقریباً ' + alertLtr(Math.round(f.expectedRemaining)) + ' میٹر کپڑا باقی)';
+function spCanvas(id, d, pg, ur, logo){
+  const W = SP_W, mk = () => document.createElement('canvas'), scratch = mk(); scratch.width = W; scratch.height = 3000;
+  const H = Math.ceil(SP_DRAW[id](spHelper(scratch.getContext('2d'), W, ur, logo), d, pg)) + 6;
+  const c = mk(); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, W, H);
+  SP_DRAW[id](spHelper(x, W, ur, logo), d, pg);
+  x.lineWidth = 10; x.strokeStyle = SP_C.b2; x.strokeRect(5, 5, W - 10, H - 10);
+  return c;
 }
-function alertBeamText(list, days){
-  const has = list && list.length;
-  const body = has ? list.map(alertBeamLine).join('\n') + '\n\n' + al('beamNext') : al('noBeam', alertLtr(days));
-  return { title: has ? al('beamSoon') : al('beamTitle'), body: body + '\n\n' + alertAsOf() };
+async function spFonts(){
+  try{
+    if(typeof document === 'undefined' || !document.fonts || !document.fonts.load) return;
+    await Promise.race([Promise.all([document.fonts.load('700 40px Roboto', '0123456789'), document.fonts.load('900 40px Roboto', '0123456789')]), new Promise(r => setTimeout(r, 2500))]);
+  }catch(e){ /* the fallback font is used */ }
 }
-function alertChequeText(pending, today, soon){
-  const withDate = pending.filter(c => c.chequeDate), byDate = (a, b) => String(a.chequeDate).localeCompare(String(b.chequeDate));
-  const over = withDate.filter(c => c.chequeDate < today).sort(byDate), due = withDate.filter(c => c.chequeDate >= today && c.chequeDate <= soon).sort(byDate);
-  const sum = l => l.reduce((s, c) => s + (Number(c.amount) || 0), 0), shown = over.concat(due), lines = [];
-  if(over.length) lines.push(al('chqOverN', alertLtr(over.length), alertRs(sum(over))));
-  if(due.length) lines.push(al('chqDueN', alertLtr(due.length), alertRs(sum(due))));
-  if(!shown.length) lines.push(al('chqNone'));
-  else lines.push('');
-  shown.slice(0, 8).forEach((c, i) => {
-    const isOver = c.chequeDate < today, n = isOver ? alertDayDiff(c.chequeDate, today) : alertDayDiff(today, c.chequeDate);
-    const when = isOver ? al('overBy', alertDays(n)) : n === 0 ? al('dueToday') : al('dueIn', alertDays(n));
-    if(i) lines.push('');
-    lines.push((isOver ? '❌ *' : '⏰ *') + (c.client || '?') + '*', '     💰 ' + alertRs(c.amount), '     📅 *' + when + '*  ·  ' + alertLtr(alertDmy(c.chequeDate)));
+let _spLogoImg = null;
+function spLogo(){
+  return new Promise(res => {
+    if(_spLogoImg && _spLogoImg.naturalWidth) return res(_spLogoImg);
+    try{
+      if(typeof BIZ_LOGO_PNG === 'undefined' || typeof Image === 'undefined') return res(null);
+      const im = new Image(), t = setTimeout(() => res(null), 3000);
+      im.onload = () => { clearTimeout(t); _spLogoImg = im; res(im); };
+      im.onerror = () => { clearTimeout(t); res(null); };
+      im.src = BIZ_LOGO_PNG;
+    }catch(e){ res(null); }
   });
-  if(shown.length > 8) lines.push('', '+ ' + (shown.length - 8) + ' ' + al('more'));
-  if(over.length) lines.push('', al('followUp'));
-  return { title: over.length ? al('chqOver') : (due.length ? al('chqSoon') : al('chqTitle')), body: lines.join('\n') };
 }
-function alertOrdersText(orders){
-  const list = (orders || []).filter(o => Number(o.qty) > 0).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.no || '').localeCompare(String(b.no || ''), undefined, { numeric: true })), lines = [];
-  if(!list.length) lines.push(al('noOrders'));
-  else{
-    const nm = alertShortNames(Array.from(new Set(list.map(o => o.quality))));
-    list.slice(0, 8).forEach((o, i) => { if(i) lines.push(''); lines.push(...alertOrderBlock(o, null, o.quality ? nm[o.quality] : '')); });
-    if(list.length > 8) lines.push('', '+ ' + (list.length - 8) + ' ' + al('moreOrders'));
-    lines.push('', al('legend'));
+// ids -> the picture files (one or more per option), in the fixed order of SHARE_SECTIONS.
+async function sharePicturesBuild(ids){
+  await spFonts();
+  const logo = await spLogo(), ur = alertUr(), data = {};
+  ids.forEach(id => { data[id] = spCollect(id); });
+  const plan = spPlan(ids, data), files = [], day = typeof todayStr === 'function' ? todayStr() : '';
+  for(const it of plan){
+    const c = spCanvas(it.id, data[it.id], it.pg, ur, logo);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    if(!blob) throw new Error('image export blocked');
+    files.push(new File([blob], 'ibrahim-weaving_' + it.id + (it.pg.total > 1 ? '_page' + it.pg.idx + 'of' + it.pg.total : '') + (day ? '_' + day : '') + '.png', { type: 'image/png' }));
   }
-  lines.push('', alertAsOf());
-  return { title: al('openTitle'), body: lines.join('\n') };
+  return files;
 }
-function alertReceivableText(total){
-  const t = Number(total) || 0;
-  return { title: al('recvTitle'), body: (t > 0.5 ? al('recv', alertRs(t)) : al('noRecv')) + '\n\n' + alertAsOf() };
-}
-function alertProfitText(profit, cash, label){
-  const p = Number(profit) || 0;
-  return { title: al('profitTitle'), body: (p >= 0 ? al('profit', label, alertRs(p)) : al('loss', label, alertRs(Math.abs(p)))) + '\n' + al('cash', alertRs(Number(cash) || 0)) + '\n\n' + alertAsOf() };
-}
-// Open orders with what is already delivered (from orderStats); empty when the app has none.
-function alertOpenOrders(){
-  try{ return (typeof DATA !== 'undefined' && DATA.orders || []).filter(o => !o.closed && !o.revoked).map(o => ({ quality: o.quality, client: o.client, no: o.no, date: o.date, qty: Number(o.qty) || 0, got: orderStats(o).got })); }
-  catch(e){ return []; }
-}
-// kind -> the message as one piece of text, ready for WhatsApp (title in bold).
-function alertBuild(kind, opts){
-  let m;
-  if(kind === 'stock'){ const st = computeStats(''), withOrders = opts && opts.orders !== undefined ? !!opts.orders : !!sharePrefs().stockOrders; m = alertStockText(st.stockByQuality, st.stock, withOrders ? alertOpenOrders() : []); }
-  else if(kind === 'weft') m = alertWeftText(weftStockEstimate());
-  else if(kind === 'beams'){ const d = beamAlertDays() || 3; m = alertBeamText(computeBeamForecasts(d).filter(f => f.state === 'full' || f.state === 'ending' || f.state === 'soon'), d); }
-  else if(kind === 'cheques'){ const t = todayStr(); m = alertChequeText(computePendingCheques(), t, dateAddDays(t, 7)); }
-  else if(kind === 'orders') m = alertOrdersText(alertOpenOrders());
-  else if(kind === 'receivable') m = alertReceivableText(computeStats('').receivable);
-  else if(kind === 'profit'){ const st = computeStats(todayStr().slice(0, 7)); m = alertProfitText(st.profitMonth, st.cash, alertMonthLabel()); }
-  else return '';
-  return alertJoin(m);
-}
-const LOUD_LINE = '🔥🔥🔥🔥🔥🔥🔥🔥';
-function alertJoin(m){ return alertRtlLines(LOUD_LINE + '\n*' + m.title + '*\n' + LOUD_LINE + '\n' + m.body); }
-// phone (optional): opens that person's chat directly. 03xx... is read as a Pakistan number (92...). Groups cannot be opened from a link.
-function alertPhoneDigits(phone){
-  let d = String(phone || '').replace(/\D/g, '');
-  if(d.startsWith('00')) d = d.slice(2);
-  else if(d.startsWith('0')) d = '92' + d.slice(1);
-  return d.length >= 8 ? d : '';
-}
-function alertWhatsAppUrl(text, phone){ return 'https://wa.me/' + alertPhoneDigits(phone) + '?text=' + encodeURIComponent(String(text || '')); }
-
-function alertShareCardHtml(){
-  try{ if(typeof permsLimited === 'function' && permsLimited()) return ''; }catch(e){ /* show it */ }   // approved people with a limited role never see this card
-  return `<div class="card" id="alertShareCard">
-    <div class="card-head"><h2>Send an alert</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-    <p class="note info-note" hidden>Builds the message from the ledger on this phone and opens WhatsApp with it ready. Choose a person or a group and send. Keep one WhatsApp group per kind of person (for example Stock viewers) so each group gets only what it should see.</p>
-    <div class="field" style="max-width:360px"><label for="al_kind">What to send</label>
-      <select id="al_kind"><option value="stock">Stock by quality</option><option value="weft">Weft stock</option><option value="beams">Warp beams</option><option value="cheques">Cheques</option><option value="custom">My own message</option></select></div>
-    <label id="al_ord_wrap" style="display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer;margin:0 0 12px"><input type="checkbox" id="al_ord" style="width:18px;height:18px"><span>Include orders (how much of each open order the stock covers)</span></label>
-    <div class="field"><label for="al_text">Message (you can edit it)</label><textarea id="al_text" rows="7"></textarea></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <a class="primary" id="al_wa" target="_blank" rel="noopener" href="#" style="text-decoration:none;display:inline-flex;align-items:center;padding:0 18px;min-height:44px">Send in WhatsApp</a>
-      <button type="button" class="ghost" id="al_refresh" style="margin:0">Refresh figures</button>
-    </div>
-  </div>`;
-}
-function alertShareWire(){
-  const $ = id => document.getElementById(id);
-  const kind = $('al_kind'), text = $('al_text'), wa = $('al_wa');
-  if(!kind || !text || !wa) return;
-  const sync = () => { wa.href = text.value.trim() ? alertWhatsAppUrl(text.value) : '#'; };
-  const ord = $('al_ord'), wrap = $('al_ord_wrap');
-  if(ord){ ord.checked = !!sharePrefs().stockOrders; ord.onchange = () => { setSharePrefs(Object.assign(sharePrefs(), { stockOrders: ord.checked })); const f = document.querySelector('.sf_chk[data-key="stockOrders"]'); if(f) f.checked = ord.checked; fill(); }; }
-  const fill = () => { if(wrap) wrap.style.display = kind.value === 'stock' ? 'flex' : 'none'; text.value = kind.value === 'custom' ? '' : alertBuild(kind.value); if(kind.value === 'custom') text.focus(); sync(); };
-  kind.onchange = fill; text.oninput = sync; $('al_refresh').onclick = fill;
-  wa.onclick = (e) => { if(!text.value.trim()){ e.preventDefault(); if(typeof showToast === 'function') showToast('Write or build a message first.', 2500); } };
-  fill();
-}
-
 
 /* ---------------- Floating Share button: what it sends (kept on this phone) ---------------- */
 const SHARE_PREFS_KEY = 'khata-share-prefs';
 const SHARE_SECTIONS = [
-  ['stock', 'Stock by quality', 'with how much of each open order it covers'],
-  ['orders', 'Open orders', 'how much of each is delivered'],
+  ['stock', 'Stock by quality', 'how much stock of each quality'],
+  ['orders', 'Open orders', 'client, quality and how much is delivered'],
   ['beams', 'Warp beams', 'beams ending soon'],
   ['weft', 'Weft stock', 'bags and days left'],
   ['cheques', 'Cheques', 'overdue and due within 7 days'],
@@ -261,69 +366,70 @@ const SHARE_SECTIONS = [
   ['profit', 'Profit and cash', 'this month, and cash in hand']
 ];
 function sharePrefs(){
-  const p = { stock: true, beams: true, weft: true, stockOrders: false, note: '', phone: '' };
+  const p = { stock: true, beams: true, weft: true };
   try{
     const s = JSON.parse(localStorage.getItem(SHARE_PREFS_KEY) || 'null');
-    if(s && typeof s === 'object'){ SHARE_SECTIONS.forEach(x => { if(typeof s[x[0]] === 'boolean') p[x[0]] = s[x[0]]; }); if(typeof s.stockOrders === 'boolean') p.stockOrders = s.stockOrders; if(typeof s.note === 'string') p.note = s.note; if(typeof s.phone === 'string') p.phone = s.phone; }
+    if(s && typeof s === 'object') SHARE_SECTIONS.forEach(x => { if(typeof s[x[0]] === 'boolean') p[x[0]] = s[x[0]]; });
   }catch(e){ /* use the defaults */ }
   return p;
 }
-function setSharePrefs(p){ try{ localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify(p)); }catch(e){ /* best effort */ } }
-function shareHasContent(p){ return !!(p && (String(p.note || '').trim() || SHARE_SECTIONS.some(x => p[x[0]]))); }
-// The ticked sections in one message (your own line on top, a single "As of" line at the end).
-function shareBuild(p){
-  const parts = [];
-  if(String(p.note || '').trim()) parts.push(String(p.note).trim());
-  SHARE_SECTIONS.forEach(x => {
-    if(!p[x[0]]) return;
-    const t = alertBuild(x[0]);
-    if(t) parts.push(t.replace(ALERT_ASOF_RE, '').trim());
-  });
-  if(parts.length && SHARE_SECTIONS.some(x => p[x[0]])) parts.push(alertRtlLines(alertAsOf()));
-  return parts.join('\n\n');
+function setSharePrefs(p){
+  const out = {}; SHARE_SECTIONS.forEach(x => { out[x[0]] = !!p[x[0]]; });
+  try{ localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify(out)); }catch(e){ /* best effort */ }
 }
-function shareFabNow(){
-  const toast = m => { if(typeof showToast === 'function') showToast(m, 3000); };
-  const p = sharePrefs();
-  if(!shareHasContent(p)){ toast(al('shChoose')); if(typeof switchTab === 'function') switchTab('settings'); return; }
-  let text = '';
-  try{ text = shareBuild(p); }catch(e){ if(typeof logErr === 'function') logErr('share', e); toast(al('shFail')); return; }
-  const url = alertWhatsAppUrl(text, p.phone);
-  const w = window.open(url, '_blank');
-  if(!w) window.location.href = url;
+function shareIds(p){ return SHARE_SECTIONS.filter(x => p && p[x[0]]).map(x => x[0]); }
+
+// Pictures made but the phone asked for a fresh tap: show them ready with a new Share button (a new tap always counts).
+function shareReadyDialog(files){
+  const old = document.getElementById('shareReady'); if(old) old.remove();
+  const wrap = document.createElement('div'); wrap.id = 'shareReady';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px;';
+  wrap.innerHTML = `<div style="background:#fff;color:#222;border-radius:16px;padding:20px;max-width:340px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:inherit">
+    <div style="font-weight:700;font-size:16px;margin-bottom:6px">Pictures are ready</div>
+    <div style="font-size:13.5px;line-height:1.4;margin-bottom:14px" id="shareReadyMsg">${files.length} ${files.length === 1 ? 'picture' : 'pictures'} to share. Tap Share, then choose WhatsApp.</div>
+    <div style="display:flex;flex-direction:column;gap:8px"><button id="shareReadyGo" type="button" class="primary" style="margin:0;width:100%">Share</button><button id="shareReadyX" type="button" class="ghost" style="width:100%">Cancel</button></div></div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.querySelector('#shareReadyX').onclick = close;
+  wrap.querySelector('#shareReadyGo').onclick = async () => {
+    try{ await navigator.share({ files }); close(); }
+    catch(e){ if(e && e.name === 'AbortError'){ close(); return; } wrap.querySelector('#shareReadyMsg').textContent = 'Could not open share: ' + (e && e.name || 'unknown error'); }
+  };
 }
+async function shareFabNow(){
+  const toast = (m, ms) => { if(typeof showToast === 'function') showToast(m, ms || 3000); };
+  const hide = () => { try{ const el = document.getElementById('appToast'); if(el) el.classList.remove('show'); }catch(e){ /* cosmetic */ } };
+  const ids = shareIds(sharePrefs());
+  if(!ids.length){ toast('Choose what to share in Settings first.'); if(typeof switchTab === 'function') switchTab('settings'); return; }
+  if(typeof canShareFiles === 'function' && !canShareFiles()){ toast('Sharing pictures is not supported on this phone.', 5000); return; }
+  let files = [];
+  try{ toast('Making pictures…', 60000); files = await sharePicturesBuild(ids); }
+  catch(e){ if(typeof logErr === 'function') logErr('share', e); hide(); toast('Could not make the pictures - tap Share again.', 5000); return; }
+  hide();
+  if(!files.length){ toast('Could not make the pictures - tap Share again.', 5000); return; }
+  if(navigator.canShare && !navigator.canShare({ files })){ toast("This phone can't share that many pictures at once - untick some options in Settings.", 6000); return; }
+  try{ await navigator.share({ files }); toast(files.length > 1 ? 'Shared ✓ (' + files.length + ' pictures)' : 'Shared ✓'); }
+  catch(e){
+    if(e && e.name === 'AbortError') return;
+    if(e && e.name === 'NotAllowedError'){ shareReadyDialog(files); return; }
+    toast('Could not open share - tap Share again.', 5000);
+  }
+}
+
+// Settings > Share on WhatsApp: only tick boxes, each with what it sends.
 function shareFabCardHtml(){
   try{ if(typeof permsLimited === 'function' && permsLimited()) return ''; }catch(e){ /* show it */ }
   const p = sharePrefs();
-  const rows = SHARE_SECTIONS.map(x => `<label style="display:flex;align-items:flex-start;gap:10px;font-weight:500;cursor:pointer;margin-top:10px"><input type="checkbox" class="sf_chk" data-key="${x[0]}" ${p[x[0]] ? 'checked' : ''} style="width:18px;height:18px;margin-top:2px"><span>${x[1]}<span class="note" style="display:block;font-weight:400;margin:0">${x[2]}</span></span></label>`).join('');
+  const rows = SHARE_SECTIONS.map(x => `<label style="display:flex;align-items:flex-start;gap:10px;font-weight:500;cursor:pointer;margin-top:12px"><input type="checkbox" class="sf_chk" data-key="${x[0]}" ${p[x[0]] ? 'checked' : ''} style="width:18px;height:18px;margin-top:2px"><span>${x[1]}<span class="note" style="display:block;font-weight:400;margin:0">${x[2]}</span></span></label>`).join('');
   return `<div class="card" id="shareFabCard">
     <div class="card-head"><h2>Floating Share button</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
-    <p class="note info-note" hidden>Tap the round button at the bottom of any screen, then Share. WhatsApp opens with the message below, built fresh from the ledger. Tick what to include. These choices are kept on this phone only.</p>
+    <p class="note info-note" hidden>Tap the round button at the bottom of any screen, then Share on WhatsApp. Each ticked option is made into its own picture from the ledger on this phone, and the phone's share sheet opens: choose WhatsApp, then a person or a group. These choices are kept on this phone only.</p>
     ${rows}
-    <label style="display:flex;align-items:flex-start;gap:10px;font-weight:500;cursor:pointer;margin-top:10px;padding-left:28px"><input type="checkbox" class="sf_chk" data-key="stockOrders" ${p.stockOrders ? 'checked' : ''} style="width:18px;height:18px;margin-top:2px"><span>Stock message: include orders<span class="note" style="display:block;font-weight:400;margin:0">adds how much of each open order the stock covers</span></span></label>
-    <div class="field" style="margin-top:14px"><label for="sf_note">Your own line on top (optional)</label><input id="sf_note" type="text" maxlength="200" placeholder="e.g. Today's update" value="${typeof escHtml === 'function' ? escHtml(p.note) : ''}"></div>
-    <div class="field"><label for="sf_phone">Send to this number (optional)</label><input id="sf_phone" type="tel" inputmode="tel" placeholder="03xx xxxxxxx - leave empty to choose in WhatsApp" value="${typeof escHtml === 'function' ? escHtml(p.phone) : ''}"><p class="note" style="margin-top:4px">A number opens that chat directly. A WhatsApp group cannot be opened from a link, so leave this empty and pick the group in WhatsApp.</p></div>
-    <div class="field"><label for="sf_preview">Preview <span id="sf_count" class="note" style="margin:0"></span></label><textarea id="sf_preview" rows="10" readonly></textarea></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="primary" id="sf_test" style="min-height:44px">Share now</button><button type="button" class="ghost" id="sf_refresh" style="margin:0">Refresh preview</button></div>
   </div>`;
 }
 function shareFabWire(){
-  const $ = id => document.getElementById(id);
-  if(!$('shareFabCard')) return;
-  const read = () => { const p = { note: $('sf_note').value, phone: $('sf_phone').value }; document.querySelectorAll('.sf_chk').forEach(c => { p[c.dataset.key] = c.checked; }); return p; };
-  const preview = () => {
-    const p = read(); let t = '';
-    try{ t = shareHasContent(p) ? shareBuild(p) : ''; }catch(e){ t = al('shFail'); }
-    $('sf_preview').value = t || al('shNone');
-    $('sf_count').textContent = t ? al(t.length > 3500 ? 'shLong' : 'shChars', t.length) : '';
-  };
-  const save = () => { const p = read(); setSharePrefs(p); const a = $('al_ord'); if(a && a.checked !== !!p.stockOrders){ a.checked = !!p.stockOrders; const k = $('al_refresh'); if(k) k.click(); } preview(); };
-  document.querySelectorAll('.sf_chk').forEach(c => { c.onchange = save; });
-  $('sf_note').oninput = save; $('sf_phone').onchange = save; $('sf_refresh').onclick = preview; $('sf_test').onclick = () => { setSharePrefs(read()); shareFabNow(); };
-  preview();
-}
-// Called when the language button is pressed: rebuild the messages in the new language.
-function alertLangRefresh(){
-  const click = id => { const b = document.getElementById(id); if(b) b.click(); };
-  click('al_refresh'); click('sf_refresh');
+  if(!document.getElementById('shareFabCard')) return;
+  document.querySelectorAll('.sf_chk').forEach(c => {
+    c.onchange = () => { const p = {}; document.querySelectorAll('.sf_chk').forEach(k => { p[k.dataset.key] = k.checked; }); setSharePrefs(p); };
+  });
 }
