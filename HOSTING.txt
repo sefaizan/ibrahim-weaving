@@ -329,3 +329,17 @@ SEND ALERTS ON WHATSAPP (v3.18.41)
     with it ready - pick a person or a group and send. Nothing goes to any server. Keep one WhatsApp group per kind of person (e.g. Stock
     viewers) so each group gets only what it should see. WhatsApp delivers to a phone that was offline once it is back online.
   TO GO BACK: put the 3.18.39 copies of index.html, service-worker.js, package.json, js/shell.js, js/wiring.js back and delete js/alert-share.js.
+
+SHARE ON WHATSAPP AS PICTURES (v3.18.103)
+  - The round button's Share (now "Share on WhatsApp") makes PICTURES instead of a text message. Settings > Share on WhatsApp is now only tick boxes, each with a line saying
+    what it sends: Stock by quality, Open orders, Warp beams, Weft stock, Cheques, Money to receive, Profit and cash. The text-message builder (your own line, a phone number,
+    the preview, "Send an alert" and "Include orders") is gone. Each ticked option becomes its own picture, made from the ledger on that phone when you tap Share.
+  - If an option has more rows than fit on one picture (about 8 stock lines, 3 orders, 10 beams or 5 cheques) it gets more pages ("1 / 2" under the title); the pictures
+    are worked out when you tap Share, like the client statement. A picture is never taller than about 1,560 px so WhatsApp does not shrink it.
+  - Every picture has the business logo and the title on one header line. Words follow the app language; figures always read left to right (3,299-8, never 8-3,299);
+    text is shrunk (then shortened with ...) so nothing is cut off. Open orders show the CLIENT'S NAME on every order, with a donut for how much is delivered. An option with
+    nothing to show (no stock, no cheques due, ...) still makes a picture that says so.
+  - The phone's share sheet opens with all the pictures: choose WhatsApp, then a person or a group. (WhatsApp cannot attach pictures from a link, so the number box is gone.)
+    If the phone asks for a fresh tap, a small "Pictures are ready" box with a Share button appears. Nothing goes to any server. Pictures with client names should only go to
+    people or groups who may see them.
+  TO GO BACK: put the 3.18.102 copies of index.html, service-worker.js, package.json, js/alert-share.js, js/shell.js, js/wiring.js, js/i18n.js back.
