@@ -344,40 +344,44 @@ function wirePanel(id){
         PAGE.production = 1; switchTab('production');
       };
     });
-    const pfFrom = document.getElementById('pf_from');
-    const pfTo = document.getElementById('pf_to');
-    const pfCustom = document.getElementById('pf_custom');
-    const pfChips = Array.from(document.querySelectorAll('#pf_chips .chip'));
-    const setPfActiveChip = (period)=> pfChips.forEach(c=> c.classList.toggle('active', c.dataset.period === period));
-    pfFrom.addEventListener('change', ()=>{
-      FILTER.productionFrom = pfFrom.value; PAGE.production = 1; setPfActiveChip('custom'); switchTab('production');
-    });
-    pfTo.addEventListener('change', ()=>{
-      FILTER.productionTo = pfTo.value; PAGE.production = 1; setPfActiveChip('custom'); switchTab('production');
-    });
-    pfChips.forEach(chip=>{
-      chip.onclick = ()=>{
-        const period = chip.dataset.period;
-        if(period === 'custom'){ pfCustom.hidden = false; setPfActiveChip('custom'); return; }
-        pfCustom.hidden = true;
-        const {from, to} = quickPeriodRange(period);
-        FILTER.productionFrom = from; FILTER.productionTo = to;
-        PAGE.production = 1; setPfActiveChip(period);
-        switchTab('production');
-      };
-    });
-    setPfActiveChip((FILTER.productionFrom || FILTER.productionTo) ? 'custom' : '');
-    const pfDetected = (()=>{
-      const from = FILTER.productionFrom || '', to = FILTER.productionTo || '';
-      if(!from && !to) return '';
-      for(const p of ['this-week','last-week','this-month','last-month','this-year']){
-        const r = quickPeriodRange(p);
-        if(r.from===from && r.to===to) return p;
-      }
-      return 'custom';
-    })();
-    setPfActiveChip(pfDetected);
-    if(pfDetected === 'custom') pfCustom.hidden = false;
+    // Date range on the Production page: the same filter is shown twice (inside the Summary card and right above the Production Log
+    // table), so both rows are wired by one function and always agree.
+    const wireProductionDates = (chipsId, customId, fromId, toId)=>{
+      const pfFrom = document.getElementById(fromId), pfTo = document.getElementById(toId), pfCustom = document.getElementById(customId);
+      if(!pfFrom || !pfTo || !pfCustom) return;
+      const pfChips = Array.from(document.querySelectorAll('#' + chipsId + ' .chip'));
+      const setPfActiveChip = (period)=> pfChips.forEach(c=> c.classList.toggle('active', c.dataset.period === period));
+      pfFrom.addEventListener('change', ()=>{
+        FILTER.productionFrom = pfFrom.value; PAGE.production = 1; setPfActiveChip('custom'); switchTab('production');
+      });
+      pfTo.addEventListener('change', ()=>{
+        FILTER.productionTo = pfTo.value; PAGE.production = 1; setPfActiveChip('custom'); switchTab('production');
+      });
+      pfChips.forEach(chip=>{
+        chip.onclick = ()=>{
+          const period = chip.dataset.period;
+          if(period === 'custom'){ pfCustom.hidden = false; setPfActiveChip('custom'); return; }
+          pfCustom.hidden = true;
+          const {from, to} = quickPeriodRange(period);
+          FILTER.productionFrom = from; FILTER.productionTo = to;
+          PAGE.production = 1; setPfActiveChip(period);
+          switchTab('production');
+        };
+      });
+      const pfDetected = (()=>{
+        const from = FILTER.productionFrom || '', to = FILTER.productionTo || '';
+        if(!from && !to) return '';
+        for(const p of ['this-week','last-week','this-month','last-month','this-year']){
+          const r = quickPeriodRange(p);
+          if(r.from===from && r.to===to) return p;
+        }
+        return 'custom';
+      })();
+      setPfActiveChip(pfDetected);
+      if(pfDetected === 'custom') pfCustom.hidden = false;
+    };
+    wireProductionDates('pf_chips', 'pf_custom', 'pf_from', 'pf_to');
+    wireProductionDates('pl_chips', 'pl_custom', 'pl_from', 'pl_to');
 
     // Bulk import: pastes multiple "Loom, Qty, Employee1, Meters1[, Employee2, Meters2[, Employee3, Meters3]]"
     // rows (one per line) — matches employee names loosely (case-insensitive, partial match if unique) since

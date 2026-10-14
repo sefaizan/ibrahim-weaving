@@ -217,6 +217,7 @@ function productionPanel(){
   if(fromVal) filteredProduction = filteredProduction.filter(r=>r.date >= fromVal);
   if(toVal) filteredProduction = filteredProduction.filter(r=>r.date <= toVal);
   // The Production Log has its own Loom # filter on top of the quality / date filters; the summary above ignores it.
+  // The Log also has its own Date range row (v3.18.105); it shares FILTER.productionFrom/To with the Summary's filter, so the two always agree.
   const loomSel = (FILTER.productionLooms || []).map(String);   // one or more looms; empty = all looms
   const logRows = loomSel.length ? filteredProduction.filter(r=>loomSel.includes(String(r.loom))) : filteredProduction;
   const filterQty = logRows.reduce((s,r)=>s+(Number(r.qty)||0),0);
@@ -298,6 +299,8 @@ function productionPanel(){
     ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml)}
     <div class="card"><h2>Production Log</h2>
       <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><div class="chip-row" id="pf_looms" style="margin-top:6px"><button type="button" class="chip${loomSel.length?'':' active'}" data-loom="">All Looms</button>${mbLoomList().map(l=>`<button type="button" class="chip${loomSel.includes(String(l))?' active':''}" data-loom="${escHtml(l)}">${escHtml(l)}</button>`).join('')}</div></div>
+      <div class="field" style="margin:10px 0"><label>Date range</label><div class="chip-row" id="pl_chips" style="margin-top:6px">${[['','All Time'],['this-week','This Week'],['last-week','Last Week'],['this-month','This Month'],['last-month','Last Month'],['this-year','This Year'],['custom','Custom…']].map(c=>`<button type="button" class="chip" data-period="${c[0]}">${c[1]}</button>`).join('')}</div>
+        <div id="pl_custom" hidden style="margin-top:10px"><div class="grid cols-2"><div class="field"><label>From</label><input type="date" id="pl_from" value="${fromVal}"></div><div class="field"><label>To</label><input type="date" id="pl_to" value="${toVal}"></div></div></div></div>
       ${(qualityVal || loomSel.length || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${logRows.length} entr${logRows.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomSel.length?` on loom${loomSel.length===1?'':'s'} <b>${loomSel.map(escHtml).join(', ')}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       <p class="note" style="margin:0 0 10px">Qty = meters woven in that entry · Diff = Qty − meters credited to the employees · Beam Date = the day that beam was started.</p>
       ${logTable('production',

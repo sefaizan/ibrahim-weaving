@@ -722,6 +722,7 @@ Object.assign(I18N_UR, {
   "Tap the round button at the bottom of any screen, then Share on WhatsApp. Each ticked option is made into its own picture from the ledger on this phone, and the phone's share sheet opens: choose WhatsApp, then a person or a group. These choices are kept on this phone only.": "کسی بھی اسکرین کے نیچے گول بٹن دبائیں، پھر واٹس ایپ پر شیئر کریں۔ ہر منتخب آپشن کی لیجر سے اسی فون پر اپنی الگ تصویر بنتی ہے، اور فون کی شیئر شیٹ کھلتی ہے: واٹس ایپ چنیں، پھر کوئی شخص یا گروپ۔ یہ انتخاب صرف اسی فون پر محفوظ رہتے ہیں۔",
   "how much stock of each quality": "ہر کوالٹی کا کتنا اسٹاک ہے",
   "client, quality and how much is delivered": "گاہک، کوالٹی اور کتنا ڈیلیور ہو چکا",
+  "Date range": "تاریخ کی حد",
   "Pictures are ready": "تصاویر تیار ہیں",
   "Making pictures…": "تصاویر بن رہی ہیں…",
   "Could not make the pictures - tap Share again.": "تصاویر نہیں بن سکیں - دوبارہ شیئر دبائیں۔",
