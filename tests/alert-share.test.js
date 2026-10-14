@@ -1,147 +1,259 @@
 'use strict';
-/* Share an alert on WhatsApp: the message texts and the link. Loads js/alert-share.js with small stand-ins. */
+/* Floating Share button: ticked options become their own pictures. Loads js/alert-share.js with small stand-ins (a recording canvas,
+ * a small fake ledger) and checks what is shared, how many pictures are made, that figures stay left to right, that the client's name
+ * is on every order, and that no text ever runs off the edge of a picture. */
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-function load(extra){
-  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'alert-share.js'), 'utf8');
-  const ctx = vm.createContext({ fmtRs: n => 'Rs ' + Math.round(n || 0), fmtQtyMtr: n => String(Math.round(n)), beamAlertText: f => 'Loom ' + f.loom + ' ends soon', todayStr: () => '2026-10-09', dateAddDays: () => '2026-10-16' });
-  vm.runInContext(src.replace(/^const /gm, 'var ') + (extra || ''), ctx);
+const root = path.join(__dirname, '..');
+const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+
+// A canvas that remembers every piece of text drawn on it. A character is 0.55 of the font size wide.
+function makeCanvas(all){
+  const calls = [];
+  const ctx = {
+    calls, font: '700 40px Roboto', direction: 'ltr', textAlign: 'left', fillStyle: '', strokeStyle: '', lineWidth: 0, textBaseline: '', lineCap: '', lineJoin: '',
+    createLinearGradient(){ return { addColorStop(){} }; }, fillRect(){}, strokeRect(){}, beginPath(){}, moveTo(){}, lineTo(){}, arcTo(){}, closePath(){}, fill(){}, stroke(){}, arc(){}, drawImage(){},
+    measureText(s){ const m = /(\d+)px/.exec(this.font); return { width: String(s).length * (m ? +m[1] : 40) * 0.55 }; },
+    fillText(s, x, y){ calls.push({ s: String(s), x, y, font: this.font, align: this.textAlign, dir: this.direction }); }
+  };
+  const c = { width: 0, height: 0, ctx, calls, getContext(){ return ctx; }, toBlob(cb){ cb({ size: 1 }); } };
+  all.push(c); return c;
+}
+const LEDGER = `
+var computeStats = p => p === '' ? { stockByQuality: [{ name: '62/44 (Micro 150.144)', stock: 3299.5 }, { name: '56/42', stock: 644.25 }, { name: 'Zero', stock: 0 }], receivable: 4746457 } : { profitMonth: -500, cash: 263724 };
+var DATA = { orders: [
+  { no: 'ORD-002', quality: '62/44 (Micro 150.144)', client: 'Ahmed Traders', date: '2026-10-05', qty: 20000 },
+  { no: 'ORD-001', quality: '62/44 (Micro 150.144)', client: 'احمد ٹریڈرز', date: '2026-09-01', qty: 10000 },
+  { no: 'ORD-000', quality: '56/42', client: 'Closed Ltd', date: '2026-08-01', qty: 500, closed: true }] };
+var orderStats = o => ({ got: o.no === 'ORD-001' ? 5549.25 : 0 });
+var fmtQtyMtr = n => { const w = Math.floor(n + 1e-9), s = Math.round((n - w) * 16); return s ? w + '-' + s : String(w); };
+var computeBeamForecasts = d => [{ loom: 11, state: 'ending', daysLeft: 4.2 }, { loom: 7, state: 'full' }, { loom: 3, state: 'soon', daysLeft: 0.3 }, { loom: 9, state: 'ok', daysLeft: 30 }, { loom: 2, state: 'soon', daysLeft: 1.2 }];
+var beamAlertDays = () => 6;
+var weftStockEstimate = () => ({ hasData: true, bags: 19.1, lbs: 1906, cover: 9.4, perDay: 202, low: false });
+var computePendingCheques = () => [{ client: 'A', amount: 1000, chequeDate: '2026-10-01' }, { client: 'B', amount: 500, chequeDate: '2026-10-14' }, { client: 'C', amount: 9000, chequeDate: '2026-12-30' }, { client: 'D', amount: 7, chequeDate: '' }];
+var todayStr = () => '2026-10-14'; var dateAddDays = () => '2026-10-21';`;
+function load(extra, opts){
+  opts = opts || {};
+  const canvases = [], toasts = [], shared = [], dialogs = [];
+  const store = opts.store || {};
+  const ctx = vm.createContext({
+    File: class { constructor(parts, name, o){ this.name = name; this.type = o && o.type; } },
+    localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } },
+    document: {
+      createElement: t => t === 'canvas' ? makeCanvas(canvases) : { style: {}, appendChild(){}, remove(){}, querySelector: () => ({}), set innerHTML(v){ dialogs.push(v); } },
+      getElementById: () => null, body: { appendChild(){} }, querySelectorAll: () => []
+    },
+    navigator: { canShare: opts.canShare || (() => true), share: opts.share || (async f => { shared.push(f); }) },
+    showToast: m => toasts.push(m), canShareFiles: () => opts.canShareFiles !== false, switchTab: t => toasts.push('tab:' + t), setTimeout, clearTimeout, console
+  });
+  vm.runInContext(read('js/alert-share.js').replace(/^(const|let) /gm, 'var ') + LEDGER + (extra || ''), ctx);
+  ctx.canvases = canvases; ctx.toasts = toasts; ctx.shared = shared; ctx.dialogs = dialogs; ctx.store = store;
   return ctx;
 }
-describe('alert texts', () => {
-  const app = load();
-  test('stock: a big total, then one line per quality (short names, biggest first) with an arrow to its quantity', () => {
-    const t = app.alertStockText([{ name: '52 Picks', stock: 300.4 }, { name: '60/52 (Micro 150.144)', stock: 0 }, { name: '62/44 (Micro 150.144)', stock: 1240 }], 1540.4);
-    assert.equal(t.title, '📦📦 STOCK IN HAND 📦📦');
-    assert.equal(t.body.split('\n').slice(0, 5).join('\n'), '🟢🟢 *TOTAL: 1,540 m*\n━━━━━━━━━━━━━━\n🔸 *62/44*  ➜  *1,240 m*\n🔸 *52 Picks*  ➜  *300 m*\n━━━━━━━━━━━━━━');
-    assert.ok(!t.body.includes('60/52') && !t.body.includes('ORDERS'));
-    assert.ok(/^🕙 \*As of .+ (AM|PM)\*$/.test(t.body.split('\n').pop()));
+const J = x => JSON.parse(JSON.stringify(x));   // plain copies, so results made inside the test sandbox compare equal
+// Where a piece of text starts and ends on the picture.
+function extent(c, W){
+  const w = c.s.length * (+/(\d+)px/.exec(c.font)[1]) * 0.55;
+  return c.align === 'right' ? [c.x - w, c.x] : c.align === 'center' ? [c.x - w / 2, c.x + w / 2] : [c.x, c.x + w];
+}
+function allInside(canvas, W){
+  canvas.calls.forEach(c => { const [a, b] = extent(c, W); assert.ok(a >= -0.5 && b <= W + 0.5, `"${c.s}" runs off the picture (${Math.round(a)}..${Math.round(b)})`); });
+}
+
+describe('what is ticked', () => {
+  test('defaults, saved ticks, and the fixed order of the options', () => {
+    const a = load();
+    assert.deepEqual(J(a.sharePrefs()), { stock: true, beams: true, weft: true });
+    assert.deepEqual(J(a.SHARE_SECTIONS.map(x => x[0])), ['stock', 'orders', 'beams', 'weft', 'cheques', 'receivable', 'profit']);
+    const b = load('', { store: { 'khata-share-prefs': JSON.stringify({ stock: false, orders: true, receivable: true, note: 'old text line', phone: '0300', stockOrders: true }) } });
+    assert.deepEqual(J(b.shareIds(b.sharePrefs())), ['orders', 'beams', 'weft', 'receivable']);
+    b.setSharePrefs({ profit: true, stock: true, note: 'x' });
+    assert.deepEqual(J(Object.keys(JSON.parse(b.store['khata-share-prefs'])).sort()), ['beams', 'cheques', 'orders', 'profit', 'receivable', 'stock', 'weft'], 'only the ticks are kept');
   });
-  test('qualities that would get the same short name keep their full name', () => {
-    const t = app.alertStockText([{ name: '62/44 (Micro 150.144)', stock: 500 }, { name: '62/44 (Polyester)', stock: 400 }], 900);
-    assert.ok(t.body.includes('62/44 (Micro 150.144)') && t.body.includes('62/44 (Polyester)'));
+  test('the Settings card is only tick boxes, each with what it sends - no message, number or preview', () => {
+    const a = load();
+    const html = a.shareFabCardHtml();
+    assert.equal((html.match(/class="sf_chk"/g) || []).length, 7);
+    a.SHARE_SECTIONS.forEach(x => assert.ok(html.includes(x[1]) && html.includes(x[2]), x[0] + ' has its description'));
+    assert.ok(!/<textarea|type="text"|type="tel"|<button[^>]*id=/.test(html), 'no text boxes and no extra buttons');
+    assert.ok(!/Preview|Share now|phone|number|WhatsApp group/i.test(html.replace(/the phone's share sheet|on this phone|this phone/gi, '')), 'the old message settings are gone');
+    assert.equal(load('var permsLimited = () => true;').shareFabCardHtml(), '', 'a limited role never sees it');
   });
-  test('orders: progress is what is DELIVERED; stock only says ready / part covered / none, shared oldest order first', () => {
-    const o = (no, date, qty, got, quality) => ({ no, date, qty, got, quality: quality || 'Q1', client: 'SECRET' });
-    const t = app.alertStockText([{ name: 'Q1', stock: 1240 }, { name: 'Q2', stock: 300 }], 1540, [o('ORD-12', '2026-09-01', 2000, 600), o('ORD-14', '2026-09-05', 3000, 0), o('ORD-15', '2026-09-10', 1000, 400), o('ORD-16', '2026-09-02', 400, 100, 'Q2')]);
-    const b = t.body;
-    assert.ok(b.includes('📋 *ORDERS*\n⚠️ *3 of 4 orders need more weaving*\n\n🧵 *Q1*\n📋 *ORD-12*\n🟩🟩🟩🟨🟨🟨🟨🟨🟨⬜\n📤 *30% delivered* (600 m of 2,000 m)\n⏳ Still to deliver: *1,400 m*\n🟠 *Stock covers only 1,240 m - weave 160 m more*'));
-    assert.ok(b.includes('📋 *ORD-14*\n⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜\n📤 *0% delivered* (0 m of 3,000 m)\n⏳ Still to deliver: *3,000 m*\n🔴 *NO STOCK - weave 3,000 m*'));
-    assert.ok(b.includes('📋 *ORD-16*\n🟩🟩🟩🟨🟨🟨🟨🟨🟨🟨\n📤 *25% delivered* (100 m of 400 m)\n⏳ Still to deliver: *300 m*\n🟢 *READY - stock covers it, send now*'));
-    assert.ok(b.includes('🟩 Delivered   🟨 In stock for it   ⬜ To weave\n━━━━━━━━━━━━━━\n🕙 *As of '));
-    assert.ok(!b.includes('SECRET'));
+  test('nothing ticked: no pictures, and the person is sent to Settings', async () => {
+    const a = load(), s = JSON.stringify({ stock: false, beams: false, weft: false });
+    const b = load('', { store: { 'khata-share-prefs': s } });
+    await b.shareFabNow();
+    assert.deepEqual(J(b.toasts), ['Choose what to share in Settings first.', 'tab:settings']);
+    assert.equal(b.shared.length, 0);
+    assert.equal(a.shareIds({}).length, 0);
   });
-  test('an order is never shown as done unless it is delivered: stock covering the rest is "READY", a finished order is "COMPLETED"', () => {
-    const b = app.alertStockText([{ name: 'Q1', stock: 5000 }], 5000, [{ no: 'A', date: '2026-09-01', qty: 1000, got: 1000, quality: 'Q1' }, { no: 'B', date: '2026-09-02', qty: 2000, got: 500, quality: 'Q1' }]).body;
-    assert.ok(b.includes('📋 *A*\n🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩\n📤 *100% delivered* (1,000 m of 1,000 m)\n✅ *COMPLETED*'));
-    assert.ok(b.includes('📤 *25% delivered* (500 m of 2,000 m)') && b.includes('🟢 *READY - stock covers it, send now*') && b.includes('✅ *Stock covers every open order*'));
+  test('the old text-message code is gone from the app', () => {
+    const src = read('js/alert-share.js'), shell = read('js/shell.js'), wiring = read('js/wiring.js'), html = read('index.html');
+    assert.ok(!/wa\.me|alertWhatsAppUrl|alertBuild|shareBuild|alertShareCardHtml|alertShareWire|alertLangRefresh/.test(src + shell + wiring + read('js/i18n.js')));
+    assert.ok(!html.includes('Share (alerts)') && html.includes('<span>Share on WhatsApp</span>'));
   });
-  test('only 3 orders per quality are listed, the rest are counted', () => {
-    const many = [1, 2, 3, 4, 5].map(i => ({ no: 'ORD-' + i, date: '2026-09-0' + i, qty: 1000, got: 0, quality: 'Q1' }));
-    const b = app.alertStockText([{ name: 'Q1', stock: 10 }], 10, many).body;
-    assert.ok(b.includes('ORD-3') && !b.includes('ORD-4') && b.includes('+ 2 more orders'));
+});
+
+describe('what each picture is made from', () => {
+  const a = load();
+  test('stock: only qualities with stock, biggest first, short names', () => {
+    assert.deepEqual(J(a.spCollect('stock').rows), [['62/44', 3299.5], ['56/42', 644.25]]);
   });
-  test('cheques: totals first, most overdue first with days late, due-soon with days left, far-off ones left out', () => {
-    const t = app.alertChequeText([{ client: 'A', amount: 1000, chequeDate: '2026-10-01' }, { client: 'B', amount: 500, chequeDate: '2026-10-12' }, { client: 'C', amount: 9000, chequeDate: '2026-12-30' }, { client: 'D', amount: 1, chequeDate: '' }], '2026-10-09', '2026-10-16');
-    assert.equal(t.title, '🚨🚨 CHEQUES OVERDUE 🚨🚨');
-    assert.ok(t.body.startsWith('🔴 *1 OVERDUE - Rs 1000*\n🟠 *1 due within 7 days - Rs 500*\n\n❌ *A*\n     💰 Rs 1000\n     📅 *8 days overdue*  ·  01-10-2026\n\n⏰ *B*\n     💰 Rs 500\n     📅 *due in 3 days*  ·  12-10-2026'));
-    assert.ok(!t.body.includes('Rs 9000') && t.body.endsWith('👉 *Follow up TODAY*'));
-    assert.ok(app.alertChequeText([], '2026-10-09', '2026-10-16').body.includes('No cheques overdue'));
-    const today = app.alertChequeText([{ client: 'T', amount: 5, chequeDate: '2026-10-09' }], '2026-10-09', '2026-10-16');
-    assert.ok(today.title.includes('DUE SOON') && today.body.includes('due TODAY'));
+  test('orders: open ones only, oldest first, WITH the client, what is delivered and the short quality', () => {
+    const r = a.spCollect('orders').rows;
+    assert.deepEqual(J(r.map(o => o.no)), ['ORD-001', 'ORD-002']);
+    assert.deepEqual(J(r.map(o => o.client)), ['احمد ٹریڈرز', 'Ahmed Traders']);
+    assert.equal(r[0].got, 5549.25); assert.equal(r[0].q, '62/44'); assert.equal(r[1].got, 0);
+    assert.ok(!JSON.stringify(r).includes('Closed Ltd'));
   });
-  test('weft and beam texts', () => {
-    assert.equal(app.alertWeftText({ hasData: true, bags: 12.34, lbs: 1234, cover: 4.2, perDay: 300, low: true }).title, '🚨🚨 WEFT RUNNING LOW 🚨🚨');
-    assert.equal(app.alertWeftText({ hasData: true, bags: 50, lbs: 5000, cover: 20, perDay: 250, low: false }).title, '🧵🧵 WEFT STOCK 🧵🧵');
-    assert.ok(app.alertWeftText({ hasData: false }).body.startsWith('No weft'));
-    assert.ok(app.alertBeamText([{ loom: 3 }], 3).body.includes('⏰ Loom 3 ends soon') && app.alertBeamText([{ loom: 3, state: 'full' }], 3).body.includes('🚨 Loom 3 ends soon'));
-    assert.ok(app.alertBeamText([], 3).body.startsWith('✅ No beam is ending within 3 days'));
+  test('beams: a full beam first ("now"), then by days left; today / tomorrow / N days; beams far away are left out', () => {
+    assert.deepEqual(JSON.parse(JSON.stringify(a.spCollect('beams').rows)), [[7, 'now'], [3, 'today'], [2, 'tomorrow'], [11, 4]]);
   });
-  test('the stock message is built from the ledger and the WhatsApp link carries it', () => {
-    const a = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] });`);
-    const msg = a.alertBuild('stock');
-    assert.ok(msg.startsWith('🔥🔥🔥🔥🔥🔥🔥🔥\n*📦📦 STOCK IN HAND 📦📦*\n🔥🔥🔥🔥🔥🔥🔥🔥\n🟢🟢 *TOTAL: 1,500 m*\n━━━━━━━━━━━━━━\n🔸 *Q1*  ➜  *1,500 m*'));
-    assert.ok(!msg.includes('ORDERS'), 'orders are off unless ticked');
-    const b = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] }); var DATA = { orders: [{ quality: 'Q1', no: 'ORD-1', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 500 });`);
-    assert.ok(!b.alertBuild('stock').includes('ORDERS'), 'default: no orders');
-    assert.ok(b.alertBuild('stock', { orders: true }).includes('📋 *ORDERS*') && b.alertBuild('stock', { orders: true }).includes('*ORD-1*'));
-    const c = load(`var localStorage = { getItem: () => '{"stockOrders":true}', setItem(){} }; var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }] }); var DATA = { orders: [{ quality: 'Q1', no: 'ORD-1', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 500 });`);
-    assert.ok(c.alertBuild('stock').includes('📋 *ORDERS*'), 'the saved tick turns orders on');
-    assert.equal(a.alertBuild('custom'), '');
-    const url = a.alertWhatsAppUrl('Q1: 1500 m\nTotal');
-    assert.ok(url.startsWith('https://wa.me/?text=') && decodeURIComponent(url.split('text=')[1]) === 'Q1: 1500 m\nTotal');
+  test('cheques: overdue first with days late, then due soon with days left; far-off and undated ones are left out', () => {
+    const r = a.spCollect('cheques').rows;
+    assert.deepEqual(J(r.map(c => c.client)), ['A', 'B']);
+    assert.equal(r[0].over, 13); assert.equal(r[1].over, 0); assert.equal(r[1].inD, 0);
   });
-  test('WhatsApp link: optional phone number opens that chat; 03xx is read as +92', () => {
-    assert.equal(app.alertWhatsAppUrl('hi'), 'https://wa.me/?text=hi');
-    assert.ok(app.alertWhatsAppUrl('hi', '0300 1234567').startsWith('https://wa.me/923001234567?text='));
-    assert.ok(app.alertWhatsAppUrl('hi', '+92 300 1234567').startsWith('https://wa.me/923001234567?'));
-    assert.ok(app.alertWhatsAppUrl('hi', '12').startsWith('https://wa.me/?'));
+  test('money to receive, profit and cash (a loss stays a loss)', () => {
+    assert.equal(a.spCollect('receivable').total, 4746457);
+    const p = a.spCollect('profit'); assert.equal(p.profit, -500); assert.equal(p.cash, 263724);
   });
-  test('open orders, money to receive, profit and cash sections', () => {
-    const o = app.alertOrdersText([{ no: 'ORD-2', date: '2026-09-02', qty: 1000, got: 250, quality: 'Q' }, { no: 'ORD-1', date: '2026-09-01', qty: 2000, got: 2000, quality: 'Q' }]);
-    assert.equal(o.title, '📋📋 OPEN ORDERS 📋📋');
-    assert.ok(o.body.startsWith('📋 *ORD-1*  ·  *Q*\n🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩\n📤 *100% delivered* (2,000 m of 2,000 m)\n✅ *COMPLETED*\n\n📋 *ORD-2*  ·  *Q*\n🟩🟩🟩⬜⬜⬜⬜⬜⬜⬜\n📤 *25% delivered* (250 m of 1,000 m)\n⏳ Still to deliver: *750 m*'));
-    assert.ok(app.alertOrdersText([]).body.startsWith('✅ No open orders.'));
-    assert.ok(app.alertReceivableText(250000).body.startsWith('🟡 *') && app.alertReceivableText(0).body.startsWith('✅'));
-    const p = app.alertProfitText(-500, 90000, 'Oct 2026');
-    assert.ok(p.body.startsWith('📉 *LOSS Oct 2026: Rs 500* 🔴') && p.body.includes('💵 Cash in hand: *Rs 90000*'));
-    assert.ok(app.alertProfitText(500, 0, 'Oct 2026').body.startsWith('📈 *PROFIT Oct 2026: Rs 500*'));
+  test('meters keep the app\'s sixteenths with commas: 3,299-8', () => {
+    assert.equal(a.spMtr(3299.5), '3,299-8');
+    assert.equal(a.spMtr(644.25), '644-4');
+    assert.equal(a.spMtr(20000), '20,000');
   });
-  test('share message: your line, ticked sections in a fixed order, one As-of line at the end', () => {
-    const a = load(`var computeStats = () => ({ stock: 1500, stockByQuality: [{ name: 'Q1', stock: 1500 }], receivable: 250000 });`);
-    const msg = a.shareBuild({ stock: true, receivable: true, beams: false, note: ' Today ' });
-    assert.ok(msg.startsWith('Today\n\n🔥🔥🔥🔥🔥🔥🔥🔥\n*📦📦 STOCK IN HAND 📦📦*'));
-    assert.ok(msg.indexOf('STOCK IN HAND') < msg.indexOf('MONEY TO RECEIVE'));
-    assert.equal((msg.match(/As of /g) || []).length, 1);
-    assert.ok(/🕙 \*As of .+\*$/.test(msg));
-    assert.equal(a.shareBuild({ note: 'Hi' }), 'Hi');
-    assert.equal(a.shareHasContent({}), false);
-    assert.equal(a.shareHasContent({ weft: true }), true);
-    assert.equal(a.sharePrefs().stock, true);
+});
+
+describe('how many pictures', () => {
+  const a = load();
+  test('one picture per ticked option, in the fixed order', () => {
+    const data = {}; ['profit', 'stock', 'orders'].forEach(id => { data[id] = a.spCollect(id); });
+    assert.deepEqual(J(a.spPlan(['stock', 'orders', 'profit'], data).map(p => p.id)), ['stock', 'orders', 'profit']);
   });
-  test('real meters formatter (bare number, sixteenths) gets commas and the unit', () => {
-    assert.equal(load(`var fmtQtyMtr = n => '12400-8';`).alertMtr(1), '12,400-8 m');
-    assert.equal(load(`var fmtQtyMtr = n => '-35';`).alertMtr(1), '-35 m');
+  test('too many rows for one picture: more pages, shared evenly, never a row cut through', () => {
+    const rows = n => ({ rows: Array.from({ length: n }, (_, i) => i) });
+    const pages = (id, n) => JSON.parse(JSON.stringify(a.spPages(id, rows(n))));
+    assert.equal(pages('stock', 8).length, 1); assert.equal(pages('stock', 9).length, 2);
+    assert.deepEqual(pages('stock', 12).map(p => p.to - p.from), [6, 6]);
+    assert.equal(pages('orders', 3).length, 1); assert.deepEqual(pages('orders', 4).map(p => p.to - p.from), [2, 2]);
+    assert.equal(pages('beams', 10).length, 1); assert.deepEqual(pages('beams', 20).map(p => p.to - p.from), [10, 10]);
+    assert.equal(pages('cheques', 5).length, 1); assert.equal(pages('cheques', 6).length, 2);
+    assert.deepEqual(pages('stock', 17).map(p => p.idx + '/' + p.total), ['1/3', '2/3', '3/3']);
+    assert.equal(pages('stock', 0).length, 1, 'an empty option is still one picture (it says there is nothing)');
+    assert.equal(a.spPages('weft', { e: {} }).length, 1);
   });
-  test('Urdu: every message is worded in Urdu when the app language is Urdu, data stays as typed', () => {
-    const u = load(`var I18N_LANG = 'ur'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44 (Micro)', stock: 1240 }], receivable: 250000, profitMonth: 84500, cash: 3000 }); var DATA = { orders: [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000 }] }; var orderStats = () => ({ got: 600 });`);
-    const L = x => '\u202A' + x + '\u202C';   // a figure, kept left-to-right
-    const st = u.alertJoin(u.alertStockText([{ name: '62/44 (Micro)', stock: 1240 }], 1540, [{ quality: '62/44 (Micro)', no: 'ORD-12', date: '2026-09-01', qty: 2000, got: 600 }]));
-    assert.ok(st.startsWith('\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F*📦📦 اسٹاک موجود 📦📦*\n\u200F🔥🔥🔥🔥🔥🔥🔥🔥\n\u200F🟢🟢 *کل اسٹاک: \u202A1,540 میٹر\u202C*'));
-    assert.ok(st.includes('🔸 *' + L('62/44') + '*  ⬅️  *\u202A1,240 میٹر\u202C*') && st.includes('📋 *آرڈرز*') && st.includes('📋 *' + L('ORD-12') + '*'));
-    assert.ok(st.includes('📤 *' + L('30%') + ' ڈیلیور* (' + L('2,000') + ' میٹر میں سے ' + L('600') + ' میٹر)') && st.includes('ڈیلیور باقی: *' + L('1,400') + ' میٹر*') && st.includes('🟠 *اسٹاک صرف ' + L('1,240') + ' میٹر پورا کرتا ہے - ' + L('160') + ' میٹر مزید بنائیں*'));
-    assert.ok(st.includes('🟩 ڈیلیور   🟨 اسٹاک میں   ⬜ بننا باقی') && /🕙 \*تازہ ترین: \d+ \S+، \u202A\d+:\d\d\u202C \S+\*$/.test(st));
-    assert.ok(!/[A-Za-z]{4}/.test(st.replace('Micro', '')), 'no English words left: ' + st);
-    const w = u.alertJoin(u.alertWeftText({ hasData: true, bags: 12.3, lbs: 1234, cover: 4.2, perDay: 300, low: true }));
-    assert.ok(w.includes('🚨🚨 بانا ختم ہو رہا ہے 🚨🚨') && w.includes('*' + L('12.3') + ' بیگ* (' + L('1,234') + ' پاؤنڈ)') && w.includes('*بانا ابھی منگوائیں'));
-    const b = u.alertBeamText([{ loom: 4, state: 'ending', daysLeft: 2.4, expectedRemaining: 120 }], 3);
-    assert.ok(b.body.includes('لوم *' + L('4') + '* کا بیم تقریباً *' + L('2') + ' دن* میں ختم ہوگا (تقریباً ' + L('120') + ' میٹر کپڑا باقی)') && b.title.includes('بیم جلد ختم'));
-    assert.ok(u.alertBeamText([], 3).body.includes('اگلے ' + L('3') + ' دنوں میں کوئی بیم ختم نہیں ہو رہا'));
-    const c = u.alertChequeText([{ client: 'Ali', amount: 1000, chequeDate: '2026-10-01' }, { client: 'Bilal', amount: 500, chequeDate: '2026-10-12' }], '2026-10-09', '2026-10-16');
-    assert.ok(c.body.includes('🔴 *' + L('1') + ' چیک کی میعاد گزر چکی - ' + L('1000') + ' روپے*') && c.body.includes('🟠 *' + L('1') + ' چیک 7 دن کے اندر واجب الادا - ' + L('500') + ' روپے*'));
-    assert.ok(c.body.includes('❌ *Ali*') && c.body.includes('📅 *' + L('8') + ' دن لیٹ*  ·  ' + L('01-10-2026')) && c.body.includes('📅 *' + L('3') + ' دن میں واجب الادا*') && c.body.includes('آج ہی رابطہ کریں'));
-    assert.ok(u.alertBuild('receivable').includes('گاہکوں سے *' + L('250000') + ' روپے* وصول ہونے ہیں'));
-    assert.ok(u.alertBuild('profit').includes('منافع ') && u.alertBuild('profit').includes('نقد موجود: *' + L('3000') + ' روپے*'));
-    assert.ok(u.alertBuild('orders').includes('📤 *' + L('30%') + ' ڈیلیور* (' + L('2,000') + ' میٹر میں سے ' + L('600') + ' میٹر)'));
-    assert.ok(u.alertJoin(u.alertProfitText(-85000, 1, 'x')).includes('📉 *نقصان x: ' + L('85000') + ' روپے* 🔴'), 'a loss is worded, never a minus sign that can flip');
-    assert.ok(u.shareBuild({ stock: true, note: 'آج کی رپورٹ' }).startsWith('آج کی رپورٹ\n\n\u200F🔥🔥🔥🔥🔥🔥🔥🔥'));
-    assert.equal(u.al('shChoose'), 'پہلے سیٹنگز میں چنیں کہ کیا شیئر کرنا ہے۔');
+  test('every picture stays under the height chat apps shrink pictures at', () => {
+    for(const id of ['stock', 'orders', 'beams', 'cheques']){
+      const n = id === 'orders' ? 3 : id === 'cheques' ? 5 : id === 'beams' ? 10 : 8, d = { rows: Array.from({ length: n }, () => ({ no: 'A', client: 'C', q: 'Q', qty: 10, got: 5, client_: 1, amt: 5, date: '2026-10-01', over: 1 })) };
+      d.rows = id === 'stock' || id === 'beams' ? Array.from({ length: n }, (_, i) => id === 'stock' ? ['Q' + i, 100] : [i + 1, 3]) : d.rows;
+      const pg = a.spPages(id, d)[0], c = a.spCanvas(id, d, pg, false, null);
+      assert.ok(c.height <= 1600, id + ' is ' + c.height + ' px tall');
+    }
   });
-  test('Urdu reads right to left on every line, and a share of several sections still has a single "latest" line', () => {
-    const u = load(`var I18N_LANG = 'ur'; var fmtQtyMtr = n => '1240-12'; var computeStats = () => ({ stock: 1540, stockByQuality: [{ name: '62/44', stock: 1240.75 }], receivable: 250000 });`);
-    const msg = u.alertBuild('stock');
-    assert.ok(msg.split('\n').filter(l => l.trim()).every(l => l.startsWith('\u200F')), 'every non-empty line starts with a right-to-left mark');
-    assert.ok(msg.includes('\u202A1,240-12 میٹر\u202C'), 'meters-and-sixteenths stay 1,240-12, never 12-1,240');
-    const both = u.shareBuild({ stock: true, receivable: true });
-    assert.equal((both.match(/تازہ ترین:/g) || []).length, 1);
-    assert.ok(both.split('\n').filter(l => l.trim()).every(l => l.startsWith('\u200F')));
-    assert.ok(!/\u200F/.test(app.alertBuild('custom')) && !/\u200F/.test(app.alertJoin(app.alertStockText([{ name: 'Q', stock: 5 }], 5))), 'English messages carry no direction marks');
+  test('the real share builds the files: named, numbered and in order', async () => {
+    const b = load('', { store: { 'khata-share-prefs': JSON.stringify({ stock: true, orders: true, beams: false, weft: false, profit: true }) } });
+    const files = await b.sharePicturesBuild(b.shareIds(b.sharePrefs()));
+    assert.deepEqual(J(files.map(f => f.name)), ['ibrahim-weaving_stock_2026-10-14.png', 'ibrahim-weaving_orders_2026-10-14.png', 'ibrahim-weaving_profit_2026-10-14.png']);
+    assert.ok(files.every(f => f.type === 'image/png'));
   });
-  test('English stays English when the language is not Urdu', () => {
-    assert.equal(app.alertUr(), false);
-    assert.equal(app.al('shChoose'), 'Choose what to share in Settings first.');
+});
+
+describe('what is drawn', () => {
+  const orders = (ur) => { const a = load(ur ? 'var I18N_LANG = "ur";' : ''); const d = a.spCollect('orders'); return { a, c: a.spCanvas('orders', d, a.spPages('orders', d)[0], ur, null) }; };
+  test('every order shows its client, order number, quality, and delivered / remaining meters in sixteenths (English)', () => {
+    const { c } = orders(false), txt = c.calls.map(x => x.s.replace(/[\u202A\u202C]/g, ''));
+    ['Ahmed Traders', 'احمد ٹریڈرز', 'ORD-001', 'ORD-002', '62/44', '5,549-4', '4,450-12', '20,000', '55%', '0%', 'Open orders', 'Delivered (m)', 'Remaining (m)'].forEach(t => assert.ok(txt.includes(t), t + ' is on the picture: ' + txt.join(' | ')));
+    allInside(c, 1080);
+  });
+  test('Urdu: the words are Urdu, the figures stay left to right (3,299-8, never 8-3,299)', () => {
+    const { c } = orders(true), words = c.calls.map(x => x.s);
+    assert.ok(words.includes('کھلے آرڈرز') && words.includes('ڈیلیور (میٹر)') && words.includes('باقی (میٹر)'));
+    const fig = c.calls.find(x => x.s.includes('5,549-4'));
+    assert.ok(fig && fig.s.startsWith('\u202A') && fig.s.endsWith('\u202C') && fig.dir === 'ltr', 'figures are one left-to-right piece');
+    const stock = load('var I18N_LANG = "ur";'), d = stock.spCollect('stock'), sc = stock.spCanvas('stock', d, stock.spPages('stock', d)[0], true, null);
+    const q = sc.calls.find(x => x.s.includes('3,299-8'));
+    assert.ok(q && q.dir === 'ltr' && !/8-3,299/.test(q.s));
+    assert.ok(sc.calls.some(x => x.s === 'اسٹاک') && sc.calls.some(x => x.s === 'کوالٹی') && sc.calls.some(x => x.s === 'میٹر'));
+    allInside(c, 1080); allInside(sc, 1080);
+  });
+  test('a typed name is drawn in its own script, in either app language', () => {
+    const { c } = orders(false), urdu = c.calls.find(x => x.s === 'احمد ٹریڈرز'), eng = c.calls.find(x => x.s.replace(/[\u202A\u202C]/g, '') === 'Ahmed Traders');
+    assert.equal(urdu.dir, 'rtl'); assert.ok(/Noto Naskh/.test(urdu.font));
+    assert.ok(eng.dir === 'ltr' && /Roboto/.test(eng.font));
+  });
+  test('no text is ever cut off: long names, long words and big figures shrink to fit, in both languages, on every picture', () => {
+    for(const lang of ['en', 'ur']){
+      const a = load(lang === 'ur' ? 'var I18N_LANG = "ur";' : '');
+      const long = 'Muhammad Ibrahim and Brothers Wholesale Cloth Merchants Limited Karachi', longUr = 'محمد ابراہیم اینڈ برادرز ہول سیل کپڑا مرچنٹس لمیٹڈ کراچی';
+      const mk = id => {
+        const ur = lang === 'ur';
+        if(id === 'stock') return { rows: [['A very long quality name 62/44 (Micro 150.144)', 123456789.5], ['56/42', 5]] };
+        if(id === 'orders') return { rows: [{ no: 'ORD-0000000012', client: ur ? longUr : long, q: 'A very long quality name (Micro)', qty: 99999999, got: 12345678.5 }, { no: 'O', client: '', q: '', qty: 10, got: 10 }] };
+        if(id === 'beams') return { days: 6, rows: [[11, 'now'], [123456, 4], [7, 'tomorrow']] };
+        if(id === 'weft') return { e: { hasData: true, bags: 123456.7, lbs: 98765432, cover: 12345.6, perDay: 987654, low: true } };
+        if(id === 'cheques') return { rows: [{ client: ur ? longUr : long, amt: 987654321, date: '2026-10-01', over: 120 }, { client: 'B', amt: 5, date: '2026-10-14', over: 0, inD: 0 }, { client: 'C', amt: 5, date: '2026-10-20', over: 0, inD: 6 }] };
+        if(id === 'receivable') return { total: 98765432109 };
+        return { profit: -987654321, cash: 123456789012, label: 'September 2026' };
+      };
+      for(const id of ['stock', 'orders', 'beams', 'weft', 'cheques', 'receivable', 'profit']){
+        const d = mk(id), c = a.spCanvas(id, d, { from: 0, to: 9, idx: 2, total: 3 }, lang === 'ur', null);
+        allInside(c, 1080);
+      }
+      ['stock', 'orders', 'beams', 'weft', 'cheques', 'receivable', 'profit'].forEach(id => {
+        const d = id === 'weft' ? { e: { hasData: false } } : id === 'receivable' ? { total: 0 } : id === 'profit' ? { profit: 1, cash: 1, label: 'x' } : { rows: [], days: 3 };
+        allInside(a.spCanvas(id, d, { from: 0, to: 1, idx: 1, total: 1 }, lang === 'ur', null), 1080);
+      });
+    }
+  });
+  test('a section with nothing to show says so in words (a green tick), in English and Urdu', () => {
+    const en = load(), ur = load('var I18N_LANG = "ur";');
+    const t = (a, id, d) => a.spCanvas(id, d, { from: 0, to: 1, idx: 1, total: 1 }, a === ur, null).calls.map(x => x.s);
+    assert.ok(t(en, 'stock', { rows: [] }).includes('No stock in hand') && t(ur, 'stock', { rows: [] }).includes('اسٹاک موجود نہیں ہے'));
+    assert.ok(t(en, 'cheques', { rows: [] }).join(' ').includes('No cheques overdue or due within 7 days'), 'a long sentence wraps onto two lines');
+    assert.ok(t(ur, 'cheques', { rows: [] }).join(' ').includes('کوئی چیک لیٹ یا 7 دن کے اندر واجب الادا نہیں'));
+    assert.ok(t(en, 'orders', { rows: [] }).includes('No open orders'));
+    assert.ok(t(en, 'beams', { rows: [], days: 6 }).join(' ').includes('No beam is ending within 6 days'));
+  });
+  test('the header is one line: the title centred beside the logo card, the date under it, page "1 / 2" only when there are several pages', () => {
+    const a = load(), d = a.spCollect('stock'), one = a.spCanvas('stock', d, { from: 0, to: 2, idx: 1, total: 1 }, false, null), many = a.spCanvas('stock', d, { from: 0, to: 2, idx: 1, total: 2 }, false, null);
+    const title = one.calls.find(x => x.s === 'Stock' && x.align === 'center');
+    assert.ok(title, 'the title is centred');
+    assert.ok(!one.calls.some(x => /\d \/ \d/.test(x.s)) && many.calls.some(x => /1 \/ 2/.test(x.s)));
+  });
+});
+
+describe('the Share button', () => {
+  test('makes the pictures, opens the phone share sheet with all of them, and says so', async () => {
+    const a = load('', { store: { 'khata-share-prefs': JSON.stringify({ stock: true, orders: true, beams: false, weft: false }) } });
+    await a.shareFabNow();
+    assert.equal(a.shared.length, 1); assert.equal(a.shared[0].files.length, 2);
+    assert.deepEqual(J(a.toasts), ['Making pictures…', 'Shared ✓ (2 pictures)']);
+  });
+  test('cancelling the share sheet is silent; a phone that wants a fresh tap shows a ready dialog; a phone that cannot share files says so', async () => {
+    const abort = load('', { share: async () => { const e = new Error('x'); e.name = 'AbortError'; throw e; } });
+    await abort.shareFabNow(); assert.ok(!abort.toasts.some(t => /Could not|Shared/.test(t)));
+    const fresh = load('', { share: async () => { const e = new Error('x'); e.name = 'NotAllowedError'; throw e; } });
+    await fresh.shareFabNow(); assert.equal(fresh.dialogs.length, 1); assert.ok(fresh.dialogs[0].includes('Pictures are ready') && fresh.dialogs[0].includes('3 pictures'));
+    const none = load('', { canShareFiles: false }); await none.shareFabNow();
+    assert.deepEqual(J(none.toasts), ['Sharing pictures is not supported on this phone.']);
+    const many = load('', { canShare: () => false }); await many.shareFabNow();
+    assert.ok(many.toasts.some(t => t.includes("can't share that many pictures")));
+  });
+});
+
+describe('Urdu for the Settings card and the messages', () => {
+  const ur = vm.runInNewContext(read('js/i18n.js') + '\n({ I18N_UR, I18N_UR_RE74 })', {});
+  test('every label, description and message the Share button shows has an Urdu version', () => {
+    const src = require('node:vm').runInNewContext(read('js/alert-share.js').replace(/^(const|let) /gm, 'var ') + '\n({ SHARE_SECTIONS })', {});
+    src.SHARE_SECTIONS.forEach(x => { assert.ok(ur.I18N_UR[x[1]], x[1]); assert.ok(ur.I18N_UR[x[2]], x[2]); });
+    ['Floating Share button', 'Share on WhatsApp', 'Floating button', 'Pictures are ready', 'Making pictures…', 'Shared ✓', 'Choose what to share in Settings first.', 'Sharing pictures is not supported on this phone.',
+      'Could not make the pictures - tap Share again.', 'Could not open share - tap Share again.', "This phone can't share that many pictures at once - untick some options in Settings."].forEach(t => assert.ok(ur.I18N_UR[t], t));
+    const info = fs.readFileSync(path.join(root, 'js/alert-share.js'), 'utf8').match(/<p class="note info-note" hidden>([^<]+)<\/p>/)[1];
+    assert.ok(ur.I18N_UR[info], 'the info text of the card');
+    assert.ok(ur.I18N_UR_RE74.some(p => p[0].test('3 pictures to share. Tap Share, then choose WhatsApp.')) && ur.I18N_UR_RE74.some(p => p[0].test('Shared ✓ (3 pictures)')));
   });
 });
