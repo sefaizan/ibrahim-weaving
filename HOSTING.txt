@@ -343,3 +343,7 @@ SHARE ON WHATSAPP AS PICTURES (v3.18.103)
     If the phone asks for a fresh tap, a small "Pictures are ready" box with a Share button appears. Nothing goes to any server. Pictures with client names should only go to
     people or groups who may see them.
   TO GO BACK: put the 3.18.102 copies of index.html, service-worker.js, package.json, js/alert-share.js, js/shell.js, js/wiring.js, js/i18n.js back.
+
+LOOM FILTER FIX (v3.18.104)
+  - Production Log > "Filter by Loom #" showed "[object Object]" on every loom chip (and tapping one could not filter). The chips now show the loom names, sorted as numbers.
+    The mistake was already in 3.18.102 and 3.18.103. TO GO BACK: put the previous js/panels-daily.js back.
