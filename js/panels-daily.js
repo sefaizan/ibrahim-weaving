@@ -297,7 +297,7 @@ function productionPanel(){
     </div>
     ${productionSummaryCard(filteredProduction, qualityVal, fromVal, toVal, productionFilterHtml)}
     <div class="card"><h2>Production Log</h2>
-      <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><div class="chip-row" id="pf_looms" style="margin-top:6px"><button type="button" class="chip${loomSel.length?'':' active'}" data-loom="">All Looms</button>${DATA.looms.map(l=>`<button type="button" class="chip${loomSel.includes(String(l))?' active':''}" data-loom="${escHtml(l)}">${escHtml(l)}</button>`).join('')}</div></div>
+      <div class="field" style="margin:10px 0"><label>Filter by Loom #</label><div class="chip-row" id="pf_looms" style="margin-top:6px"><button type="button" class="chip${loomSel.length?'':' active'}" data-loom="">All Looms</button>${mbLoomList().map(l=>`<button type="button" class="chip${loomSel.includes(String(l))?' active':''}" data-loom="${escHtml(l)}">${escHtml(l)}</button>`).join('')}</div></div>
       ${(qualityVal || loomSel.length || fromVal || toVal) ? `<p class="note" style="margin-top:10px">Showing ${logRows.length} entr${logRows.length===1?'y':'ies'}${qualityVal?` for <b>${qualityVal}</b>`:''}${loomSel.length?` on loom${loomSel.length===1?'':'s'} <b>${loomSel.map(escHtml).join(', ')}</b>`:''}${fromVal||toVal?` from ${fromVal?fmtDate(fromVal):'the start'} to ${toVal?fmtDate(toVal):'now'}`:''} — total ${fmtQtyMtr(filterQty)} mtr.</p>` : ''}
       <p class="note" style="margin:0 0 10px">Qty = meters woven in that entry · Diff = Qty − meters credited to the employees · Beam Date = the day that beam was started.</p>
       ${logTable('production',
