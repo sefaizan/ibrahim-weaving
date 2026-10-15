@@ -85,7 +85,7 @@ describe('Summary tab', () => {
     assert.match(html, /<td>A<\/td>/); assert.match(html, /<td>B<\/td>/);     // both qualities listed
     assert.match(html, /12\.00\*/);                                            // A's rate changed inside the period
     assert.doesNotMatch(html.match(/<td>B<\/td>[^]*?<\/tr>/)[0], /\*/);        // B's did not
-    assert.match(html, /Total with bonus/); assert.match(html, /Full tables/);
+    assert.match(html, /Total with bonus/); assert.match(html, /Full table/);
   });
   test('figures tie to the calculation code: owed = positive balances, earned and paid for the period', () => {
     const t = load(ledger());

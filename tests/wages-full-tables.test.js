@@ -8,7 +8,7 @@ const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
 describe('wages full tables', () => {
   const ui = read('js/wages-ui.js'), full = ui.slice(ui.indexOf('class="card wg-full"'));
-  test('both tables use the standard log-scroll wrapper', () => assert.equal((full.match(/<div class="log-scroll"[^>]*><table>/g) || []).length, 2));
+  test('one combined table (meters + Rs per quality) in the standard log-scroll wrapper', () => assert.equal((full.match(/<div class="log-scroll"[^>]*><table>/g) || []).length, 1));
   test('no pinned (sticky) first column anywhere in the wages page or its CSS', () => {
     assert.doesNotMatch(ui, /wg-sticky/); assert.doesNotMatch(read('index.html'), /wg-sticky/);
   });
