@@ -249,10 +249,11 @@ function wagesSalCardHtml(d, from, to, asOf){
   </div>`;
 }
 // People who would get the weekly bonus: active staff of the chosen type (prod = per-meter, sal = salaried, all = both)
-// with earnings in the period and no bonus logged in it yet.
+// (the type is the employee's Basis in Settings: per meter or salary) who have no bonus logged in the period yet.
+// No earnings test: the bonus is a flat amount for each person of that type.
 function wagesBonusTargets(items, from, to, type){
   type = type || 'prod';
-  return items.filter(d => (type === 'all' || (type === 'sal') === isSalariedEmp(d.name)) && d.net.earned > 0.004 && (DATA.employees.find(e => e.name === d.name) || {}).active !== false
+  return items.filter(d => (type === 'all' || (type === 'sal') === isSalariedEmp(d.name)) && (DATA.employees.find(e => e.name === d.name) || {}).active !== false
     && !(DATA.wageBonuses || []).some(b => b.employee === d.name && (!from || b.date >= from) && (!to || b.date <= to))).map(d => d.name);
 }
 const WAGES_BONUS_TYPES = [['prod', 'Production staff'], ['sal', 'Salaried staff'], ['all', 'All']];
@@ -260,11 +261,11 @@ function wagesBonusAllHtml(items, from, to){
   const type = WAGES_UI.bonusType || 'prod';
   if(!WAGES_BONUS_TYPES.some(([k]) => wagesBonusTargets(items, from, to, k).length)) return '';
   const names = wagesBonusTargets(items, from, to, type);
-  const earners = items.filter(d => (type === 'all' || (type === 'sal') === isSalariedEmp(d.name)) && d.net.earned > 0.004 && (DATA.employees.find(e => e.name === d.name) || {}).active !== false).length;
+  const typed = items.filter(d => (type === 'all' || (type === 'sal') === isSalariedEmp(d.name)) && (DATA.employees.find(e => e.name === d.name) || {}).active !== false).length;
   const last = (DATA.wageBonuses || []).filter(b => type === 'all' || (type === 'sal') === isSalariedEmp(b.employee)).sort((a, b) => a.date < b.date ? -1 : 1).pop();
   const amt = WAGES_UI.bonusAmt != null ? WAGES_UI.bonusAmt : (last ? Number(last.amount) || 500 : 500);
-  const btnTxt = names.length ? `Add bonus to ${names.length} ${names.length === 1 ? 'person' : 'people'}` : (earners ? 'Everyone already has a bonus this period' : 'No one has earned anything yet this period');
-  return `<div class="wg-pw-bonus" style="flex-wrap:wrap"><select id="wg_bonusType" aria-label="Bonus for" style="flex:1 1 55%;margin:0">${WAGES_BONUS_TYPES.map(([k, l]) => `<option value="${k}"${k === type ? ' selected' : ''}>${l}</option>`).join('')}</select><input id="wg_bonusAll" type="number" inputmode="decimal" min="0" value="${amt}" aria-label="Bonus amount (Rs)" style="flex:0 0 90px"><button type="button" class="ghost" style="flex:1 1 100%;border-radius:12px" data-wg-bonus-all${names.length ? '' : ' disabled'}>${btnTxt}</button></div>`;
+  const btnTxt = names.length ? `Add bonus to ${names.length} ${names.length === 1 ? 'person' : 'people'}` : (typed ? 'Everyone already has a bonus this period' : 'No active staff of this type');
+  return `<div class="wg-pw-bonus" style="flex-wrap:wrap"><select id="wg_bonusType" aria-label="Bonus for" style="flex:1 1 55%;margin:0">${WAGES_BONUS_TYPES.map(([k, l]) => `<option value="${k}"${k === type ? ' selected' : ''}>${l}</option>`).join('')}</select><input id="wg_bonusAll" type="number" inputmode="decimal" min="0" value="${amt}" aria-label="Bonus amount (Rs)" style="flex:0 0 90px"><button type="button" class="ghost" style="flex:1 1 100%;border-radius:12px" data-wg-bonus-all${names.length ? '' : ' disabled'}>${btnTxt}</button>${names.length ? `<div class="note" style="flex:1 1 100%;margin:0">Will go to: ${names.map(escHtml).join(', ')}</div>` : ''}</div>`;
 }
 function renderWages(){
   const from = v('wg_from'), to = v('wg_to');
