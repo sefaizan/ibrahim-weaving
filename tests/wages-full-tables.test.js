@@ -13,3 +13,8 @@ describe('wages full tables', () => {
     assert.doesNotMatch(ui, /wg-sticky/); assert.doesNotMatch(read('index.html'), /wg-sticky/);
   });
 });
+
+test('stacked phone cards label every value with its quality and Mtr/Rs (two-row header)', () => {
+  const u = fs.readFileSync(path.join(__dirname, '..', 'js', 'ux-enhance.js'), 'utf8');
+  assert.ok(u.includes('col.parts.join') && u.includes('h.rowSpan'));
+});
