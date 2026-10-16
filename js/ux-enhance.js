@@ -137,11 +137,25 @@
   function fitTables(root){
     $$('table', root).forEach(tb => {
       if(tb.closest('.wg-sheet')) return;
-      const heads = tb.tHead && tb.tHead.rows.length ? Array.from(tb.tHead.rows[tb.tHead.rows.length - 1].cells) : [];
+      const heads = tb.tHead ? Array.from(tb.tHead.rows).reduce((a, r) => a.concat(Array.from(r.cells)), []) : [];
       if(!heads.length || heads.some(h => !h.textContent.trim())) return;
       if(tb.querySelector('tbody button, tbody input, tbody select, tbody textarea')) return;
       if(!tb.offsetParent) return;                        // hidden (collapsed card): measured again when it opens
-      const labels = []; heads.forEach(h => { for(let i = 0; i < (h.colSpan || 1); i++) labels.push(h.textContent.replace(/\s+/g, ' ').trim()); });
+      // One entry per column, read across ALL header rows (rowspan/colspan aware): a two-row header such as
+      // "Quality A" over "Mtr | Rs" gives the labels "Quality A · Mtr" and "Quality A · Rs".
+      const cols = [], occ = [];
+      Array.from(tb.tHead.rows).forEach((r, ri) => { let c = 0; Array.from(r.cells).forEach(h => {
+        while(occ[ri] && occ[ri][c]) c++;
+        const txt = h.textContent.replace(/\s+/g, ' ').trim();
+        for(let i = 0; i < (h.colSpan || 1); i++){
+          for(let j = 0; j < (h.rowSpan || 1); j++){ (occ[ri + j] = occ[ri + j] || [])[c + i] = true; }
+          const col = cols[c + i] = cols[c + i] || { parts: [], cell: null };
+          if(col.parts[col.parts.length - 1] !== txt) col.parts.push(txt);
+          col.cell = h;
+        }
+        c += h.colSpan || 1;
+      }); });
+      const labels = cols.map(col => col ? col.parts.join(' \u00b7 ') : '');
       const numeric = labels.map(() => true);
       Array.from(tb.tBodies).concat(tb.tFoot ? [tb.tFoot] : []).forEach(body => Array.from(body.rows).forEach(r => {
         let c = 0;
@@ -153,7 +167,7 @@
           c += td.colSpan || 1;
         });
       }));
-      heads.forEach((h, i) => h.classList.toggle('n', i > 0 && !!numeric[i]));
+      cols.forEach((col, i) => { if(col && col.cell) col.cell.classList.toggle('n', i > 0 && !!numeric[i]); });
       tb.classList.add('fit-tbl');
       tb.classList.remove('tbl-stack');
       const box = tb.closest('.log-scroll, .wg-scroll, .purchase-panel, .card') || tb.parentElement;
