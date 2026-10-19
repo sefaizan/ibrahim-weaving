@@ -56,7 +56,7 @@ const TABS = [
   {id:'backup', label:'Backup & Restore', icon:'backup', group:'Tools'},
 ];
 // Order the groups appear in the drawer, top to bottom.
-const NAV_GROUPS = ['Daily','Money','Family','Materials','Tools'];
+const NAV_GROUPS = ['Daily','Money','Materials','Family','Tools'];
 
 let DATA = {
   "qualities": [],

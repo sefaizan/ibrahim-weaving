@@ -1066,6 +1066,17 @@ function finishedOnCell(d){
   const how = d.finishedHow === 'replaced' ? 'replaced by next beam' : 'marked finished';
   return `${fmtDate(d.finishedOn)}${d.finishedTime ? ' · ' + escHtml(d.finishedTime) : ''}<br><span style="font-size:11px;color:var(--ink-soft)">${how}</span>`;
 }
+// Overall Summary / Beam-Level Detail inside each purchase panel fold away independently; the choice is remembered per
+// purchase across re-renders (a Set of closed sections, so everything starts open).
+const YIELD_SEC_CLOSED = new Set();
+document.addEventListener('toggle', e => {
+  const d = e.target; if(!d || !d.matches || !d.matches('details[data-yield-sec]')) return;
+  if(d.open) YIELD_SEC_CLOSED.delete(d.dataset.yieldSec); else YIELD_SEC_CLOSED.add(d.dataset.yieldSec);
+}, true);
+function yieldSecOpen(r, sec, title, body, extraStyle){
+  const key = r.purchase.id + ':' + sec;
+  return `<details class="panel-sec" data-yield-sec="${key}"${YIELD_SEC_CLOSED.has(key) ? '' : ' open'}${extraStyle ? ` style="${extraStyle}"` : ''}><summary class="panel-subhead">${title}</summary>${body}</details>`;
+}
 function renderYieldPanel(r, beamDetails){
   const shrinkStat = r.complete
     ? `${fmtQtyMtr(r.totalShrinkage)}m${r.shrinkagePct!=null?` (${fmtNum(Math.round(r.shrinkagePct*100)/100)}%)`:''}`
@@ -1098,17 +1109,15 @@ function renderYieldPanel(r, beamDetails){
   <div class="purchase-panel">
     <div class="ptitle">${escHtml(purchaseText(r.purchase))}</div>
     <div class="psub">${fmtRs(r.purchase.amount)} · ${r.beams.length} beam${r.beams.length===1?'':'s'} · ${r.complete?'<span class="badge month">Complete</span>':'<span class="badge progress">In Progress</span>'}</div>
-    <div class="panel-subhead">Overall Summary</div>
-    <div class="grid cols-3">
+    ${yieldSecOpen(r, 'sum', 'Overall Summary', `<div class="grid cols-3">
       <div class="stat"><div class="label">Length Logged</div><div class="value">${fmtNum(r.totalLength)}m</div><div class="hint">Warp length entered on the beams</div></div>
       <div class="stat"><div class="label">Woven${r.complete?'':' So Far'}</div><div class="value">${fmtNum(r.totalWoven)}m</div><div class="hint">Grey cloth woven from these beams</div></div>
       <div class="stat"><div class="label">Shrinkage</div><div class="value">${shrinkStat}</div><div class="hint">Length − Woven: warp that did not become cloth</div></div>
       <div class="stat"><div class="label">Yield</div><div class="value">${yieldStat}</div><div class="hint">Woven ÷ Length</div></div>
       <div class="stat"><div class="label">Cost / Meter</div><div class="value">${costStat}</div><div class="hint">Purchase amount ÷ woven meters</div></div>
       ${leftStats}
-    </div>
-    <div class="panel-subhead" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">Beam-Level Detail</div>
-    <div class="log-scroll log-cards">${table(['Beam Date','Warp Type','Loom','Length (m)','Woven (m)','Shrinkage (m)','Shrinkage %','Days Taken','Finished On','Status'], beamRows, true)}</div>
+    </div>`)}
+    ${yieldSecOpen(r, 'det', 'Beam-Level Detail', `<div class="log-scroll log-cards">${table(['Beam Date','Warp Type','Loom','Length (m)','Woven (m)','Shrinkage (m)','Shrinkage %','Days Taken','Finished On','Status'], beamRows, true)}</div>`, 'margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)')}
   </div>`;
 }
 function warpBeamsPanel(){
