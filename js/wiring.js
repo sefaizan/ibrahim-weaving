@@ -108,6 +108,7 @@ function wirePanel(id){
       if(EDITING) return;
       const rec = readProductionForm();
       if(!requireFields(productionChecks(rec))) return;
+      applyFinishTick(rec);
       nextBtn.disabled = true;
       const next = nextLoomAfter(rec.loom);
       DATA.production.push({id:uid(), ...rec}); PAGE.production = 1;
@@ -127,12 +128,14 @@ function wirePanel(id){
         if(idx>-1) DATA.production[idx] = {...DATA.production[idx], ...rec};
         EDITING = null;
       } else {
+        applyFinishTick(rec);
         DATA.production.push({id:uid(), ...rec}); PAGE.production = 1;
       }
       await save(); switchTab('production');
       beamAlertToast(takeBeamAlert(rec.loom)); // the loom's beam may now be about to end
     };
     document.getElementById('p_loom').addEventListener('change', ()=> renderBeamToggle(true));
+    ['p_loom','p_date','p_qty','p_qty_16','p_beamToggleWrap'].forEach(i=>{ const e = document.getElementById(i); if(e){ e.addEventListener('input', updFinishOffer); e.addEventListener('change', updFinishOffer); } });
     // Live "beam about to finish" badge under the beam choice (same rule as Multiple Entries)
     const updBeamLeft = ()=>{
       const el = document.getElementById('p_beamLeft'); if(!el) return;
@@ -158,7 +161,7 @@ function wirePanel(id){
       document.getElementById('p_e2').value = a?.e2 || '';
       document.getElementById('p_qty').focus();
     }
-    renderBeamToggle(true);
+    renderBeamToggle(true); updFinishOffer();
     // Employee 3 stays hidden until needed — clicking the button reveals it; clicking
     // again hides it and clears whatever was typed, so a hidden field never gets submitted.
     const e3wrap = document.getElementById('p_e3wrap');
@@ -481,12 +484,35 @@ function wirePanel(id){
         const left = entryEmployee2Meters(t, num(q(c,'.mb_m1')), num(q(c,'.mb_m3')) + (e4On(c) ? num(q(c,'.mb_m4')) : 0)) || 0;
         m2.value = left > 0 ? left : '';
       };
+      // Per loom card: on a changeover day (a new beam was chained today) ask which beam this roll is from, defaulting to the
+      // OLDER one while it still has room; and offer "mark finished" when this roll fills the beam. State lives on the card.
+      const mbBeamBox = (c, date, t)=>{
+        const box = q(c,'.mb-bx'), loom = c.dataset.loom, beams = beamsForLoom(loom), on = beams.filter(b=> b.date <= date);
+        let html = '', choice = '';
+        if(on.length && date){
+          const active = on[0], prior = beams[beams.indexOf(active) + 1];
+          if(beams.length > 1 && active.date === date && prior){
+            const cap = (Number(prior.length)||0) * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100), woven = (computeWarpBeamUsage()[prior.id] || {woven:0}).woven;
+            const sel = [active.id, prior.id].includes(c.dataset.beam) ? c.dataset.beam : (cap - woven > 0.5 ? prior.id : active.id);
+            choice = sel;
+            html = `<div class="field"><label>This entry is from</label><div style="display:flex;gap:16px;flex-wrap:wrap;padding:6px 0">`
+              + `<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" class="mb_bch" name="mbb_${escHtml(loom)}" value="${prior.id}"${sel===prior.id?' checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})</label>`
+              + `<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" class="mb_bch" name="mbb_${escHtml(loom)}" value="${active.id}"${sel===active.id?' checked':''}> New beam (${fmtDate(active.date)}, ${escHtml(active.warpType||'')})</label></div></div>`;
+          }
+        }
+        c.dataset.beam = choice;
+        const o = beamFinishOffer({date, loom, qty:t, beam:choice});
+        if(!o) c.dataset.fin = '';
+        else html += `<label style="display:flex;gap:8px;align-items:center;font-weight:600;padding:6px 0"><input type="checkbox" class="mb_fin"${c.dataset.fin===o.beam.id?' checked':''} data-beam="${o.beam.id}"> This beam is fully woven — mark it finished</label>`;
+        if(box._h !== html){ box._h = html; box.innerHTML = html; }
+      };
       const calc = ()=>{
         let T=0, A=0, bad=0;
         const bu = computeBeamForecasts(beamAlertDays() || 3);
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
           q(c,'.mb-bm').innerHTML = beamLeftBadge(c.dataset.loom, t, bu) + prodCheckBadges(c.dataset.loom, v('mb_date'), cardQ(c), t, {dup:true});
+          mbBeamBox(c, v('mb_date'), t);
           if(!(t>0)){ d.textContent='Diff: —'; d.style.color=''; return; }
           const diff = Math.round((t-a)*16)/16;
           d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
@@ -519,6 +545,8 @@ function wirePanel(id){
       });
       mbRoot.addEventListener('change', e=>{
         const c = e.target.closest('.mb-card');
+        if(c && e.target.matches('.mb_bch')){ c.dataset.beam = e.target.value; calc(); }
+        if(c && e.target.matches('.mb_fin')){ c.dataset.fin = e.target.checked ? e.target.dataset.beam : ''; }
         if(c && e.target.matches('.mb_q')) calc();
         if(c && e.target.matches('.mb_n2,.mb_n3,.mb_n4')){ autoSplit3(c); calc(); }
       });
@@ -555,12 +583,12 @@ function wirePanel(id){
         const fail = m=>{ err.textContent = m; };
         if(!date) return fail('Pick the date first.');
         const list = shown(); if(!list.length) return fail('Tick at least one loom.');
-        const recs = [];
+        const recs = [], finishQ = [];
         for(const c of list){
           const loom = c.dataset.loom, t = total(c), quality = cardQ(c);
           if(!(t>0)) return fail(`Loom ${loom}: enter the Gzana (total meters) first.`);
           if(!quality) return fail(`Loom ${loom}: Pick a quality first.`);
-          const r = {date, time:nowStr(), loom, quality, qty:t, beam:'', e1:'', e1m:0, e2:'', e2m:0, e3:'', e3m:0};
+          const r = {date, time:nowStr(), loom, quality, qty:t, beam:c.dataset.beam || '', e1:'', e1m:0, e2:'', e2m:0, e3:'', e3m:0};
           for(const n of (e4On(c)?[1,2,3,4]:e3On(c)?[1,2,3]:[1,2])){
             const name = q(c,'.mb_n'+n).value, m = num(q(c,'.mb_m'+n));
             if(!name && m) return fail(`Loom ${loom}: pick Employee ${n} for ${m} meters.`);
@@ -569,8 +597,10 @@ function wirePanel(id){
           if(!r.e1) return fail(`Loom ${loom}: pick Employee 1.`);
           if(assigned(c) - t > 1e-9) return fail(`Loom ${loom}: employee meters exceed the Gzana.`);
           const bc = beamEntryCheck(r); if(!bc.ok) return fail(bc.msg);
+          const fo = c.dataset.fin ? beamFinishOffer(r) : null; if(fo && fo.beam.id === c.dataset.fin) finishQ.push({beam:fo.beam, date:r.date, time:r.time});
           recs.push(r);
         }
+        finishQ.forEach(f=>finishBeamAt(f.beam, f.date, f.time));
         recs.forEach(r=>DATA.production.push({id:uid(), ...r}));
         PAGE.production = 1;
         await save(); switchTab('production');

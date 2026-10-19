@@ -1261,6 +1261,33 @@ function beamEntryCheck(rec, skipId){
   return {ok:false, msg:`Loom ${loom}: this beam is about to finish. It is ${f(len)} m of warp, about ${f(cap)} m of cloth after ${BEAM_ENTRY_SHRINKAGE_PCT}% shrinkage, and ${f(woven)} m is already woven, so only ${f(left)} m more fits — ${f(qty)} m is invalid.`};
 }
 
+// Offer to mark a beam finished while logging production: only when this entry takes the loom's LAST beam (not finished by hand,
+// not replaced by a newer one) to within 0.5 m of its expected cloth, without going over it (an entry over the limit is blocked by
+// beamEntryCheck anyway). Returns {beam, woven, cap} or null. The beam is the one chosen on the entry, else the date rule.
+function beamFinishOffer(rec){
+  const loom = rec && rec.loom, qty = Number(rec && rec.qty) || 0;
+  if(!loom || !(qty > 0) || !rec.date) return null;
+  const list = DATA.warpBeams.filter(b=> b.loom === loom).sort((a,b)=> dtOf(a)-dtOf(b));
+  if(!list.length) return null;
+  let beam = rec.beam ? list.find(b=> b.id === rec.beam) : null;
+  if(!beam){
+    for(let i=list.length-1;i>=0;i--){
+      const cand = list[i];
+      if(rec.date < cand.date) continue;
+      const next = list[i+1];
+      const windowEnd = next ? next.date : (cand.finished ? (cand.finishedDate||cand.date) : null);
+      if(windowEnd != null && rec.date > windowEnd) continue;
+      beam = cand; break;
+    }
+  }
+  if(!beam || beam.finished || list[list.length-1].id !== beam.id) return null;
+  const len = Number(beam.length) || 0; if(!(len > 0)) return null;
+  const cap = len * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100), woven = (computeWarpBeamUsage()[beam.id] || {woven:0}).woven, after = woven + qty;
+  if(after > cap + 1e-6 || cap - after > 0.5) return null;
+  return {beam, woven, cap};
+}
+function finishBeamAt(beam, date, time){ beam.finished = true; beam.finishedDate = date; beam.finishedTime = time || ''; }
+
 /* ---------------- Warp beams: forecast of which beam runs out next ---------------- */
 // For every beam still on a loom, estimates when it will be finished so an order for warp (or the
 // next beam) can be lined up in time. Two numbers drive it:

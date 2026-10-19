@@ -619,6 +619,7 @@ const I18N_UR_EXTRA = {"Ibrahim Weaving — Power Loom Ledger":"ابراہیم �
 "Still owed to employees (running balance)":"ملازمین کو اب بھی واجب (جاری بیلنس)",
 "Still owed to employees (this period)":"ملازمین کو اب بھی واجب (اس مدت کا)",
 "Full tables (all columns)":"مکمل جدول (تمام کالم)",
+"This beam is fully woven — mark it finished":"یہ بیم مکمل بُنا جا چکا ہے — ختم شدہ نشان لگائیں",
 "Production staff":"پیداواری عملہ",
 "Salaried staff":"تنخواہ دار عملہ",
 "Full table (meters & wages)":"مکمل جدول (میٹر اور اجرت)",

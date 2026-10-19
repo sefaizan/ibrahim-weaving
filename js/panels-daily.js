@@ -157,6 +157,7 @@ function mbCardHtml(name){
   return `<div class="mb-card" data-loom="${escHtml(name)}" style="display:none">
     <div class="mb-hd"><b>Loom ${escHtml(name)}</b><span class="mb-df">Diff: —</span></div>
     <div class="mb-bm"></div>
+    <div class="mb-bx"></div>
     <label>Quality</label><div class="mb-rw"><select class="mb_q" tabindex="-1">${qo}</select></div>
     <label>Gzana (meters and sixteenths)</label>
     <div class="mb-rw"><input placeholder="Total meters" class="mb_g mb_f" type="number" inputmode="decimal" enterkeyhint="next" style="flex:2;min-width:0"><span class="mb-line"></span><input class="mb_s mb_f" type="number" inputmode="numeric" min="0" max="15" enterkeyhint="next" style="flex:1;min-width:0"></div>
@@ -249,6 +250,7 @@ function productionPanel(){
     </div>
     <div id="p_beamToggleWrap"></div>
     <div id="p_beamLeft"></div>
+    <div id="p_finishWrap"></div>
     <input type="hidden" id="p_beam" value="">
     <div class="group-label">Employees & Their Meters</div>
     <div class="grid cols-2">
@@ -904,6 +906,20 @@ function weftPanel(){
 }
 /* ---------------- Warp Beams (per-loom length tracking, FIFO by install date) ---------------- */
 // Beams for a loom, newest-install-first.
+// Single-entry form: "beam fully woven" tickbox, shown only when beamFinishOffer says this entry fills the beam.
+function updFinishOffer(){
+  const wrap = document.getElementById('p_finishWrap'); if(!wrap) return;
+  const o = (EDITING && EDITING.key==='production') ? null : beamFinishOffer({date:v('p_date'), loom:v('p_loom'), qty:combineMtr16(v('p_qty'), v('p_qty_16')), beam:v('p_beam')});
+  const old = document.getElementById('p_finishBeam');
+  if(!o){ wrap.innerHTML = ''; return; }
+  if(old && old.dataset.beam === o.beam.id) return;   // already showing for this beam; keep its ticked state
+  wrap.innerHTML = `<label class="beam-finish-tick" style="display:flex;gap:8px;align-items:center;font-weight:600;padding:8px 0;cursor:pointer"><input type="checkbox" id="p_finishBeam" data-beam="${o.beam.id}"> This beam is fully woven — mark it finished</label>`;
+}
+// Ticked box + still valid -> finish that beam as of this entry's own date and time (call BEFORE the entry is pushed).
+function applyFinishTick(rec){
+  const cb = document.getElementById('p_finishBeam'); if(!cb || !cb.checked) return;
+  const o = beamFinishOffer(rec); if(o) finishBeamAt(o.beam, rec.date, rec.time);
+}
 function beamsForLoom(loomName){
   return DATA.warpBeams.filter(b=>b.loom===loomName).slice().sort((a,b)=> dtOf(b)-dtOf(a));
 }
