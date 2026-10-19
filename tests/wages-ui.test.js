@@ -234,3 +234,10 @@ describe('salaried staff card (v3.18.35)', () => {
     assert.match(w, /Wages <b>Rs 600\.00<\/b>/);
   });
 });
+
+test('menu: Materials group sits above Family; warp beam purchase panels have collapsible sections', () => {
+  const core = fs.readFileSync(path.join(__dirname, '..', 'js', 'core.js'), 'utf8');
+  assert.ok(core.includes("NAV_GROUPS = ['Daily','Money','Materials','Family','Tools']"));
+  const pd = fs.readFileSync(path.join(__dirname, '..', 'js', 'panels-daily.js'), 'utf8');
+  assert.ok(pd.includes("yieldSecOpen(r, 'sum'") && pd.includes("yieldSecOpen(r, 'det'"));
+});
