@@ -93,3 +93,45 @@ describe('Urdu for the beam messages', () => {
     assert.ok(u && /[\u0600-\u06FF]/.test(u) && !/this beam/.test(u), msg);
   }));
 });
+
+describe('mark beam finished from the production form (beamFinishOffer / finishBeamAt)', () => {
+  const woven = (q) => [prod({ id: 'p1', loom: '1', date: '2026-09-10', qty: q })];   // cap 975 m
+  test('offered only when this entry fills the beam to within 0.5 m, not before and not over', () => {
+    const app = loadApp();
+    app.setData({ warpBeams: [beam()], production: woven(900) });
+    assert.equal(app.beamFinishOffer(rec({ qty: 75 })).beam.id, 'b1');       // exactly fills it
+    assert.equal(app.beamFinishOffer(rec({ qty: 74.6 })).beam.id, 'b1');     // within 0.5 m
+    assert.equal(app.beamFinishOffer(rec({ qty: 50 })), null);               // plenty left
+    assert.equal(app.beamFinishOffer(rec({ qty: 76 })), null);               // over: blocked by beamEntryCheck instead
+  });
+  test('not offered for a beam already finished by hand or replaced by a newer beam', () => {
+    const app = loadApp();
+    app.setData({ warpBeams: [beam({ finished: true, finishedDate: '2026-09-15' })], production: woven(900) });
+    assert.equal(app.beamFinishOffer(rec({ qty: 75, date: '2026-09-15' })), null);
+    app.setData({ warpBeams: [beam(), beam({ id: 'b2', date: '2026-09-20', time: '09:00' })], production: woven(900) });
+    assert.equal(app.beamFinishOffer(rec({ qty: 75, beam: 'b1' })), null);
+  });
+  test('finishBeamAt stamps the entry date and time, and the next entry after that date is blocked', () => {
+    const app = loadApp();
+    const b = beam();
+    app.setData({ warpBeams: [b], production: woven(900) });
+    app.finishBeamAt(b, '2026-09-20', '17:30');
+    assert.equal(b.finished, true); assert.equal(b.finishedDate, '2026-09-20'); assert.equal(b.finishedTime, '17:30');
+    assert.equal(app.beamEntryCheck(rec({ qty: 5, date: '2026-09-20' })).ok, true);
+    assert.equal(app.beamEntryCheck(rec({ qty: 5, date: '2026-09-21' })).ok, false);
+  });
+  test('an entry that names the previous beam is checked against that beam, not the new one', () => {
+    const app = loadApp();
+    app.setData({ warpBeams: [beam(), beam({ id: 'b2', date: '2026-09-20', time: '09:00' })], production: woven(900) });
+    assert.equal(app.beamEntryCheck(rec({ qty: 75, beam: 'b1' })).ok, true);
+    assert.equal(app.beamEntryCheck(rec({ qty: 76, beam: 'b1' })).ok, false);
+    assert.equal(app.beamEntryCheck(rec({ qty: 76, beam: 'b2' })).ok, true);
+  });
+});
+
+test('both production forms wire the beam choice and the finish tickbox before saving', () => {
+  const fs = require('fs'), path = require('path'), w = fs.readFileSync(path.join(__dirname, '..', 'js', 'wiring.js'), 'utf8');
+  assert.equal((w.match(/applyFinishTick\(rec\)/g) || []).length, 2);                       // single entry + Add & next loom
+  assert.ok(w.includes("beam:c.dataset.beam || ''") && w.includes('finishQ.forEach(f=>finishBeamAt('));   // Multiple Entries
+  assert.ok(w.includes('mb_bch') && w.includes('mb_fin'));
+});

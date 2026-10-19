@@ -97,7 +97,7 @@ describe('save rules and wiring', () => {
   });
   test('each loom becomes an ordinary production record (qty, e1-e3, meters) and the whole batch saves once', () => {
     assert.match(save, /DATA\.production\.push\(\{id:uid\(\), \.\.\.r\}\)/);
-    ['qty:t', 'e1:', 'e1m:0', 'e2:', 'e2m:0', 'e3:', 'e3m:0', "beam:''"].forEach(k => assert.ok(save.includes(k), k));
+    ['qty:t', 'e1:', 'e1m:0', 'e2:', 'e2m:0', 'e3:', 'e3m:0', "beam:c.dataset.beam || ''"].forEach(k => assert.ok(save.includes(k), k));
     assert.equal((save.match(/await save\(\)/g) || []).length, 1);
   });
   test('the total is built with combineMtr16, so sixteenths are stored as fractions', () => assert.match(wiring, /combineMtr16\(q\(c,'\.mb_g'\)\.value, q\(c,'\.mb_s'\)\.value\)/));
