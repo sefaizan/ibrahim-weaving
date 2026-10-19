@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.114-beam-finish-tick">
+<meta name="app-build" content="v3.18.115-wages-one-list">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -956,6 +956,7 @@
   .wg-tag.due{ background:var(--warn-bg-1); color:var(--red); } .wg-tag.cr{ background:rgba(61,131,97,.18); color:var(--green); } .wg-tag.zero{ background:var(--rust-tonal); color:var(--rust); }
   .wg-pay{ margin:0; flex:none; padding:7px 14px; min-height:36px; }
   .wg-mini, .wg-lines{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px; color:var(--ink-soft); margin-top:6px; }
+  .wg-sub{ margin:2px 0 0 28px; font-size:13px; color:var(--ink-soft); cursor:pointer; } .wg-sub b{ color:var(--ink); }
   .wg-sal-big{ display:flex; justify-content:space-between; align-items:flex-end; margin:4px 0 2px; } .wg-sal-big small{ display:block; font-size:12px; color:var(--ink-soft); } .wg-sal-big strong{ font-size:26px; font-weight:900; line-height:1.1; } .wg-sal-big b{ font-size:16px; }
   .wg-mini b, .wg-lines b{ color:var(--ink); } .wg-mini b.due{ color:var(--red); } .wg-mini b.cr{ color:var(--green); }
   .wg-det{ display:none; margin-top:8px; background:var(--paper); border-radius:10px; padding:8px; } .wg-emp.open .wg-det{ display:block; }
@@ -1523,7 +1524,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.114</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.115</span></span>
     </div>
   </header>
 
