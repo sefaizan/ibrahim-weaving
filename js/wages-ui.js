@@ -227,7 +227,7 @@ function wagesEmpCardHtml(d, qualities, from, to, asOf){
     : `<div class="wg-fine">No production in this period.</div>`;
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
     <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${wagesStatusTag(net)}${tag}${wagesPayBtn(name, net, from, to)}</div>
-    <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(net.earned)}</strong></div><div><small>Meters</small><b>${fmtQtyMtr(row ? row.totalMeters : 0)}</b></div></div>
+    <div class="wg-sub" data-wg-toggle>Earned <b>${fmtRs2(net.earned)}</b> · ${fmtQtyMtr(row ? row.totalMeters : 0)} m</div>
     <div class="wg-det">${detail}
       <div class="wg-lines">${row && row.salary > 0 ? `<span>Weekly salary earned <b>${fmtRs2(row.salary)}</b></span>` : ''}<span>Bonus <b>${fmtRs2(row ? row.bonus : 0)}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
@@ -243,8 +243,7 @@ function wagesSalCardHtml(d, from, to, asOf){
   const carry = bal.carryForward ? (bal.carryForward > 0 ? `${fmtRs2(bal.carryForward)} owed` : `${fmtRs2(Math.abs(bal.carryForward))} credit`) : '';
   return `<div class="wg-emp${open ? ' open' : ''}" data-wg-emp="${escHtml(name)}">
     <div class="wg-eh" data-wg-toggle><span class="wg-chev">${ICON_CHEV}</span><span class="name">${escHtml(name)}</span>${wagesStatusTag(net)}${tag}${wagesPayBtn(name, net, from, to)}</div>
-    ${emp.title ? `<div class="wg-fine" data-wg-toggle style="margin:0 0 4px">${escHtml(emp.title)}</div>` : ''}
-    <div class="wg-sal-big" data-wg-toggle><div><small>Earned this period</small><strong>${fmtRs2(row ? row.totalWages : 0)}</strong></div><div><small>Weekly salary</small><b>${weekly ? fmtRs2(weekly) : '\u2013'}</b></div></div>
+    <div class="wg-sub" data-wg-toggle>${emp.title ? escHtml(emp.title) : 'Salaried'} · Earned <b>${fmtRs2(row ? row.totalWages : 0)}</b> · Salary ${weekly ? fmtRs2(weekly) + '/week' : '\u2013'}</div>
     <div class="wg-det"><div class="wg-lines"><span>Salary <b>${fmtRs2(row ? row.salary : 0)}</b></span>${row && row.totalWagesNoBonus > 0 ? `<span>Wages <b>${fmtRs2(row.totalWagesNoBonus)}</b></span>` : ''}<span>Bonus <b>${row && row.bonus ? fmtRs2(row.bonus) : '\u2013'}</b></span><span>Total with bonus <b>${fmtRs2(row ? row.totalWages : 0)}</b></span><span>Paid <b>${net.paid ? fmtRs2(net.paid) : '\u2013'}</b></span><span>Net <b class="${netCls}">${fmtRs2(net.net)}</b></span><span>Carried forward <b>${carry || '\u2013'}</b></span><span>Last settled <b>${bal.lastSettled ? fmtDate(bal.lastSettled) : 'Never'}</b></span></div></div>
   </div>`;
 }
@@ -293,12 +292,6 @@ function renderWages(){
   const tWages = qualities.map((q, i) => rows.reduce((s, r) => s + r.byQuality[i].wages, 0));
   const tDiffW = qualities.map((q, i) => rows.reduce((s, r) => s + r.byQuality[i].diffWages, 0));
   const act = qualities.map((q, i) => i).filter(i => tMeters[i] !== 0 || tWages[i] !== 0);
-  let qChanged = false;
-  const qBody = act.map(i => {
-    const r = rateForQualityOn(qualities[i].name, asOf), star = from && r !== rateForQualityOn(qualities[i].name, from);
-    if(star) qChanged = true;
-    return `<tr><td>${escHtml(qualities[i].name)}</td><td>${fmtQtyMtr(tMeters[i] - tDiff[i])}</td><td>${tDiff[i] ? fmtQtyMtr(tDiff[i]) : '–'}</td><td>${fmtRs2(r).replace('Rs ', '')}${star ? '*' : ''}</td><td><b>${fmtRs2(tWages[i]).replace('Rs ', '')}</b></td></tr>`;
-  }).join('');
   const gM = tMeters.reduce((a, b) => a + b, 0), gD = tDiff.reduce((a, b) => a + b, 0), gW = tWages.reduce((a, b) => a + b, 0);
 
   // The full wide tables (as on the earlier screen), kept under one fold for exact figures.
@@ -327,15 +320,12 @@ function renderWages(){
       ${prodHtml}
       <div class="wg-hero-sub">Earned, paid, bonus and production are for ${fmtDate(from)} to ${fmtDate(to)}</div></div>
     <div class="card"><div class="card-head"><h2>Employees</h2><button type="button" class="info-btn" data-info-toggle data-info-target="info-wgemps" title="Info">i</button></div>
-      <p class="note info-note" id="info-wgemps" hidden>Tap a name for the breakdown by quality: own meters, the share of unassigned Difference, the rate and the wages. "Earned" and "Paid" are for the selected period only (earned includes bonus), and "Net" reaches 0 once you have paid what was earned there. "Owed" is the running balance since the employee's last settlement, whatever period is selected. "Credit" means paid ahead of wages earned. Advances to employees are in the Employee Loans page.</p>
+      <p class="note info-note" id="info-wgemps" hidden>Everyone in one list, people still owed first. Tap a name for the breakdown (per-meter staff: own meters, the share of unassigned Difference, the rate and the wages; salaried staff: salary, bonus and carried forward). "Earned" and "Paid" are for the selected period only (earned includes bonus), and "Net" reaches 0 once you have paid what was earned there. "Owed" is the running balance since the employee's last settlement, whatever period is selected. "Credit" means paid ahead of wages earned. Weekly salary accrues daily. Advances to employees are in the Employee Loans page.</p>
       ${wagesBonusAllHtml(data, from, to)}
-      ${data.filter(d => !isSalariedEmp(d.name)).sort(wagesDueFirst).map(d => wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No per-meter employees</div>'}</div>
-    ${data.some(d => isSalariedEmp(d.name)) ? `<div class="card"><div class="card-head"><h2>Salaried staff</h2></div><p class="note" style="margin:0 0 6px">Weekly salary accrues daily. Salary, bonus and paid are for the selected period; "Owed" is the running balance since the last settlement.</p>${data.filter(d => isSalariedEmp(d.name)).sort(wagesDueFirst).map(d => wagesSalCardHtml(d, from, to, asOf)).join('')}</div>` : ''}
-    <div class="card"><h2>This period by quality</h2>
-      ${act.length ? `<div class="wg-scroll"><table class="wg-q"><thead><tr><th>Quality</th><th>Own m</th><th>Diff m</th><th>Rate</th><th>Wages Rs</th></tr></thead><tbody>${qBody}</tbody><tfoot><tr><td>Total</td><td>${fmtQtyMtr(gM - gD)}</td><td>${gD ? fmtQtyMtr(gD) : '–'}</td><td></td><td>${fmtRs2(gW).replace('Rs ', '')}</td></tr></tfoot></table></div>${qChanged ? '<div class="wg-fine">* rate changed during this period (rate shown is the one on the To date)</div>' : ''}<div class="wg-fine">Diff = each employee's share of unassigned loom output, already included in the totals and paid at that quality's own rate.</div>` : '<div class="empty">No production in this period.</div>'}</div>
+      ${data.slice().sort(wagesDueFirst).map(d => isSalariedEmp(d.name) ? wagesSalCardHtml(d, from, to, asOf) : wagesEmpCardHtml(d, qualities, from, to, asOf)).join('') || '<div class="empty">No employees</div>'}</div>
     <details class="card wg-full" open><summary>Full table (meters & wages)</summary>
       <div class="log-scroll"><table><thead><tr>${head1}</tr><tr>${head2}</tr></thead><tbody>${rows2 || '<tr><td class="empty" colspan="99">No employees yet</td></tr>'}</tbody>
-      <tfoot>${foot2}</tfoot></table></div>
+      <tfoot>${foot2}</tfoot></table></div>${dAct.length ? '<div class="wg-fine">Diff = each employee\'s share of unassigned loom output, already included in the totals and paid at that quality\'s own rate.</div>' : ''}
     </details>`;
 }
 
