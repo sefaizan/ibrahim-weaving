@@ -228,7 +228,7 @@ describe('salaried staff card (v3.18.35)', () => {
   test('earnings for the period come first and large, with the weekly salary beside them and the breakdown below', () => {
     const t = load(ledger());
     const h = t.run("wagesSalCardHtml({name: 'Ali', row: {salary: 4000, bonus: 500, totalWages: 4500, totalWagesNoBonus: 0}, bal: {balance: 0, carryForward: 0}, net: {earned: 4500, paid: 0, net: 4500}}, '2026-09-28', '2026-10-02', '2026-10-02')");
-    assert.match(h, /wg-sal-big[^]*Earned this period[^]*<strong>Rs 4500\.00<\/strong>/);
+    assert.match(h, /wg-sub[^]*Earned <b>Rs 4500\.00<\/b>[^]*Salary /);
     assert.match(h, /Salary <b>Rs 4000\.00<\/b>/); assert.match(h, /Bonus <b>Rs 500\.00<\/b>/); assert.doesNotMatch(h, /Wages <b>/, 'no piece wages, so no Wages item');
     const w = t.run("wagesSalCardHtml({name: 'Ali', row: {salary: 4000, bonus: 0, totalWages: 4600, totalWagesNoBonus: 600}, bal: {balance: 0, carryForward: 0}, net: {earned: 4600, paid: 0, net: 4600}}, '', '', '2026-10-02')");
     assert.match(w, /Wages <b>Rs 600\.00<\/b>/);
@@ -240,4 +240,10 @@ test('menu: Materials group sits above Family; warp beam purchase panels have co
   assert.ok(core.includes("NAV_GROUPS = ['Daily','Money','Materials','Family','Tools']"));
   const pd = fs.readFileSync(path.join(__dirname, '..', 'js', 'panels-daily.js'), 'utf8');
   assert.ok(pd.includes("yieldSecOpen(r, 'sum'") && pd.includes("yieldSecOpen(r, 'det'"));
+});
+
+test('wages Summary: one Employees list for production and salaried staff; no separate by-quality card', () => {
+  const w = read('js/wages-ui.js');
+  assert.ok(w.includes('isSalariedEmp(d.name) ? wagesSalCardHtml(d, from, to, asOf) : wagesEmpCardHtml(d, qualities, from, to, asOf)'));
+  assert.ok(!w.includes('<h2>Salaried staff</h2>') && !w.includes('This period by quality') && w.includes('Full table (meters & wages)'));
 });
