@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.112-beam-block-restored">
+<meta name="app-build" content="v3.18.113-menu-order-beam-sections">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -621,6 +621,10 @@
   @media (max-width:480px){ .purchase-panels{ grid-template-columns:minmax(0,1fr); } }
   .purchase-panel{ min-width:0; border:1px solid var(--line); border-radius:var(--shape-md); padding:14px 16px; background:var(--card); }
   .panel-subhead{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); margin-bottom:10px; }
+  .panel-sec > summary{ cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .panel-sec > summary::-webkit-details-marker{ display:none; }
+  .panel-sec > summary::after{ content:'\25BE'; font-size:14px; transition:transform .15s; }
+  .panel-sec:not([open]) > summary::after{ transform:rotate(-90deg); }
   .purchase-panel .ptitle{ font-weight:700; margin-bottom:2px; }
   .purchase-panel .psub{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; }
   @media (max-width:720px){ .purchase-panel .grid.cols-3{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; } }
@@ -1519,7 +1523,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.112</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.113</span></span>
     </div>
   </header>
 
