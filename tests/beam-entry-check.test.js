@@ -101,8 +101,16 @@ describe('mark beam finished from the production form (beamFinishOffer / finishB
     app.setData({ warpBeams: [beam()], production: woven(900) });
     assert.equal(app.beamFinishOffer(rec({ qty: 75 })).beam.id, 'b1');       // exactly fills it
     assert.equal(app.beamFinishOffer(rec({ qty: 74.6 })).beam.id, 'b1');     // within 0.5 m
-    assert.equal(app.beamFinishOffer(rec({ qty: 50 })), null);               // plenty left
+    assert.equal(app.beamFinishOffer(rec({ qty: 75 })).near, true);
+    assert.equal(app.beamFinishOffer(rec({ qty: 40 })).near, false);         // 940 m = 6% shrinkage: still offered, wording is the softer one
+    assert.equal(app.beamFinishOffer(rec({ qty: 39 })), null);               // below the 6% point: too early to ask
     assert.equal(app.beamFinishOffer(rec({ qty: 76 })), null);               // over: blocked by beamEntryCheck instead
+  });
+  test('the max shrinkage is a setting', () => {
+    const app = loadApp();
+    app.setData({ warpBeams: [beam()], production: woven(900), costSettings: { beamMaxShrinkPct: 8 } });
+    assert.equal(app.beamFinishOffer(rec({ qty: 20 })).beam.id, 'b1');       // 920 m = 8% shrinkage
+    assert.equal(app.beamFinishOffer(rec({ qty: 19 })), null);
   });
   test('not offered for a beam already finished by hand or replaced by a newer beam', () => {
     const app = loadApp();
