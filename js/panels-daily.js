@@ -913,7 +913,7 @@ function updFinishOffer(){
   const old = document.getElementById('p_finishBeam');
   if(!o){ wrap.innerHTML = ''; return; }
   if(old && old.dataset.beam === o.beam.id) return;   // already showing for this beam; keep its ticked state
-  wrap.innerHTML = `<label class="beam-finish-tick" style="display:flex;gap:8px;align-items:center;font-weight:600;padding:8px 0;cursor:pointer"><input type="checkbox" id="p_finishBeam" data-beam="${o.beam.id}"> This beam is fully woven — mark it finished</label>`;
+  wrap.innerHTML = `<label class="beam-finish-tick" style="display:flex;gap:8px;align-items:center;font-weight:600;padding:8px 0;cursor:pointer"><input type="checkbox" id="p_finishBeam" data-beam="${o.beam.id}"> ${o.near ? 'This beam is fully woven — mark it finished' : 'Is this the last roll of the beam? Mark it finished'}</label>`;
 }
 // Ticked box + still valid -> finish that beam as of this entry's own date and time (call BEFORE the entry is pushed).
 function applyFinishTick(rec){

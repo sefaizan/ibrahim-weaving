@@ -1218,6 +1218,10 @@ function computeBeamDetails(){
  * Returns {ok:true} or {ok:false, msg}. Loom with no beam logged = no check.
  */
 const BEAM_ENTRY_SHRINKAGE_PCT = 2.5;
+// The most shrinkage a beam can have (Settings -> Beam Alerts). Beams really end anywhere between BEAM_ENTRY_SHRINKAGE_PCT and about
+// this much, so the "mark this beam finished" tickbox is offered across that whole range, not only next to the 2.5% limit.
+const BEAM_MAX_SHRINKAGE_DEFAULT = 6;
+function beamMaxShrinkPct(){ const n = Number((DATA.costSettings || {}).beamMaxShrinkPct); return n >= 3 && n <= 15 ? n : BEAM_MAX_SHRINKAGE_DEFAULT; }
 function beamEntryCheck(rec, skipId){
   const loom = rec && rec.loom, qty = Number(rec && rec.qty) || 0;
   if(!loom || !(qty > 0)) return {ok:true};
@@ -1262,7 +1266,7 @@ function beamEntryCheck(rec, skipId){
 }
 
 // Offer to mark a beam finished while logging production: only when this entry takes the loom's LAST beam (not finished by hand,
-// not replaced by a newer one) to within 0.5 m of its expected cloth, without going over it (an entry over the limit is blocked by
+// not replaced by a newer one) into the range where it may be done (from length less the max shrinkage up to the 2.5% limit; `near` = within 0.5 m of that limit) (an entry over the limit is blocked by
 // beamEntryCheck anyway). Returns {beam, woven, cap} or null. The beam is the one chosen on the entry, else the date rule.
 function beamFinishOffer(rec){
   const loom = rec && rec.loom, qty = Number(rec && rec.qty) || 0;
@@ -1283,8 +1287,9 @@ function beamFinishOffer(rec){
   if(!beam || beam.finished || list[list.length-1].id !== beam.id) return null;
   const len = Number(beam.length) || 0; if(!(len > 0)) return null;
   const cap = len * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100), woven = (computeWarpBeamUsage()[beam.id] || {woven:0}).woven, after = woven + qty;
-  if(after > cap + 1e-6 || cap - after > 0.5) return null;
-  return {beam, woven, cap};
+  const floor = len * (1 - beamMaxShrinkPct()/100);
+  if(after > cap + 1e-6 || after < floor - 1e-6) return null;
+  return {beam, woven, cap, near: cap - after <= 0.5};
 }
 function finishBeamAt(beam, date, time){ beam.finished = true; beam.finishedDate = date; beam.finishedTime = time || ''; }
 

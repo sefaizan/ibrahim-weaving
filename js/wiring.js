@@ -503,7 +503,7 @@ function wirePanel(id){
         c.dataset.beam = choice;
         const o = beamFinishOffer({date, loom, qty:t, beam:choice});
         if(!o) c.dataset.fin = '';
-        else html += `<label style="display:flex;gap:8px;align-items:center;font-weight:600;padding:6px 0"><input type="checkbox" class="mb_fin"${c.dataset.fin===o.beam.id?' checked':''} data-beam="${o.beam.id}"> This beam is fully woven — mark it finished</label>`;
+        else html += `<label style="display:flex;gap:8px;align-items:center;font-weight:600;padding:6px 0"><input type="checkbox" class="mb_fin"${c.dataset.fin===o.beam.id?' checked':''} data-beam="${o.beam.id}"> ${o.near ? 'This beam is fully woven — mark it finished' : 'Is this the last roll of the beam? Mark it finished'}</label>`;
         if(box._h !== html){ box._h = html; box.innerHTML = html; }
       };
       const calc = ()=>{

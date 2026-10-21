@@ -270,9 +270,20 @@ function beamAlertSettingsCard(){
     <div class="field" style="max-width:360px"><label>Alert me when a beam has</label>
       <select id="beamAlertDays">${opt(0, 'Never alert me')}${opt(2, '2 days or less left')}${opt(3, '3 days or less left (recommended)')}${opt(5, '5 days or less left')}${opt(7, '7 days or less left')}</select>
     </div>
+    <div class="field" style="max-width:360px;margin-top:12px"><label for="beamMaxShrink">Most shrinkage a beam can have (%)</label>
+      <input id="beamMaxShrink" type="number" inputmode="decimal" min="3" max="15" step="0.1" value="${beamMaxShrinkPct()}">
+      <p class="note" style="margin:6px 0 0">A beam can never give more than ${100 - BEAM_ENTRY_SHRINKAGE_PCT}% of its length (${BEAM_ENTRY_SHRINKAGE_PCT}% shrinkage), so a Production entry past that is blocked. Real beams end anywhere between that and this figure, so the "mark this beam finished" tickbox shows from here on. Raise it if a beam ever shrinks more.</p>
+    </div>
   </div>`;
 }
 function wireBeamAlertSettings(){
+  const ms = document.getElementById('beamMaxShrink');
+  if(ms) ms.addEventListener('change', async ()=>{
+    const n = parseFloat(ms.value);
+    if(!(n >= 3 && n <= 15)){ ms.value = beamMaxShrinkPct(); showToast('Enter a figure between 3 and 15'); return; }
+    DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {beamMaxShrinkPct: n});
+    await save(); showToast('Most beam shrinkage: ' + n + '%', 3000);
+  });
   const sel = document.getElementById('beamAlertDays');
   if(!sel) return;
   sel.addEventListener('change', ()=>{
