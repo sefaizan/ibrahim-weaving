@@ -151,19 +151,33 @@ function wagesSheetFill(setAmount){
   const help = document.getElementById('wq_helper');
   if(help) help.textContent = (k === 'pay' && emp) ? wagePaymentHelperMsg(emp, Number(v('wq_amt') || 0), from, to) : '';
 }
+// The page's scroll position is kept while the sheet is open and put back when it closes: focusing the amount box (and the phone
+// keyboard) otherwise leaves the page scrolled to the bottom.
+function wagesScrollMark(){
+  const sc = document.getElementById('panels');
+  WAGES_UI.sheetY = { p: sc ? sc.scrollTop : 0, w: typeof window !== 'undefined' ? window.scrollY : 0 };
+}
+function wagesScrollBack(){
+  const y = WAGES_UI.sheetY; if(!y) return;
+  const sc = document.getElementById('panels'), put = () => { if(sc) sc.scrollTop = y.p; if(typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, y.w); };
+  put(); if(typeof requestAnimationFrame === 'function') requestAnimationFrame(put);
+}
 function wagesSheetOpen(kind, emp){
-  WAGES_UI.sheet = { kind: kind || 'pay', emp: emp || '', date: todayStr() };
+  if(!WAGES_UI.sheet) wagesScrollMark();
+  // Opened from one person's Pay button = a single payment (the sheet closes after it); opened from the + button = a run of payments.
+  WAGES_UI.sheet = { kind: kind || 'pay', emp: emp || '', date: todayStr(), single: !!emp };
   const bg = document.getElementById('wg_sheetBg'), sh = document.getElementById('wg_sheet');
   if(bg) bg.classList.add('on'); if(sh) sh.classList.add('on');
   const e = document.getElementById('wq_emp'); if(e) e.value = WAGES_UI.sheet.emp;
   const d = document.getElementById('wq_date'); if(d) d.value = WAGES_UI.sheet.date;
   const r = document.getElementById('wq_rem'); if(r) r.value = '';
   wagesSheetFill(true);
-  const a = document.getElementById('wq_amt'); if(a && emp) setTimeout(() => { try{ a.focus(); a.select(); }catch(err){} }, 60);
+  const a = document.getElementById('wq_amt'); if(a && emp) setTimeout(() => { try{ a.focus({ preventScroll: true }); a.select(); }catch(err){} }, 60);
 }
 function wagesSheetClose(){
   WAGES_UI.sheet = null;
   ['wg_sheetBg', 'wg_sheet'].forEach(i => { const el = document.getElementById(i); if(el) el.classList.remove('on'); });
+  wagesScrollBack(); WAGES_UI.sheetY = null;
 }
 async function wagesSheetSave(){
   const s = WAGES_UI.sheet; if(!s) return;
@@ -187,10 +201,11 @@ async function wagesSheetSave(){
     if(k === 'pay') next = wagesNextDueEmployee(emp, v('wg_from'), v('wg_to'));
   }
   // Paying several people in a row: stay open on the next person who is still due; otherwise close.
-  WAGES_UI.sheet = (kept && (k !== 'pay' || next)) ? { kind: k, emp: next, date } : null;
-  const sc = document.getElementById('panels'), y = sc ? sc.scrollTop : 0;
+  // (Only when it was opened from the + button: a person's own Pay button means a single payment, so the sheet just closes.)
+  WAGES_UI.sheet = (kept && (k !== 'pay' || (next && !s.single))) ? { kind: k, emp: s.single ? '' : next, date, single: false } : null;
+  if(!WAGES_UI.sheetY) wagesScrollMark();
   switchTab('wages');
-  if(sc) sc.scrollTop = y;
+  wagesScrollBack(); if(!WAGES_UI.sheet) WAGES_UI.sheetY = null;
 }
 
 // Pay is off for a period that is already paid in full (something was earned and nothing is left due).
