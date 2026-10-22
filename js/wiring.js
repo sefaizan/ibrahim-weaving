@@ -1825,7 +1825,7 @@ function wirePanel(id){
     if(darkToggle) darkToggle.addEventListener('change', ()=>{
       const dark = darkToggle.checked;
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-      document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0B0D0F' : '#163B3D');
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#15181B' : '#163B3D');
       try{ localStorage.setItem('khata-theme', dark ? 'dark' : 'light'); }catch(e){}
     });
     const logCardsToggle = document.getElementById('logCardsToggle');

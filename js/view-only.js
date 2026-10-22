@@ -184,10 +184,12 @@ const PERM_OVERVIEW_CARDS = {
   reminders_cheques: { needs: ['recovery'], banner: true },                    // the cheque rows of the Reminders banner
   reminders_clients: { needs: ['sales', 'recovery'], banner: true },           // "clients quiet 30+ days with a balance due"
   beams_ending:      { needs: ['production'], banner: true },
+  weft_stock:        { needs: ['production', 'materials'] },                   // estimated weft stock, days of cover and the Count bags button
   backup_reminder:   { needs: [], banner: true, device: true },
   pending_l:         { needs: ['sales'] },                                     // sales sent to a dyeing unit, L (AIL) not yet logged
   pending_cheques:   { needs: ['recovery'] },
   bounced_cheques:   { needs: ['recovery'] },
+  orders_progress:   { needs: ['sales'] },                                     // client orders: delivered against ordered, pace, stalled ones
   stock:             { needs: ['production', 'sales'] },                       // stock by quality, Produced / Sold / In Stock
   stock_glance:      { needs: ['stock'] },                                     // totals-only stock (the At a Glance tiles) for an account given just Stock
   cash_position:     { needs: ['tools', 'recovery'].concat(PERM_MONEY_ALL) },  // the Cash Position tile and its checkpoint note

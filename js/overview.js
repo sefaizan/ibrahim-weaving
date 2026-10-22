@@ -860,7 +860,7 @@ function fmtCompactNum(n){
   return sign+String(Math.round(a));
 }
 const MONTH_LABEL_MIN_PITCH = 42;
-const GX_PALETTE = ['var(--rust)','var(--gold)','var(--green)','#5B7DB1','#8E6BB0','#B8962E','#9AA3AA'];
+const GX_PALETTE = ['var(--gx-teal)','var(--gold)','var(--green)','var(--gx-blue)','var(--gx-purple)','var(--gx-ochre)','var(--gx-grey)'];
 const GX_ESC = s => (typeof escHtml === 'function' ? escHtml(String(s)) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
 const gxM = v => Math.round(Number(v)||0).toLocaleString('en-IN') + ' m';
 const gxRs = v => (Number(v)<0?'-':'') + 'Rs ' + Math.abs(Math.round(Number(v)||0)).toLocaleString('en-IN');
