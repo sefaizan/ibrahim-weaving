@@ -49,9 +49,18 @@ function wagesLogSwitchHtml(){
 }
 
 /* ---------------- Shared text for "what is still due" (Payments form and the quick-entry sheet) ---------------- */
+// What to pay for the selected period. The period's wages (`due`) are reduced by any credit carried from earlier weeks being paid
+// ahead (rounded-up payments, advances): when the employee's running balance is lower than the period's wages, the balance is
+// what is actually owed, so that is the default amount and the credit is used up instead of piling up week after week.
+function wagesPayDue(emp, from, to){
+  const n = computeEmployeeWageNetForPeriod(emp, from || null, to || null), b = computeEmployeeWageBalance(emp);
+  const due = n.net > 0.004 ? n.net : 0, bal = b.balance;
+  const eff = due > 0 && bal < due - 0.004 ? Math.max(bal, 0) : due;
+  return {n, due, bal, eff, carry: due - eff};
+}
 function wagePaymentHelperMsg(emp, amt, from, to){
   if(!emp) return '';
-  const {earned, paid, net: stillDue} = computeEmployeeWageNetForPeriod(emp, from || null, to || null);
+  const pd = wagesPayDue(emp, from, to), {earned, paid} = pd.n, stillDue = pd.eff;
   const diff = stillDue - amt;
   const paidNote = paid > 0.004 ? ` (${fmtRs2(paid)} already paid for this period)` : '';
   let msg;
@@ -66,10 +75,8 @@ function wagePaymentHelperMsg(emp, amt, from, to){
   } else {
     msg = '';
   }
-  const b = computeEmployeeWageBalance(emp);
-  if(b.balance < -0.004){
-    msg += (msg ? ' ' : '') + `They also have a credit of ${fmtRs2(Math.abs(b.balance))} from being paid ahead of wages earned.`;
-  }
+  if(pd.carry > 0.004) msg += (msg ? ' ' : '') + `${fmtRs2(pd.carry)} paid ahead in earlier weeks has been taken off this period's ${fmtRs2(pd.due)}.`;
+  else if(pd.bal < -0.004) msg += (msg ? ' ' : '') + `They also have a credit of ${fmtRs2(Math.abs(pd.bal))} from being paid ahead of wages earned.`;
   return msg;
 }
 
@@ -123,10 +130,10 @@ function wagesSheetFill(setAmount){
   if(emp){
     const b = computeEmployeeWageBalance(emp);
     if(k === 'pay'){
-      const n = computeEmployeeWageNetForPeriod(emp, from, to).net;
-      const due = n > 0.004 ? wagesR2(n) : 0, bal = b.balance > 0.004 ? wagesR2(b.balance) : 0;
+      const pd = wagesPayDue(emp, from, to);
+      const due = pd.eff > 0.004 ? wagesR2(pd.eff) : 0, bal = b.balance > 0.004 ? wagesR2(b.balance) : 0;
       const last = wagesLastBy(DATA.wagePayments, emp);
-      if(due) chips.push(['Period due', due]);
+      if(due) chips.push([pd.carry > 0.004 ? 'Period due (after credit)' : 'Period due', due]);
       if(bal && bal !== due) chips.push(['Full balance', bal]);
       if(last) chips.push(['Last paid', Number(last.amount) || 0]);
       def = due || bal || '';

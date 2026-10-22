@@ -86,3 +86,13 @@ function rcpRender(inp, r){
   };
   rt.oninput = od.oninput = draw; draw();
 }
+
+// Sale form: approximate profit on this sale from the quality's cost per meter (see saleCostPerMeter), shown while typing.
+function updSaleProfit(){
+  const el = document.getElementById('s_profitPreview'); if(!el) return;
+  const ok = typeof ovCardOn === 'function' ? ovCardOn('profit_loss') : true;
+  const e = ok ? saleProfitEstimate(v('s_quality'), combineMtr16(v('s_qty'), v('s_qty_16')), Number(v('s_rate'))) : null;
+  if(!e){ el.innerHTML = ''; return; }
+  const tone = cmTone(e.margin), color = tone === 'loss' ? 'var(--red)' : tone === 'thin' ? 'var(--gold)' : 'var(--green)';
+  el.innerHTML = `<b style="color:${color}">Approx. ${e.profit < 0 ? 'loss' : 'profit'} ${fmtRs(Math.abs(Math.round(e.profit)))}</b> (Rs ${cmR1(e.margin)} per meter) · cost Rs ${cmR1(e.cost)}/m from ${e.month}${e.est ? ', electricity estimated' : ''}. An estimate: yarn at the latest purchase rates, wages and expenses spread over the month's meters.`;
+}

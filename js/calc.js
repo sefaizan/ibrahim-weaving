@@ -1351,17 +1351,18 @@ function computeBeamForecasts(alertDays){
       const total = mine.filter(x => x.n >= fromN && x.n <= lastN).reduce((s, x) => s + x.q, 0);
       if(basisDays > 0 && total > 0) rate = total / basisDays;
     }
+    const gapDays = lastN === null ? 0 : todayN - lastN, estMeters = rate && gapDays > 0 ? Math.min(expectedRemaining, rate * gapDays) : 0;   // assumed since the last entry (loom not idle, so at most the stale limit)
     let state, daysLeft = null, finishDate = null;
     if(expectedRemaining <= 0){ state = 'full'; daysLeft = 0; finishDate = today; }
     else if(rate){
-      daysLeft = expectedRemaining / rate;
+      daysLeft = (expectedRemaining - estMeters) / rate;
       finishDate = beamDayStr(todayN + Math.round(daysLeft));
       state = daysLeft <= alertAt ? 'ending' : (daysLeft <= BEAM_SOON_DAYS ? 'soon' : 'ok');
     }else{
       state = lastN === null ? 'nodata' : 'idle';
     }
     out.push({id:b.id, loom:b.loom, warpType:b.warpType || '', length, woven, remaining, expectedRemaining,
-      rate, basisDays, lastDay: lastN === null ? null : beamDayStr(lastN), daysLeft, finishDate, state,
+      rate, basisDays, estMeters, gapDays, lastDay: lastN === null ? null : beamDayStr(lastN), daysLeft, finishDate, state,
       low: remaining < BEAM_LOW_METERS && (state === 'idle' || state === 'nodata'),
       yieldRatio: yieldInfo.value, yieldBasis: yieldInfo.basis});
   });
@@ -1619,6 +1620,25 @@ function costRefOverhead(){
   }
   return {month: prev, est: true, wage: 0, power: 0, other: 0};
 }
+// Cost per meter of one quality for the Sale form: the newest of this and the last 3 months in which that quality was woven.
+let _saleCostMemo = {key: '', val: {}};
+function saleCostPerMeter(quality){
+  const key = [todayStr(), (DATA.production || []).length, (DATA.expense || []).length, (DATA.warp || []).length, (DATA.weft || []).length, (DATA.sale || []).length].join('|');
+  if(_saleCostMemo.key !== key) _saleCostMemo = {key, val: {}};
+  if(quality in _saleCostMemo.val) return _saleCostMemo.val[quality];
+  let y = Number(todayStr().slice(0, 4)), m = Number(todayStr().slice(5, 7)), found = null;
+  for(let i = 0; i < 4 && !found; i++){
+    const mk = y + '-' + String(m).padStart(2, '0'), r = costMonth(mk, (costCfg().bills || {})[mk]), row = r.rows.find(x => x.quality === quality);
+    if(row && row.m > 0) found = {cost: row.cost, lines: row.lines, month: mk, est: r.est};
+    if(--m < 1){ m = 12; y--; }
+  }
+  return (_saleCostMemo.val[quality] = found);
+}
+function saleProfitEstimate(quality, qty, rate){
+  const c = saleCostPerMeter(quality);
+  if(!c || !(qty > 0) || !(rate > 0)) return null;
+  return {cost: c.cost, margin: rate - c.cost, profit: (rate - c.cost) * qty, month: c.month, est: c.est};
+}
 // Live profit at a negotiated rate. inp = the Grey Cloth Rate inputs; yarn from the real use rules, overheads from the reference month.
 function costQuote(inp, agreed){
   const cfg = costCfg(), ref = costRefOverhead(), wl = costWarpLbs(inp.thread, inp.width, inp.warpCount, cfg), fl = costWeftLbs(inp.picks, inp.width, cfg);
@@ -1727,6 +1747,49 @@ function weftBagsToLbs(bags){
   for(const l of lots){ if(rest <= 0) break; const t = Math.min(rest, l.lbs / l.per); lbs += t * l.per; rest -= t; }
   return lbs + (rest > 0 ? rest * (lots.length ? lots[0].per : 100) : 0);
 }
+// ---- Looms between entries (v3.18.117) ----
+// Entries are logged every few days, so between a loom's last entry and today the app ASSUMES it kept weaving at its recent pace
+// (capped at LOOM_RUN_CAP_DAYS). The assumed meters are never saved as production: they only feed the weft stock and the beam
+// forecast, and are always labelled "estimated". Pace = meters of the loom's recent entries / the days they cover (an entry covers
+// the days since the loom's previous entry).
+const LOOM_RUN_CAP_DAYS = 3;
+function loomPaceOf(rows){   // rows sorted by day: pace of rows[1..] over the span from rows[0] to the last row
+  if(rows.length < 2) return null;
+  const span = rows[rows.length-1].n - rows[0].n; if(!(span > 0)) return null;
+  const q = rows.slice(1).reduce((t,x)=> t + x.q, 0);
+  return q > 0 ? q / span : null;
+}
+function loomPaceInfo(){
+  const today = todayStr(), todayN = beamDayNum(today), by = {}, out = {};
+  (DATA.production || []).forEach(r=>{ if(r.loom && r.date && r.date <= today) (by[r.loom] = by[r.loom] || []).push(r); });
+  Object.keys(by).forEach(loom=>{
+    const rows = by[loom].map(r=>({n: beamDayNum(r.date), q: Number(r.qty) || 0, quality: r.quality, date: r.date, time: r.time || ''}))
+      .sort((a,b)=> a.n - b.n || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+    const last = rows[rows.length-1], lastN = last.n;
+    const recentStart = rows.findIndex(x=> x.n >= lastN - 6), anchor = Math.max(0, recentStart - 1);
+    const recentPace = loomPaceOf(rows.slice(anchor)), priorPace = loomPaceOf(rows.slice(Math.max(0, anchor - 3), anchor + 1));
+    const drop = !!(recentPace && priorPace && rows.length - anchor >= 3 && anchor + 1 - Math.max(0, anchor - 3) >= 3 && recentPace < priorPace * 0.6);
+    out[loom] = {loom, lastN, lastDay: last.date, lastQuality: last.quality, pace: loomPaceOf(rows.slice(Math.max(0, rows.length - 5))), gap: todayN - lastN, recentPace, priorPace, drop};
+  });
+  return out;
+}
+// Meters a loom is assumed to have woven since `fromN` (a day number, e.g. the day of a stock count) or its last entry, whichever is later.
+function loomEstimatedMeters(info, fromN){
+  if(!info || !info.pace) return {days: 0, meters: 0};
+  const days = Math.max(0, Math.min(LOOM_RUN_CAP_DAYS, beamDayNum(todayStr()) - Math.max(info.lastN, fromN == null ? -Infinity : fromN)));
+  return {days, meters: info.pace * days};
+}
+// Looms that need attention: active looms (an entry in the last 30 days) not logged for longer than the cap, and looms whose pace fell.
+function loomWatchItems(){
+  const out = [];
+  Object.values(loomPaceInfo()).forEach(i=>{
+    if(i.gap > 30) return;
+    if(i.gap > LOOM_RUN_CAP_DAYS) out.push({kind: 'nolog', loom: i.loom, gap: i.gap, lastDay: i.lastDay});
+    else if(i.drop) out.push({kind: 'drop', loom: i.loom, pct: Math.round((1 - i.recentPace / i.priorPace) * 100), recent: i.recentPace, prior: i.priorPace});
+  });
+  return out.sort((a,b)=> String(a.loom).localeCompare(String(b.loom), undefined, {numeric: true}));
+}
+
 function weftStockEstimate(){
   const cfg = costCfg(), cnt = cfg.weftStockCount || null, from = cnt ? String(cnt.at) : '', key = (d, t) => d + ' ' + (t || '00:00');
   let lbs = cnt ? Number(cnt.lbs) || 0 : 0;
@@ -1738,11 +1801,20 @@ function weftStockEstimate(){
     perDate[r.date] = (perDate[r.date] || 0) + use;
     if(key(r.date, r.time) > from) lbs -= use;
   });
+  // use since each loom's last entry that is not logged yet (never before the stock count; see loomPaceInfo)
+  const fromN = cnt ? beamDayNum(String(cnt.at).slice(0, 10)) : null;
+  let estLbs = 0, estDays = 0;
+  Object.values(loomPaceInfo()).forEach(i=>{
+    const q = (DATA.qualities || []).find(x => x.name === i.lastQuality); if(!q) return;
+    const e = loomEstimatedMeters(i, fromN); if(!(e.meters > 0)) return;
+    estLbs += e.meters * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: WEFT_STOCK_K}); estDays = Math.max(estDays, e.days);
+  });
+  lbs -= estLbs;
   const today = todayStr(), days = Object.keys(perDate).filter(d => d <= today).sort().slice(-7);
   const perDay = days.length ? days.reduce((s, d) => s + perDate[d], 0) / days.length : 0, bag = weftBagLbs();
   const cover = perDay > 0 ? Math.max(lbs, 0) / perDay : null, limit = weftAlertDays();
   const hasData = (DATA.weft || []).length > 0 || !!cnt;
-  return {lbs, bags: weftLbsToBags(lbs), bagLbs: bag, perDay, cover, limit, counted: cnt, hasData, low: hasData && perDay > 0 && (lbs <= 0 || cover <= limit)};
+  return {lbs, bags: weftLbsToBags(lbs), bagLbs: bag, perDay, cover, limit, counted: cnt, hasData, estLbs, estDays, low: hasData && perDay > 0 && (lbs <= 0 || cover <= limit)};
 }
 
 // Production Summary (Production page): totals and per-quality / per-loom / per-employee splits for the rows passed in

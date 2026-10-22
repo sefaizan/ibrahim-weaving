@@ -397,6 +397,7 @@ function salePanel(){
       ${textareaField('Description (optional)','s_desc')}
     </div>
     <div class="calc-amount" id="s_amtPreview">Amount: —</div>
+    <div class="note" id="s_profitPreview" style="margin:6px 0 0"></div>
     <div class="form-actions">
       <button class="primary" id="addSale">Add Entry</button>
       <button class="ghost" id="cancelSale" style="display:none">Cancel Edit</button>

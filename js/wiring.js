@@ -676,6 +676,7 @@ function wirePanel(id){
       }catch(e){}
     };
     wireAmountPreview(['s_qty','s_qty_16'],'s_rate','s_amtPreview','Amount',true);
+    ['s_quality','s_qty','s_qty_16','s_rate'].forEach(i=>{ const e = document.getElementById(i); if(e){ e.addEventListener('input', updSaleProfit); e.addEventListener('change', updSaleProfit); } });
     wireEnterSubmit(['s_date','s_client','s_quality','s_qty','s_qty_16','s_rate','s_inv'],'addSale');
     wireDelete('sale');
     // Qty is stored as one decimal number, same as before — the Meters/16ths boxes are split

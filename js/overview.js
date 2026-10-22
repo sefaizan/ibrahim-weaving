@@ -189,7 +189,7 @@ function beamForecastRows(list){
     const r = beamForecastRightCell(f);
     const detail = f.state === 'full'
       ? `${fmtNum(Math.round(f.woven))} of ${fmtNum(f.length)} m woven`
-      : [`~${fmtNum(Math.round(f.expectedRemaining))} m cloth left`, f.rate ? `${fmtNum(Math.round(f.rate))} m/day` : ''].filter(Boolean).join(' · ');
+      : [`~${fmtNum(Math.round(f.expectedRemaining - (f.estMeters || 0)))} m cloth left`, f.rate ? `${fmtNum(Math.round(f.rate))} m/day` : '', f.estMeters >= 1 ? `incl. ~${fmtNum(Math.round(f.estMeters))} m estimated since the last entry` : ''].filter(Boolean).join(' · ');
     return `<div style="${rowStyle}">
       <span><b>Loom ${escHtml(f.loom)}</b>${f.warpType ? ' · ' + escHtml(f.warpType) : ''}<br><span style="color:var(--ink-soft);font-size:12px">${detail}</span></span>
       <span style="text-align:right;color:${r.color}"><b>${r.label}</b>${r.sub ? `<br><span style="font-size:12px">${r.sub}</span>` : ''}</span>
@@ -215,7 +215,7 @@ function weftStockCard(){
   return `<div class="card" id="weftStockCard"${e.low ? ' style="background:var(--warn-bg-1)"' : ''}>
     <div class="card-head"><h2>🧵 Weft stock</h2></div>
     <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:22px">${r1(Math.max(e.bags, 0))} bags</b><span class="note" style="margin:0">${r1(Math.max(e.lbs, 0))} lbs</span></div>
-    <p class="note" style="margin:6px 0 0">${e.cover === null ? 'No recent production to measure the pace.' : 'About ' + r1(e.cover) + ' days left at ' + r1(e.perDay) + ' lbs per production day (last 7 days).'} Estimated from production. ${when}</p>
+    <p class="note" style="margin:6px 0 0">${e.estLbs > 0.5 ? 'Includes about ' + r1(e.estLbs) + ' lbs estimated since the looms\' last entries (assumed to keep weaving at their usual pace, up to ' + LOOM_RUN_CAP_DAYS + ' days). ' : ''}${e.cover === null ? 'No recent production to measure the pace.' : 'About ' + r1(e.cover) + ' days left at ' + r1(e.perDay) + ' lbs per production day (last 7 days).'} Estimated from production. ${when}</p>
     ${canEdit ? `<div class="grid cols-2" style="margin-top:10px;align-items:end"><div class="field" style="margin:0"><label for="wf_count_bags">Bags on hand now</label><input id="wf_count_bags" type="number" inputmode="decimal" step="any" min="0"></div>
       <button type="button" class="primary" style="margin:0" onclick="weftCountSave()">Count bags</button></div>
       <div class="field" style="margin:10px 0 0"><label for="wf_alert_days">Alert when days left is</label><select id="wf_alert_days" onchange="weftAlertSave(this.value)">${[2, 3, 5, 7].map(n => `<option value="${n}"${n === e.limit ? ' selected' : ''}>${n} or fewer</option>`).join('')}</select></div>` : ''}
@@ -230,6 +230,32 @@ async function weftCountSave(){
 async function weftAlertSave(v){
   DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftAlertDays: Number(v)});
   await save(); SETTINGS_OPEN = 'stock'; switchTab('settings');
+}
+// Overview: one short "today" card. Silent when there is nothing to say; dismissal lasts until the list changes.
+function briefingItems(){
+  const out = [], watch = loomWatchItems(), nolog = watch.filter(w => w.kind === 'nolog'), drop = watch.filter(w => w.kind === 'drop');
+  if(nolog.length) out.push({icon: '📝', text: 'No entry for over ' + LOOM_RUN_CAP_DAYS + ' days: ' + nolog.map(w => 'Loom ' + w.loom + ' (' + w.gap + 'd)').join(', ') + '. Log them so the beam and weft estimates stay right.', tab: 'production', key: 'n' + nolog.map(w => w.loom).join(',')});
+  if(drop.length) out.push({icon: '📉', text: 'Slower than usual: ' + drop.map(w => 'Loom ' + w.loom + ' (' + w.pct + '% down)').join(', ') + '.', tab: 'production', key: 'd' + drop.map(w => w.loom).join(',')});
+  if(ovCardOn('beams_ending')){
+    const b = computeBeamForecasts(beamAlertDays() || 3).filter(f => f.state === 'full' || f.state === 'ending');
+    if(b.length) out.push({icon: '⏳', text: b.map(f => 'Loom ' + f.loom + (f.state === 'full' ? ' beam full' : ' beam ends ' + beamWhenText(f).replace('in about ', '~'))).join(', ') + '.', tab: 'warpbeams', key: 'b' + b.map(f => f.id + f.state).join(',')});
+  }
+  if(ovCardOn('weft_stock')){
+    const w = weftStockEstimate();
+    if(w.low) out.push({icon: '🧵', text: 'Weft is running low: about ' + (w.cover === null ? 'none' : (Math.round(w.cover * 10) / 10) + ' days') + ' left' + (w.estLbs > 0.5 ? ' (includes estimated use since the last entries)' : '') + '.', tab: 'settings', key: 'w' + Math.round(w.lbs)});
+  }
+  return out;
+}
+function briefingCard(){
+  if(!ovCardOn('beams_ending')) return '';
+  const items = briefingItems(); if(!items.length) return '';
+  const signature = items.map(i => i.key).join('|');
+  if(isBannerDismissed('brief', signature)) return '';
+  return `<div class="card" id="banner-brief" style="background:var(--warn-bg-1)">
+    <div class="card-head"><h2>Today</h2><button type="button" class="dismiss-btn" onclick="dismissBanner('brief','${signature}')" aria-label="Dismiss" title="Dismiss">✕</button></div>
+    ${items.map(i => `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px"><span>${i.icon}</span><span style="flex:1">${escHtml(i.text)}</span><button type="button" class="ghost" style="margin:0;padding:4px 10px" onclick="switchTab('${i.tab}')">Open</button></div>`).join('')}
+    <p class="note" style="margin:8px 0 0">Weft and beam figures include estimates for days not logged yet; they are marked wherever they appear.</p>
+  </div>`;
 }
 function beamsEndingCard(){
   if(!ovCardOn('beams_ending')) return '';
@@ -304,6 +330,7 @@ function overviewPanel(){
       <button type="button" class="ghost" data-quick-add="recovery" style="margin:0">+ Add Recovery</button>
     </div>`}
     ${remindersBanner()}
+    ${briefingCard()}
     ${beamsEndingCard()}
     ${backupNagBanner()}
     <div class="card ov-period-card">
