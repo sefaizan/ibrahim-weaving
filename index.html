@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.18.119-pay-single-scroll">
+<meta name="app-build" content="v3.19.0-version-3-19">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -62,6 +62,7 @@
     --rust-deep:#163B3D;
     --rust-tonal:#DCEDEB;
     --gold:#C1652D;
+    --gx-teal:#204E52; --gx-blue:#5B7DB1; --gx-purple:#8E6BB0; --gx-ochre:#B8962E; --gx-grey:#9AA3AA;   /* chart colours (brightened in dark mode) */
     --green:#3D8361;
     --red:#B5402E;
     --card:#FFFFFF;
@@ -115,7 +116,13 @@
     --tonal-progress-ink:#E0A870;
     --tonal-receipt-hover:#4A3826;
   }
-  html[data-theme="dark"]{ background:#0B0D0F; }
+  /* Dark theme, easier on the eyes: lifted chart colours (on the dark card the light-theme ones read as dull blobs), a softer red and
+     amber for text, and the page edge the same grey as the paper instead of near-black. */
+  :root[data-theme="dark"]{
+    --gx-blue:#86AEE8; --gx-purple:#BDA3E6; --gx-ochre:#E6CB74; --gx-grey:#AEB7BE;
+    --gx-teal:#5CC4B8; --green:#6FD0A0; --gold:#EDB56B; --red:#EE9186;
+  }
+  html[data-theme="dark"]{ background:#15181B; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{ background:#C7CDD2; overscroll-behavior-y:contain; } /* stops a pull-down at the very top of the page from reaching the browser's native pull-to-refresh (which reloads the app and drops you back on Overview) */
   body{
@@ -847,7 +854,7 @@
   #receiptPrintArea, .receipt{
     color-scheme: light;
     --paper:#EDEFF1; --paper-dim:#E1E4E8; --ink:#1B2126; --ink-soft:#626B72; --line:#D9DEE3; --field-border:#B9C2C9;
-    --rust:#204E52; --rust-deep:#163B3D; --rust-tonal:#DCEDEB; --gold:#C1652D; --green:#3D8361; --red:#B5402E; --card:#FFFFFF;
+    --gx-teal:#204E52; --gx-blue:#5B7DB1; --gx-purple:#8E6BB0; --gx-ochre:#B8962E; --gx-grey:#9AA3AA; --rust:#204E52; --rust-deep:#163B3D; --rust-tonal:#DCEDEB; --gold:#C1652D; --green:#3D8361; --red:#B5402E; --card:#FFFFFF;
   }
   .receipt{ background:#fff; }
   @media print{
@@ -929,6 +936,7 @@
   .rbc-row{ display:grid; grid-template-columns:24px minmax(0,1fr) auto; column-gap:10px; align-items:baseline; padding:10px 0 8px; border-bottom:1px solid var(--line); }
   .rbc-row .rk{ width:22px; height:22px; border-radius:50%; background:var(--paper-dim); color:var(--ink-soft); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; align-self:center; }
   .rbc-row:nth-of-type(1) .rk{ background:var(--gold); color:#fff; }
+  :root[data-theme="dark"] .rbc-row:nth-of-type(1) .rk{ color:#2C160A; }
   .rbc-row .nm{ font-weight:700; min-width:0; overflow-wrap:anywhere; }
   .rbc-row .am{ font-weight:800; white-space:nowrap; }
   .rbc-row .bar{ grid-column:2 / 3; height:5px; margin-top:6px; border-radius:3px; background:var(--paper-dim); overflow:hidden; }
@@ -1524,7 +1532,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.18.119</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.0</span></span>
     </div>
   </header>
 
