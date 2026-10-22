@@ -272,3 +272,28 @@ describe('credit from rounded-up payments is taken off the next payment (v3.18.1
     closeTo(JSON.parse(t.run("JSON.stringify(wagesPayDue('Ali', '2026-10-05', '2026-10-11'))")).eff, 0, 'to pay');
   });
 });
+
+describe('single payments from a person\'s Pay button (v3.18.119)', () => {
+  const open = (emp) => {
+    const t = load(ledger()); t.vals.wg_from = '2026-09-28'; t.vals.wg_to = '2026-10-02';
+    t.run('this.setTimeout = () => 0'); t.run(`wagesSheetOpen('pay', '${emp}')`); return t;
+  };
+  test('paying from one person\'s Pay button closes the sheet instead of opening the next person', async () => {
+    const t = open('Ali'); Object.assign(t.vals, { wq_emp: 'Ali', wq_date: '2026-10-02', wq_amt: '650' });
+    await t.run('wagesSheetSave()');
+    assert.equal(t.run('WAGES_UI.sheet'), null);
+    assert.equal(JSON.parse(t.run('JSON.stringify(DATA.wagePayments)')).length, 2);
+  });
+  test('opened from the + button (no person) the run-of-payments behaviour is unchanged', () => {
+    const t = open(''); assert.equal(t.run('WAGES_UI.sheet.single'), false);
+  });
+  test('the page position is remembered when the sheet opens and put back when it closes or saves', async () => {
+    const t = open('Ali'); const sc = t.el('panels'); 
+    assert.ok(t.run('WAGES_UI.sheetY'), 'the position is recorded when the sheet opens');
+    t.run("WAGES_UI.sheetY.p = 1234"); sc.scrollTop = 9999;      // the keyboard pushed the page to the bottom
+    t.run('wagesSheetClose()'); assert.equal(sc.scrollTop, 1234);
+    const u = open('Ali'); const sc2 = u.el('panels'); sc2.scrollTop = 500; u.run("WAGES_UI.sheetY.p = 500"); sc2.scrollTop = 8000;
+    Object.assign(u.vals, { wq_emp: 'Ali', wq_date: '2026-10-02', wq_amt: '650' });
+    await u.run('wagesSheetSave()'); assert.equal(sc2.scrollTop, 500);
+  });
+});
