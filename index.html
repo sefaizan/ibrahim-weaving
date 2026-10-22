@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.19.0-version-3-19">
+<meta name="app-build" content="v3.19.1-dark-mode-colours">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -79,6 +79,8 @@
     --tonal-edit-hover:#CFE3E1;
     --tonal-del:#F7E0DB;
     --tonal-del-hover:#F0CCC3;
+    --red-solid:#B5402E;
+    --amber:#B7791F;
     --tonal-progress-bg:#F3DFCB;
     --tonal-progress-ink:#8A4A1D;
     --tonal-receipt-hover:#EACBA0;
@@ -119,8 +121,12 @@
   /* Dark theme, easier on the eyes: lifted chart colours (on the dark card the light-theme ones read as dull blobs), a softer red and
      amber for text, and the page edge the same grey as the paper instead of near-black. */
   :root[data-theme="dark"]{
-    --gx-blue:#86AEE8; --gx-purple:#BDA3E6; --gx-ochre:#E6CB74; --gx-grey:#AEB7BE;
-    --gx-teal:#5CC4B8; --green:#6FD0A0; --gold:#EDB56B; --red:#EE9186;
+    --gx-blue:#7FA8FF; --gx-purple:#C39BFF; --gx-ochre:#E4E86A; --gx-grey:#B4BCC3;
+    --gx-teal:#3EC9E0; --green:#6EDB9A; --gold:#FFB347; --red:#FF6B5B;
+    /* v3.19.1: red is a vivid coral-red (5.7:1 on the card), not a pale salmon. Where red is a FILL behind white text use --red-solid
+       (5.1:1 with white). --amber is the readable warm text colour; --danger feeds the field-error text. */
+    --red-solid:#C9382B; --amber:#F0B24A; --danger:#FF6B5B;
+    --tonal-del:#3D1F1C; --tonal-del-hover:#512724;
   }
   html[data-theme="dark"]{ background:#15181B; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -787,7 +793,7 @@
      in js/lock-init.js. */
   .fab-backup.needs-backup::after{
     content:''; position:absolute; top:3px; right:3px; width:15px; height:15px;
-    border-radius:50%; background:var(--red); border:2px solid #FFF3E0;
+    border-radius:50%; background:var(--red-solid); border:2px solid #FFF3E0;
     transform-origin:center; animation:fabBackupPulse 1.4s ease-in-out infinite;
   }
   @keyframes fabBackupPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.35); } }
@@ -1346,13 +1352,14 @@
      Now: a single slim, softly-tinted prompt (the strip on most screens, the card on Overview); the floating shortcut steps aside
      while a prompt is showing and returns when it is dismissed or a backup is taken. */
   :root{ --nudge-bg:#FBF1DD; --nudge-edge:#D9922B; --nudge-urgent-bg:#FBE6E1; --nudge-urgent-edge:#C8472F; }
-  :root[data-theme="dark"]{ --nudge-bg:#3A3224; --nudge-edge:#D9A24B; --nudge-urgent-bg:#40262270; --nudge-urgent-edge:#E07A5F; }
+  :root[data-theme="dark"]{ --nudge-bg:#3A3224; --nudge-edge:#D9A24B; --nudge-urgent-bg:#4A211D; --nudge-urgent-edge:#FF6B5B; }
   .backup-strip{ flex-wrap:nowrap; gap:10px; padding:8px 10px 8px 12px; font-size:12.5px; background:var(--nudge-bg); color:var(--ink);
     border-bottom:1px solid var(--line); box-shadow:inset 4px 0 0 var(--nudge-edge); }
   .backup-strip .bs-msg{ flex:1 1 auto; min-width:0; font-weight:600; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .backup-strip .bs-btn{ flex:0 0 auto; width:auto; min-height:34px; padding:6px 14px; font-size:12.5px; border-radius:999px; margin:0; }
   .backup-strip.urgent{ background:var(--nudge-urgent-bg); color:var(--ink); box-shadow:inset 4px 0 0 var(--nudge-urgent-edge); }
   .backup-strip.urgent .bs-btn{ background:var(--nudge-urgent-edge); color:#fff; }
+  :root[data-theme="dark"] .backup-strip.urgent .bs-btn{ background:var(--red-solid); }
   .backup-strip .dismiss-btn{ position:static; flex:0 0 auto; }
   #banner-backup{ background:var(--nudge-bg) !important; box-shadow:inset 4px 0 0 var(--nudge-edge), var(--elev-card); padding:12px 14px; }
   #banner-backup .card-head{ margin-bottom:4px; padding-bottom:0; border-bottom:0; }
@@ -1499,8 +1506,32 @@
   :root[data-theme="dark"] input[type="file"]::file-selector-button{ background:var(--rust-deep); border-color:var(--rust-deep); color:#fff; }
   :root[data-theme="dark"] .chip.active, :root[data-theme="dark"] .wg-chip.on, :root[data-theme="dark"] .lf-chip.on{ border-color:var(--rust); }
   :root[data-theme="dark"] .ovo-sec-t, :root[data-theme="dark"] .ovo-sec-c, :root[data-theme="dark"] .od-sec{ color:#7CC4BC; }
-  :root[data-theme="dark"] label .req, :root[data-theme="dark"] .req{ color:#FF8A7A; }
+  :root[data-theme="dark"] label .req, :root[data-theme="dark"] .req{ color:var(--red); }
   :root[data-theme="dark"] .wg-fab{ background:#A9531F; color:#fff; }
+
+  /* ===== v3.19.1 Dark mode readability pass =====
+     Red: vivid coral-red text, deep-red fills with white text, bold on tinted chips.
+     Amber literals (#B7791F, 4.4:1 on the dark card) lift to --amber. Field errors used a literal dark red (2.4:1) - now --danger.
+     Charts: clearer axes/labels, a visible selected-month highlight, "so far" bars no longer faded out, stronger average/trend lines. */
+  :root[data-theme="dark"] :is(.stat .value.adv, .ov-glance .ov-kpi .value.adv, .inline-warn, .rc-info .rc-adv b){ color:var(--amber); }
+  :root[data-theme="dark"] .field-err{ color:var(--danger); }
+  :root[data-theme="dark"] :is(.stat .value.neg, .ov-glance .ov-kpi .value.neg, .ov-trend.down, .wg-mini b.due, .fh .neg, .fh-tile b.neg){ font-weight:800; }
+  :root[data-theme="dark"] button.rowbtn.del{ border:1px solid rgba(255,107,91,.45); font-weight:700; }
+  :root[data-theme="dark"] .wg-tag.due{ background:var(--tonal-del); color:var(--red); font-weight:700; }
+  :root[data-theme="dark"] .rate-warn{ background:var(--tonal-del); border-color:var(--red); }
+  :root[data-theme="dark"] #graphs_root, :root[data-theme="dark"] .fh{ --ink-soft:#B9C1C7; }
+  :root[data-theme="dark"] #graphs_root svg line[stroke="var(--line)"]{ stroke:#4B565D; }
+  :root[data-theme="dark"] #graphs_root .gx-bar.gx-live{ opacity:.9; stroke:var(--ink); stroke-width:1.3; }
+  :root[data-theme="dark"] #graphs_root .gx-dot.gx-live{ opacity:.95; }
+  :root[data-theme="dark"] #graphs_root .gx-ghost{ stroke:#CBD2D7; opacity:.95; }
+  :root[data-theme="dark"] #graphs_root .gx-avg{ stroke:#CBD2D7; opacity:.95; stroke-width:1.2; }
+  :root[data-theme="dark"] #graphs_root .gx-avg-t{ fill:#DDE2E6; font-weight:600; }
+  :root[data-theme="dark"] #graphs_root .gx-trend{ stroke:#FFFFFF; opacity:.85; }
+  :root[data-theme="dark"] #graphs_root .gx-area{ opacity:.24; }
+  :root[data-theme="dark"] #graphs_root .gx-selbg{ fill:#FFFFFF; }
+  :root[data-theme="dark"] #graphs_root .gx-grp.sel .gx-selbg{ opacity:.14; }
+  :root[data-theme="dark"] #graphs_root .gx-tip.on{ background:#2A3A3C; color:var(--ink); }
+
 .hint{font-size:11px;line-height:1.3;opacity:.7;margin-top:4px;font-weight:400}
 </style>
 <script>window.addEventListener("load",function(){setTimeout(function(){var s=document.createElement("script");s.src="./jspdf.umd.min.js";document.head.appendChild(s);},1500);});</script>
@@ -1532,7 +1563,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.0</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.1</span></span>
     </div>
   </header>
 
