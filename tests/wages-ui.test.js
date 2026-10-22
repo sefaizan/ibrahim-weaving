@@ -247,3 +247,28 @@ test('wages Summary: one Employees list for production and salaried staff; no se
   assert.ok(w.includes('isSalariedEmp(d.name) ? wagesSalCardHtml(d, from, to, asOf) : wagesEmpCardHtml(d, qualities, from, to, asOf)'));
   assert.ok(!w.includes('<h2>Salaried staff</h2>') && !w.includes('This period by quality') && w.includes('Full table (meters & wages)'));
 });
+
+describe('credit from rounded-up payments is taken off the next payment (v3.18.118)', () => {
+  const mk = (pays) => load({
+    qualities: [{ name: 'A' }], employees: [emp('Ali')], wageRateHistory: { A: [{ date: '2026-01-01', rate: 10 }] },
+    production: [prod({ date: '2026-10-01', quality: 'A', qty: 700, e1: 'Ali', e1m: 700 }), prod({ date: '2026-10-08', quality: 'A', qty: 800, e1: 'Ali', e1m: 800 })],
+    wagePayments: pays,
+  }, '2026-10-11');
+  test('week 1 earned 7000 and paid 7006: week 2 (8000) is due as 7994, with the credit explained', () => {
+    const t = mk([{ id: 'p1', date: '2026-10-02', employee: 'Ali', amount: 7006, remarks: '' }]);
+    const d = JSON.parse(t.run("JSON.stringify(wagesPayDue('Ali', '2026-10-05', '2026-10-11'))"));
+    closeTo(d.due, 8000, 'period wages'); closeTo(d.eff, 7994, 'to pay'); closeTo(d.carry, 6, 'credit used');
+    t.vals.wq_emp = 'Ali'; t.vals.wg_from = '2026-10-05'; t.vals.wg_to = '2026-10-11';
+    t.run("WAGES_UI.sheet = {kind:'pay', emp:'Ali', date:'2026-10-11'}; wagesSheetFill(true)");
+    assert.equal(t.el('wq_amt').value, '7994');
+    assert.match(t.el('wq_helper').textContent, /Rs 6\.00 paid ahead in earlier weeks/);
+  });
+  test('arrears from earlier weeks are not hidden: the default stays the period wages', () => {
+    const t = mk([]);   // week 1 (7000) never paid: balance 15000 is higher than week 2's 8000
+    closeTo(JSON.parse(t.run("JSON.stringify(wagesPayDue('Ali', '2026-10-05', '2026-10-11'))")).eff, 8000, 'to pay');
+  });
+  test('a credit bigger than the period wages leaves nothing to pay this time', () => {
+    const t = mk([{ id: 'p1', date: '2026-10-02', employee: 'Ali', amount: 16000, remarks: '' }]);
+    closeTo(JSON.parse(t.run("JSON.stringify(wagesPayDue('Ali', '2026-10-05', '2026-10-11'))")).eff, 0, 'to pay');
+  });
+});

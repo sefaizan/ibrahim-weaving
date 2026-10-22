@@ -143,3 +143,50 @@ test('both production forms wire the beam choice and the finish tickbox before s
   assert.ok(w.includes("beam:c.dataset.beam || ''") && w.includes('finishQ.forEach(f=>finishBeamAt('));   // Multiple Entries
   assert.ok(w.includes('mb_bch') && w.includes('mb_fin'));
 });
+
+describe('smart estimates between entries (v3.18.117)', () => {
+  const q = { name: 'Q', picks: 46, kangi: 72, warpType: 'Micro' };
+  const log = [['2026-09-10', 100], ['2026-09-12', 60], ['2026-09-14', 60]].map(([date, qty], i) => prod({ id: 'p' + i, loom: '1', date, qty, quality: 'Q' }));
+  test('loom pace comes from the days the entries cover; estimate is capped at 3 days', () => {
+    const app = loadApp(); app.setData({ qualities: [q], production: log, warpBeams: [beam()] });
+    app.setToday('2026-09-16');
+    const i = app.loomPaceInfo()['1'];
+    assert.equal(Math.round(i.pace), 30);                        // (60 + 60) m over the 4 days from the first entry
+    assert.equal(app.loomEstimatedMeters(i).days, 2);
+    app.setToday('2026-09-25');
+    assert.equal(app.loomEstimatedMeters(app.loomPaceInfo()['1']).days, 3);   // capped
+  });
+  test('a loom not logged for over 3 days is flagged; a recent one is not', () => {
+    const app = loadApp(); app.setData({ qualities: [q], production: log });
+    app.setToday('2026-09-16'); assert.equal(app.loomWatchItems().length, 0);
+    app.setToday('2026-09-20'); const w = app.loomWatchItems(); assert.equal(w[0].kind, 'nolog'); assert.equal(w[0].gap, 6);
+  });
+  test('a loom whose pace fell well below its usual is flagged', () => {
+    const rows = [['2026-09-10', 50], ['2026-09-13', 300], ['2026-09-16', 300], ['2026-09-19', 300], ['2026-09-22', 150], ['2026-09-25', 100], ['2026-09-28', 100]]
+      .map(([date, qty], i) => prod({ id: 'd' + i, loom: '1', date, qty, quality: 'Q' }));
+    const app = loadApp(); app.setData({ qualities: [q], production: rows }); app.setToday('2026-09-30');
+    const w = app.loomWatchItems(); assert.equal(w[0].kind, 'drop'); assert.ok(w[0].pct >= 55 && w[0].pct <= 65);
+  });
+  test('weft stock drops by the assumed use since the last entry, and not before a stock count', () => {
+    const app = loadApp(); app.setData({ qualities: [q], production: log, weft: [{ id: 'w1', date: '2026-09-01', lbs: 1000 }] });
+    app.setToday('2026-09-14'); const a = app.weftStockEstimate();
+    app.setToday('2026-09-16'); const b = app.weftStockEstimate();
+    assert.equal(a.estLbs, 0); assert.ok(b.estLbs > 0); assert.ok(Math.abs((a.lbs - b.lbs) - b.estLbs) < 1e-6);
+    app.setData({ qualities: [q], production: log, weft: [{ id: 'w1', date: '2026-09-01', lbs: 1000 }], costSettings: { weftStockCount: { at: '2026-09-16 08:00', lbs: 500 } } });
+    assert.equal(app.weftStockEstimate().estLbs, 0);             // the count already includes that use
+  });
+  test('beam forecast counts the assumed meters since its last entry', () => {
+    const app = loadApp(); app.setData({ qualities: [q], production: log, warpBeams: [beam()] });
+    app.setToday('2026-09-14'); const f14 = app.computeBeamForecasts(3)[0];
+    app.setToday('2026-09-16'); const f16 = app.computeBeamForecasts(3)[0];
+    assert.equal(f14.estMeters, 0); assert.ok(f16.estMeters > 50);
+    assert.ok(f16.daysLeft < f14.daysLeft - 1.5);
+  });
+  test('sale profit estimate: margin per meter and total from the quality cost per meter', () => {
+    const app = loadApp(); app.setData({ qualities: [q], production: [prod({ id: 'x', loom: '1', date: '2026-09-10', qty: 1000, quality: 'Q' })] });
+    app.setToday('2026-09-20');
+    assert.equal(app.saleProfitEstimate('Nope', 100, 50), null);
+    const e = app.saleProfitEstimate('Q', 100, 500);
+    assert.ok(e.cost >= 4.3 && Math.abs(e.profit - (500 - e.cost) * 100) < 1e-6 && e.month === '2026-09');
+  });
+});

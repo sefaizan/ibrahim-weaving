@@ -60,7 +60,8 @@ describe('forecast for a running beam', () => {
     const f = only(app.computeBeamForecasts(3));
     assert.equal(f.basisDays, 7);
     closeTo(f.rate, 500 / 7, 'rate');
-    closeTo(f.daysLeft, 1500 / (500 / 7), 'days left');   // 21 days
+    closeTo(f.estMeters, 2 * 500 / 7, 'assumed meters since the last entry (2 days)');
+    closeTo(f.daysLeft, (1500 - 2 * 500 / 7) / (500 / 7), 'days left');   // 19 days: the 2 unlogged days are assumed woven
     assert.equal(f.state, 'ok');
   });
 
