@@ -192,3 +192,51 @@ describe('wage slip for a payment with no saved period (v3.18.34)', () => {
     assert.equal(g.periodFrom, '2026-09-25'); assert.equal(g.earned, 5000); assert.equal(g.balance, 0);   // the week before still shows its own wages
   });
 });
+
+describe('wage slip: extra paid in an earlier week is deducted (v3.19.3)', () => {
+  // Last week (Fri 25 Sep - Thu 1 Oct): earned 1000, paid 1100 (100 extra). This week (Fri 2 Oct - Thu 8 Oct): earned 1000.
+  const last = { id: 'p0', date: '2026-10-01', employee: 'Ali', amount: 1100, remarks: '', periodFrom: '2026-09-25', periodTo: '2026-10-01' };
+  const week = (amount) => load({
+    production: [prod({ date: '2026-09-28', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }), prod({ date: '2026-10-03', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 })],
+    wageBonuses: [],
+    wagePayments: [last, { id: 'p1', date: '2026-10-08', employee: 'Ali', amount, remarks: '', periodFrom: '2026-10-02', periodTo: '2026-10-08' }],
+  });
+  test('the deduction is shown and total due is this week minus the earlier extra', () => {
+    const { facts, html } = week(900);
+    const f = facts('p1');
+    assert.equal(f.earlierExtra, -100); assert.equal(f.earned, 1000);
+    const h = html('p1');
+    assert.match(h, /Extra paid in earlier weeks \(deducted\)/); assert.match(h, /\u2212 Rs 100\.00/);
+    assert.match(h, /Total due<\/span><span>Rs 900\.00/);
+  });
+  test('paying exactly what is left settles it - no "still payable"', () => {
+    const { facts, html } = week(900);
+    assert.equal(facts('p1').balance, 0);
+    assert.match(html('p1'), /Settled/); assert.doesNotMatch(html('p1'), /Still payable/);
+  });
+  test('your case: paid a little extra again this week -> no amount is still payable, the new extra is shown', () => {
+    const { facts, html } = week(950);
+    assert.equal(facts('p1').balance, -50);
+    assert.doesNotMatch(html('p1'), /Still payable/); assert.match(html('p1'), /Receivable from employee/); assert.match(html('p1'), /Rs 50\.00/);
+  });
+  test('paid less than what is left: only the real shortfall is still payable', () => {
+    const { facts, html } = week(500);
+    assert.equal(facts('p1').balance, 400);
+    assert.match(html('p1'), /Still payable to employee<\/span><span>Rs 400\.00/);
+  });
+  test('no earlier extra (last week paid exactly) -> no deduction line at all', () => {
+    const { facts, html } = load({
+      production: [prod({ date: '2026-09-28', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }), prod({ date: '2026-10-03', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 })],
+      wageBonuses: [],
+      wagePayments: [{ ...last, amount: 1000 }, { id: 'p1', date: '2026-10-08', employee: 'Ali', amount: 1000, remarks: '', periodFrom: '2026-10-02', periodTo: '2026-10-08' }],
+    });
+    assert.equal(facts('p1').earlierExtra, 0); assert.doesNotMatch(html('p1'), /Extra paid in earlier weeks/);
+  });
+  test('Urdu slip translates the new line', () => {
+    const { html } = load({
+      production: [prod({ date: '2026-09-28', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 }), prod({ date: '2026-10-03', quality: 'A', qty: 100, e1: 'Ali', e1m: 100 })],
+      wageBonuses: [], wagePayments: [last, { id: 'p1', date: '2026-10-08', employee: 'Ali', amount: 900, remarks: '', periodFrom: '2026-10-02', periodTo: '2026-10-08' }],
+    }, 'ur');
+    assert.doesNotMatch(html('p1').slice(html('p1').indexOf('dir="rtl"')), /Extra paid in earlier weeks/);
+  });
+});

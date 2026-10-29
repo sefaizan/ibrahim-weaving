@@ -90,7 +90,7 @@ describe('wage slip for salaried staff', () => {
   test('slip facts include salary, so the balance matches the Wages page', () => {
     const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'panels-wages-receipts.js'), 'utf8');
     assert.match(src, /salaryAccrued\(emp, from, toD\)/);
-    assert.match(src, /carry \+ earned \+ salary \+ bonus/);
+    assert.match(src, /carry \+ earlierExtra \+ earned \+ salary \+ bonus/);
   });
   test('helpers: salaried flag, weekly rate on a date, first date', () => {
     app.setData({ employees: [emp('M'), { id: 'x', name: 'W' }], staffSalary: { M: { rates: [{ date: '2026-09-01', weekly: 7000 }, { date: '2026-09-08', weekly: 9000 }], to: '2026-09-30' } } });
