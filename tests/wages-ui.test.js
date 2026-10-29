@@ -167,6 +167,19 @@ describe('quick-entry sheet', () => {
     const p = JSON.parse(t.run('JSON.stringify(DATA.wagePayments)'))[1];
     assert.equal(p.periodFrom, '2026-09-25'); assert.equal(p.periodTo, '2026-10-01');
   });
+  test('badge and Pay follow what is really left (extra paid earlier is taken off first)', () => {
+    const t = setup('pay');
+    // this week alone looks short by 50 (net 50), but earlier extra covers it: left 0 -> Paid, Pay off
+    assert.match(t.run("wagesStatusTag({earned: 1000, paid: 950, net: 50, left: 0})"), />Paid</);
+    assert.match(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 950, net: 50, left: 0})"), /disabled[^>]*>Paid</);
+    // really short by 400: Part, Pay on
+    assert.match(t.run("wagesStatusTag({earned: 1000, paid: 500, net: 500, left: 400})"), />Part</);
+    assert.doesNotMatch(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 500, net: 500, left: 400})"), /disabled/);
+    // nothing paid this week and nothing covered: Due
+    assert.match(t.run("wagesStatusTag({earned: 1000, paid: 0, net: 1000, left: 1000})"), />Due</);
+    // covered purely by earlier extra, nothing paid this week: Paid, with its own reason
+    assert.match(t.run("wagesStatusTag({earned: 1000, paid: 0, net: 1000, left: 0})"), />Paid</);
+  });
   test('Pay is off for a period that is already paid in full, and on while anything is still due', () => {
     const t = setup('pay');
     assert.match(t.run("wagesPayBtn('Ali', {earned: 1000, paid: 1000, net: 0})"), /disabled[^>]*>Paid</);
