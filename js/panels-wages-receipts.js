@@ -1719,6 +1719,11 @@ function wageReceiptFacts(payId){
   const per = p.periodFrom && p.periodTo ? {from: p.periodFrom, to: p.periodTo} : {from: wkFrom, to: p.date};
   const toD = per.to, from = per.from, inScope = d => d >= per.from && d <= per.to;
   const carry = sett && (new Date(per.from + 'T00:00:00Z') - new Date(sett.date + 'T00:00:00Z')) / 86400000 <= 7 ? Number(sett.carryForward||0) : 0;   // a settlement in the week before the period hands its balance to it
+  // Extra paid in EARLIER weeks (and not yet settled) is taken off this week's total, the same way the Pay button and the
+  // Paid/Part badge do it. enteringBal = the running balance the evening before the period starts; only a CREDIT (paid ahead)
+  // is brought in, and only the part the settlement carry above has not already covered.
+  const enteringBal = computeEmployeeWageBalance(emp, prevDayStr(per.from)).balance;
+  const earlierExtra = enteringBal < -0.004 ? Math.min(0, paisaDiff(enteringBal, carry)) : 0;
   let earned = 0;
   DATA.qualities.forEach(q=>{ earned += computeWageMeters(emp, q.name, from, toD).wages; });
   const bonus = DATA.wageBonuses.filter(b=>b.employee===emp && inScope(b.date)).reduce((s,b)=>s+(Number(b.amount)||0),0);
@@ -1729,7 +1734,7 @@ function wageReceiptFacts(payId){
   const salary = salaryAccrued(emp, from, toD);
   const salaried = isSalariedEmp(emp) || salary > 0;
   const bonusRows = DATA.wageBonuses.filter(b=>b.employee===emp && inScope(b.date)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-  const balance = paisaDiff(carry + earned + salary + bonus, paidTotal);
+  const balance = paisaDiff(carry + earlierExtra + earned + salary + bonus, paidTotal);
   const loans = DATA.loanPayments.filter(l=>l.employee===emp && l.date<=p.date);
   const given = loans.filter(l=>l.type!=='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
   const repaid = loans.filter(l=>l.type==='Loan Repaid').reduce((s,l)=>s+(Number(l.amount)||0),0);
@@ -1745,7 +1750,7 @@ function wageReceiptFacts(payId){
     return {date:l.date, type: rep ? 'Repaid' : 'Given', amount:amt, balance:run};
   });
   const empRec = DATA.employees.find(e=>e.name===emp) || {};
-  return {periodTo: toD, p, emp, carry, earned, bonus, salary, salaried, weekly: salaryWeeklyOn(emp, p.date), bonusRows, title: empRec.title || '', paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows, qualityRows, diffWages, periodFrom};
+  return {periodTo: toD, p, emp, carry, earlierExtra, earned, bonus, salary, salaried, weekly: salaryWeeklyOn(emp, p.date), bonusRows, title: empRec.title || '', paidEarlier, paidTotal, balance, loan: given-repaid, loanGiven: given, loanRepaid: repaid, loanRows, qualityRows, diffWages, periodFrom};
 }
 function buildWageReceiptFields(payId){
   const facts = wageReceiptFacts(payId);
@@ -1763,7 +1768,7 @@ const WAGE_SLIP_UR = {
   'Wages Rs':'اجرت (روپے)', 'Total':'کل', 'No production in this period':'اس مدت میں کوئی پیداوار نہیں',
   'Wages from own meters':'اپنے میٹر کی اجرت', 'Wages from diff share':'فرق کے حصے کی اجرت', 'Bonus':'بونس',
   'Brought forward (owed to employee)':'پچھلا بقایا (ملازم کا حق)', 'Brought forward (employee owes)':'پچھلا بقایا (ملازم کے ذمے)',
-  'Total due':'کل واجب الادا', 'Payment':'ادائیگی', 'Paid earlier':'پہلے ادا کیے', 'Paid now':'اب ادا کیے',
+  'Total due':'کل واجب الادا', 'Extra paid in earlier weeks (deducted)':'پچھلے ہفتوں میں زیادہ ادا کیے (منہا)', 'Payment':'ادائیگی', 'Paid earlier':'پہلے ادا کیے', 'Paid now':'اب ادا کیے',
   'Receivable from employee (deduct from next wages)':'ملازم سے وصولی (اگلی اجرت سے کاٹیں)',
   'Still payable to employee':'ملازم کو ابھی دینے ہیں', 'Balance':'بقایا', 'Settled':'حساب برابر',
   'How salary was built':'ہفتہ وار تنخواہ کا حساب', 'Weekly salary':'ہفتہ وار تنخواہ', 'Salary for this period':'اس مدت کی تنخواہ', 'Position':'عہدہ', 'Loan outstanding':'باقی قرض', 'Remarks':'ریمارکس', 'to':'سے'
@@ -1772,7 +1777,7 @@ function wageSlipIsUrdu(){ try{ return typeof I18N_LANG !== 'undefined' && I18N_
 function printWageReceipt(payId, opts){
   const f = buildWageReceiptFields(payId);
   if(!f){ if(!(opts && opts.htmlOnly)) showToast('That wage payment could not be found — try refreshing the page.', 5000); return; }
-  const {p, emp, biz, bizName, carry, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, periodTo, fileBase, salary, salaried, weekly, bonusRows, title} = f;
+  const {p, emp, biz, bizName, carry, earlierExtra, earned, bonus, paidEarlier, balance, loan, qualityRows, diffWages, periodFrom, periodTo, fileBase, salary, salaried, weekly, bonusRows, title} = f;
   const ur = wageSlipIsUrdu();
   const T = s => (ur && WAGE_SLIP_UR[s]) || s;
   const V = s => ur ? `<bdi dir="ltr">${s}</bdi>` : s; // numbers and dates keep their left-to-right order inside Urdu text
@@ -1799,7 +1804,8 @@ function printWageReceipt(payId, opts){
     salaried ? row('Salary for this period', fmtRs2(salary)) : '',
     (salaried && bonusRows.length) ? bonusRows.map(b=>`<div class="row"><span>${T('Bonus')} ${V(fmtDate(b.date))}${b.remarks ? ' \u2014 ' + escHtml(b.remarks) : ''}</span><span>${V(fmtRs2(b.amount))}</span></div>`).join('') : (bonus ? row('Bonus', fmtRs2(bonus)) : ''),
     carry ? row(carry>0 ? 'Brought forward (owed to employee)' : 'Brought forward (employee owes)', (carry<0 ? '\u2212 ' : '') + fmtRs2(Math.abs(carry))) : '',
-    row('Total due', fmtRs2(carry + earned + salary + bonus), 'total')
+    earlierExtra ? row('Extra paid in earlier weeks (deducted)', '\u2212 ' + fmtRs2(Math.abs(earlierExtra))) : '',
+    row('Total due', fmtRs2(carry + earlierExtra + earned + salary + bonus), 'total')
   ].join('');
   let balLine;
   if(balance < -0.004) balLine = row('Receivable from employee (deduct from next wages)', fmtRs2(Math.abs(balance)), 'total');

@@ -250,6 +250,13 @@ function nextDayStr(dateStr){
   return d.toISOString().slice(0,10);
 }
 
+// Returns the date string one day before the given YYYY-MM-DD date.
+function prevDayStr(dateStr){
+  const d = new Date(dateStr+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()-1);
+  return d.toISOString().slice(0,10);
+}
+
 // Wage amounts are shown to 2 decimals, so differences are taken on whole paisa. Otherwise a hidden
 // fraction (e.g. earned 9533.3249 vs paid 9533.32) leaves "Rs 0.00" flagged as owed/credit, or "-0.00".
 function paisaDiff(a, b){ return (Math.round(a * 100) - Math.round(b * 100)) / 100 || 0; }
