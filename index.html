@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.19.3-wage-slip-earlier-extra">
+<meta name="app-build" content="v3.19.4-multi-entry-employee-totals">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -1165,6 +1165,13 @@
   /* v3.17.60 — Multiple Entries (looms sheet) */
     .mb-quick{margin-bottom:12px}
   .mb-card{border:1px solid var(--line,rgba(128,128,128,.3));border-radius:12px;padding:10px;margin-bottom:8px}
+  .mb-emp{border:1px solid var(--line,rgba(128,128,128,.3));border-radius:12px;padding:8px 12px;margin:8px 0}
+  .mb-emp[hidden]{display:none}
+  .mb-emp-h{font-weight:700;font-size:13px;margin-bottom:4px}
+  .mb-emp-h span{font-weight:500;color:var(--ink-soft);font-size:12px}
+  .mb-emp-r{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid var(--line,rgba(128,128,128,.25))}
+  .mb-emp-h + .mb-emp-r{border-top:0}
+  .mb-emp-r .n{overflow-wrap:anywhere}
   .mb-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
   .mb-df{font-size:13px;font-weight:600}
   .mb-rw{display:flex;gap:6px;align-items:center}
@@ -1563,7 +1570,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.3</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.4</span></span>
     </div>
   </header>
 
