@@ -259,22 +259,25 @@ function paisaDiff(a, b){ return (Math.round(a * 100) - Math.round(b * 100)) / 1
 // forward whatever balance was agreed at the time (0 for a full settlement, or a partial
 // amount if some of it was deliberately left outstanding). Employee loans (money advanced
 // to them separate from wages) live in their own ledger — see computeEmployeeLoanBalance.
-function computeEmployeeWageBalance(empName){
-  const settlements = DATA.wageSettlements.filter(s=>s.employee===empName).slice().sort((a,b)=> dtOf(b)-dtOf(a));
+// asOf (optional, YYYY-MM-DD): the same balance counted only up to the END of that day, so a past week can be judged by what was
+// really left when it closed. Omitted = the balance today, exactly as before.
+function computeEmployeeWageBalance(empName, asOf){
+  const upTo = asOf || null;
+  const settlements = DATA.wageSettlements.filter(s=>s.employee===empName && (!upTo || s.date<=upTo)).slice().sort((a,b)=> dtOf(b)-dtOf(a));
   const lastSettlement = settlements[0] || null;
   const sinceDate = lastSettlement ? lastSettlement.date : null;
   const carryForward = lastSettlement ? Number(lastSettlement.carryForward||0) : 0;
   const wageFromDate = sinceDate ? nextDayStr(sinceDate) : null;
   let earned = 0;
   DATA.qualities.forEach(q=>{
-    earned += computeWageMeters(empName, q.name, wageFromDate, null).wages;
+    earned += computeWageMeters(empName, q.name, wageFromDate, upTo).wages;
   });
   const bonus = DATA.wageBonuses
-    .filter(b=>b.employee===empName && (!sinceDate || b.date > sinceDate))
+    .filter(b=>b.employee===empName && (!sinceDate || b.date > sinceDate) && (!upTo || b.date <= upTo))
     .reduce((s,b)=>s+(Number(b.amount)||0),0);
-  const paymentsSince = DATA.wagePayments.filter(p=>p.employee===empName && (!sinceDate || p.date > sinceDate));
+  const paymentsSince = DATA.wagePayments.filter(p=>p.employee===empName && (!sinceDate || p.date > sinceDate) && (!upTo || p.date <= upTo));
   const paid = paymentsSince.reduce((s,p)=>s+(Number(p.amount)||0),0);
-  const salary = salaryAccrued(empName, wageFromDate, null);
+  const salary = salaryAccrued(empName, wageFromDate, upTo);
   const owed = earned + bonus + salary;
   return {owed, paid, salary, carryForward, balance: paisaDiff(carryForward + owed, paid), lastSettled: lastSettlement ? lastSettlement.date : null};
 }
@@ -1407,6 +1410,18 @@ function computeEmployeeWageNetForPeriod(empName, fromDate, toDate){
   const earned = computeEmployeeWagesForPeriod(empName, fromDate, toDate);
   const paid = sumWagePaymentsInRange(empName, fromDate, toDate);
   return {earned, paid, net: paisaDiff(earned, paid)};
+}
+
+// What is REALLY left to pay for a Wage Period: this period's net (earned - paid inside it), capped by the running balance
+// at the period's end. Extra paid in earlier weeks sits in that balance, so it is taken off first. Without this a week
+// could read "Part" (this week's payment < this week's wages) when the person was already paid ahead and owed nothing.
+// left = 0 means nothing to pay; credit = what they are still ahead by after this period.
+function computeWageLeftForPeriod(empName, fromDate, toDate){
+  const n = computeEmployeeWageNetForPeriod(empName, fromDate, toDate);
+  const bal = computeEmployeeWageBalance(empName, toDate || null).balance;
+  const due = n.net > 0.004 ? n.net : 0;
+  const left = due > 0 ? paisaDiff(Math.min(due, Math.max(bal, 0)), 0) : 0;
+  return {earned: n.earned, paid: n.paid, net: n.net, balance: bal, left, credit: bal < -0.004 ? paisaDiff(0, bal) : 0};
 }
 
 // Production entry forms: Employee 2's automatic meters. Whole meters only — whatever is left after

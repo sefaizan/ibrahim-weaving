@@ -52,8 +52,14 @@ function wagesLogSwitchHtml(){
 // What to pay for the selected period. The period's wages (`due`) are reduced by any credit carried from earlier weeks being paid
 // ahead (rounded-up payments, advances): when the employee's running balance is lower than the period's wages, the balance is
 // what is actually owed, so that is the default amount and the credit is used up instead of piling up week after week.
+// The period's net with `left` added: what is really still to pay once extra paid in earlier weeks is taken off (see computeWageLeftForPeriod).
+function wagesNetFor(emp, from, to){
+  const n = computeEmployeeWageNetForPeriod(emp, from || null, to || null);
+  n.left = computeWageLeftForPeriod(emp, from || null, to || null).left;
+  return n;
+}
 function wagesPayDue(emp, from, to){
-  const n = computeEmployeeWageNetForPeriod(emp, from || null, to || null), b = computeEmployeeWageBalance(emp);
+  const n = computeEmployeeWageNetForPeriod(emp, from || null, to || null), b = computeEmployeeWageBalance(emp, to || null);
   const due = n.net > 0.004 ? n.net : 0, bal = b.balance;
   const eff = due > 0 && bal < due - 0.004 ? Math.max(bal, 0) : due;
   return {n, due, bal, eff, carry: due - eff};
@@ -121,7 +127,7 @@ function wagesSheetFill(setAmount){
   const k = s.kind, emp = v('wq_emp'), from = v('wg_from') || null, to = v('wg_to') || null;
   document.querySelectorAll('[data-wq-kind]').forEach(b => b.classList.toggle('on', b.dataset.wqKind === k));
   const save = document.getElementById('wq_save'); if(save) save.textContent = { pay: 'Add Payment', bonus: 'Add Bonus', settle: 'Mark Settled' }[k];
-  const paidUp = k === 'pay' && emp && wagesPeriodPaid(computeEmployeeWageNetForPeriod(emp, from, to));
+  const paidUp = k === 'pay' && emp && wagesPeriodPaid(wagesNetFor(emp, from, to));
   if(save){ save.disabled = !!paidUp; save.title = paidUp ? 'Already paid for this period' : ''; }
   const amt = document.getElementById('wq_amt');
   const lbl = document.getElementById('wq_amtL'); if(lbl) lbl.textContent = k === 'settle' ? 'Carry Forward (Rs)' : k === 'bonus' ? 'Bonus Amount (Rs)' : 'Amount Paid (Rs)';
@@ -187,7 +193,7 @@ async function wagesSheetSave(){
     [emp, 'Pick an employee first.', 'wq_emp'],
     [k === 'settle' ? raw !== '' : amt > 0, k === 'settle' ? 'Enter the carry forward first (0 if fully settled).' : 'Enter the amount first.', 'wq_amt'],
   ])) return;
-  if(k === 'pay' && wagesPeriodPaid(computeEmployeeWageNetForPeriod(emp, v('wg_from') || null, v('wg_to') || null))){ showToast('Already paid in full for this period.'); return; }
+  if(k === 'pay' && wagesPeriodPaid(wagesNetFor(emp, v('wg_from') || null, v('wg_to') || null))){ showToast('Already paid in full for this period.'); return; }
   EDITING = null; // a half-finished Edit on the page's own form must not turn this into an overwrite
   const id = uid(), list = k === 'settle' ? 'wageSettlements' : k === 'bonus' ? 'wageBonuses' : 'wagePayments';
   DATA[list].push(k === 'settle' ? { id, date, employee: emp, carryForward: amt, remarks: rem } : Object.assign({ id, date, employee: emp, amount: amt, remarks: rem }, v('wg_from') && v('wg_to') ? { periodFrom: v('wg_from'), periodTo: v('wg_to') } : {}));
@@ -209,7 +215,9 @@ async function wagesSheetSave(){
 }
 
 // Pay is off for a period that is already paid in full (something was earned and nothing is left due).
-function wagesPeriodPaid(n){ return n.earned > 0.004 && n.net <= 0.004; }
+// n.left (from wagesNetFor) already takes earlier extra payments off; plain {earned, paid, net} objects fall back to net.
+function wagesOwedOf(n){ return typeof n.left === 'number' ? n.left : n.net; }
+function wagesPeriodPaid(n){ return n.earned > 0.004 && wagesOwedOf(n) <= 0.004; }
 // The newest payment of the period (same date rule as the Paid figure), so a paid card can share its receipt from here.
 function wagesPeriodPayment(name, from, to){
   return (DATA.wagePayments || []).filter(p => p.employee === name && (!from || p.date >= from) && (!to || p.date <= to)).reduce((a, p) => !a || p.date >= a.date ? p : a, null);
@@ -217,7 +225,7 @@ function wagesPeriodPayment(name, from, to){
 // Period status for a card: Paid (nothing left), Part (something paid, something left), Due (nothing paid yet); nothing when nothing was earned.
 function wagesStatusTag(net){
   if(net.earned <= 0.004 && Math.abs(net.net) <= 0.004) return '';
-  if(net.net <= 0.004) return '<span class="wg-tag zero">Paid</span>';
+  if(wagesOwedOf(net) <= 0.004) return '<span class="wg-tag zero">Paid</span>';
   return net.paid > 0.004 ? '<span class="wg-tag due">Part</span>' : '<span class="wg-tag due">Due</span>';
 }
 // People still owed first (biggest amount first), then everyone else.
@@ -225,7 +233,7 @@ function wagesDueFirst(a, b){ return ((b.net.net > 0.004) - (a.net.net > 0.004))
 function wagesPayBtn(name, net, from, to){
   const done = wagesPeriodPaid(net), last = done ? wagesPeriodPayment(name, from, to) : null;
   const share = last ? `<button type="button" class="ghost wg-pay" data-wage-share="${escHtml(last.id)}" aria-label="Share receipt" title="Share the wage receipt" style="padding-inline:12px;min-width:0">${typeof ICON_SHARE !== 'undefined' ? ICON_SHARE : 'Share'}</button>` : '';
-  return share + `<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}"${done ? ' disabled aria-disabled="true" title="Already paid for this period" style="opacity:.55"' : ''}>${done ? 'Paid' : 'Pay'}</button>`;
+  return share + `<button type="button" class="ghost wg-pay" data-wage-add="pay" data-wage-emp="${escHtml(name)}"${done ? ' disabled aria-disabled="true" title="' + (net.paid > 0.004 ? 'Already paid for this period' : 'Covered by extra paid in earlier weeks') + '" style="opacity:.55"' : ''}>${done ? 'Paid' : 'Pay'}</button>`;
 }
 
 /* ---------------- Summary tab ---------------- */
@@ -301,7 +309,7 @@ function renderWages(){
   // Everyone relevant for balances, plus anyone with earnings in the period (never hide earned money).
   const names = wageRelevantEmployees().map(e => e.name); rows.forEach(r => { if(!names.includes(r.employee)) names.push(r.employee); });
   const meterRows = rows.filter(r => !isSalariedEmp(r.employee));
-  const data = names.map(name => ({ name, row: rowOf[name], bal: computeEmployeeWageBalance(name), net: computeEmployeeWageNetForPeriod(name, from, to) }));
+  const data = names.map(name => ({ name, row: rowOf[name], bal: computeEmployeeWageBalance(name), net: wagesNetFor(name, from, to) }));
   // Follows the selected period: earned minus paid within it (the running balance is on Settle).
   const owed = data.reduce((s, d) => s + (d.net.net > 0.004 ? d.net.net : 0), 0);
   const credit = data.reduce((s, d) => s + (d.net.net < -0.004 ? -d.net.net : 0), 0);
