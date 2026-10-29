@@ -250,6 +250,20 @@ function nextDayStr(dateStr){
   return d.toISOString().slice(0,10);
 }
 
+// Multiple Entries (production): total meters per employee across the loom cards, WITHOUT any share of the unassigned Diff.
+// slots = [{name, meters}] for every employee slot being used (Employee 1-4 on each loom with a Gzana). The same person on
+// several looms/slots is added together; order = first appearance; blank names and zero meters are ignored.
+function mbEmployeeTotals(slots){
+  const order = [], sums = {};
+  (slots || []).forEach(sl=>{
+    const name = String(sl && sl.name || '').trim(), m = Number(sl && sl.meters) || 0;
+    if(!name || !(m > 0)) return;
+    if(!(name in sums)){ sums[name] = 0; order.push(name); }
+    sums[name] += m;
+  });
+  return order.map(name=>({name, meters: Math.round(sums[name]*10000)/10000}));
+}
+
 // Returns the date string one day before the given YYYY-MM-DD date.
 function prevDayStr(dateStr){
   const d = new Date(dateStr+'T00:00:00Z');

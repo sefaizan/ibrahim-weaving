@@ -508,6 +508,7 @@ function wirePanel(id){
       };
       const calc = ()=>{
         let T=0, A=0, bad=0;
+        const empSlots = [];   // every employee slot in use on a loom with a Gzana, for the per-employee totals below
         const bu = computeBeamForecasts(beamAlertDays() || 3);
         shown().forEach(c=>{
           const t = total(c), a = assigned(c), d = q(c,'.mb-df');
@@ -517,8 +518,16 @@ function wirePanel(id){
           const diff = Math.round((t-a)*16)/16;
           d.textContent = 'Diff: ' + fmtQtyMtr(diff); d.style.color = diff<0 ? 'var(--rust)' : '';
           if(diff<0) bad++; T+=t; A+=a;
+          [1,2,3,4].forEach(n=>{ if((n===3 && !e3On(c)) || (n===4 && !e4On(c))) return; empSlots.push({name: q(c,'.mb_n'+n).value, meters: num(q(c,'.mb_m'+n))}); });
         });
         document.getElementById('mb_totals').textContent = `Total Gzana: ${fmtQtyMtr(T)} · Assigned: ${fmtQtyMtr(A)} · Diff: ${fmtQtyMtr(Math.round((T-A)*16)/16)}`;
+        // Per-employee totals: their own meters only (no share of the Diff), as many employees as are picked (3rd / 4th included).
+        const empBox = document.getElementById('mb_emp'), et = mbEmployeeTotals(empSlots);
+        if(empBox){
+          empBox.hidden = !et.length;
+          empBox.innerHTML = et.length ? '<div class="mb-emp-h">By employee <span>(own meters, without Diff share)</span></div>'
+            + et.map(x=>`<div class="mb-emp-r"><span class="n">${escHtml(x.name)}</span><b>${fmtQtyMtr(x.meters)}</b></div>`).join('') : '';
+        }
         document.getElementById('mb_err').textContent = bad ? `Employees exceed Gzana on ${bad} loom(s). Check the meters.` : '';
       };
       ['mb_date','mb_quality'].forEach(id=>{ const e = document.getElementById(id); if(e){ e.addEventListener('change', calc); e.addEventListener('input', calc); } });

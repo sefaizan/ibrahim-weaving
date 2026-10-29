@@ -181,6 +181,7 @@ function multiEntryCardHtml(){
       <div class="chip-row mb-quick"><button type="button" class="chip" data-mb-all>All</button>${mbGroups().map((g,i)=>`<button type="button" class="chip" data-mb-grp="${i}">${escHtml(g.label)}</button>`).join('')}<button type="button" class="chip" data-mb-none>None</button></div>
       <div id="mb_cards">${looms.map(mbCardHtml).join('')}</div>
       <div class="calc-amount" id="mb_totals">Total Gzana: — · Assigned: — · Diff: —</div>
+      <div class="mb-emp" id="mb_emp" hidden></div>
       <div class="note" id="mb_err" style="color:var(--rust);min-height:18px"></div>
       <div class="form-actions"><button class="primary" id="saveMultiProduction">Save all entries</button></div>
     </div></div>
