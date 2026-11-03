@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.19.4-multi-entry-employee-totals">
+<meta name="app-build" content="v3.19.5-dark-optout-for-apk">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -31,7 +31,13 @@
   // try/catch since localStorage can throw in some embedded/locked-down webviews.
   try{
     var t = localStorage.getItem('khata-theme');
-    if(t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    if(t === 'dark'){
+      document.documentElement.setAttribute('data-theme', 'dark');
+      // Tell the browser / Android WebView up front that this page is already dark, so a phone-level "darken web pages"
+      // feature (Samsung, installed-app wrappers) does not darken it a second time.
+      var cs = document.querySelector('meta[name="color-scheme"]'); if(cs) cs.setAttribute('content', 'dark');
+      var tc = document.querySelector('meta[name="theme-color"]'); if(tc) tc.setAttribute('content', '#15181B');
+    }
     // Device preference: log tables as compact cards on phones (default) or classic tables.
     if(localStorage.getItem('khata-logs') === 'table') document.documentElement.setAttribute('data-logs', 'table');
   }catch(e){}
@@ -50,6 +56,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
 <style>
+  /* v3.19.5 Dark-mode hint for browsers and Android WebViews: some of them darken a page a second time unless it visibly handles
+     prefers-color-scheme. The app has its own dark theme (the Dark Mode switch, via data-theme), so these two empty-looking rules
+     only tell them "this page handles dark mode itself". Nothing else reads this variable. */
+  @media (prefers-color-scheme: dark){ :root{ --scheme-hint:dark; } }
+  @media (prefers-color-scheme: light){ :root{ --scheme-hint:light; } }
   :root{
     color-scheme: only light;
     --paper:#EDEFF1;
@@ -1570,7 +1581,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.4</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.5</span></span>
     </div>
   </header>
 
