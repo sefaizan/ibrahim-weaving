@@ -91,7 +91,7 @@ function viewOnlySaveBlocked(){
 // are deliberately not listed.
 const VIEW_ONLY_WRITE_SELECTOR = [
   '.form-actions',
-  '[data-edit]', '[data-del]', '[data-finish]', '[data-add]', '[data-cancel]:not(#pinShowChange):not(#pinShowDisable)', '[data-toggle-active]',
+  '[data-edit]', '[data-del]', '[data-sale-adjust]', '[data-finish]', '[data-add]', '[data-cancel]:not(#pinShowChange):not(#pinShowDisable)', '[data-toggle-active]',
   '[data-move]', '[data-cheque]', '[data-replace-cheque]', '[data-link-replacement]', '[data-rh-edit]', '[data-rh-del]',
   '[data-l-ok]', '[data-l-toggle]', '[data-l-return]', '[data-l-confirm]', '[data-l-cancel]', '[data-l-box]',
   '[data-toggle-form]', '[data-form-body]', '[data-snap-restore]', '[data-quick-add]', '[data-wage-add]', '[data-undo-id]',
@@ -253,6 +253,7 @@ function permsNeedOf(el){
   const has = n => (el.hasAttribute ? el.hasAttribute(n) : attr(n) !== null && attr(n) !== undefined);
   if(has('data-edit')) return { sec: permsSectionOfKey(String(attr('data-edit')).split(':')[0]), letter: 'e' };
   if(has('data-del')) return { sec: permsSectionOfKey(String(attr('data-del')).split(':')[0]), letter: 'd' };
+  if(has('data-sale-adjust')) return { sec: permsSectionOfKey('sale'), letter: 'e' };
   if(has('data-wage-add')) return { sec: 'wages', letter: 'a' };
   if(has('data-quick-add')){ const sec = PERM_QUICK_ADD[attr('data-quick-add')]; return sec ? { sec, letter: 'a' } : null; }
   if(has('data-undo-id') || has('data-snap-restore')) return { sec: null, letter: null };
@@ -282,7 +283,7 @@ const PERM_HIDE_CLASS = 'perm-hide';
 function permsApply(scope){
   if(!permsLimited() || !scope || !scope.querySelectorAll) return;
   try{
-    scope.querySelectorAll('[data-edit],[data-del],[data-quick-add],[data-wage-add],[data-undo-id],[data-snap-restore],#undoBtn,#restoreJsonBtn,#importProduction,' + Object.keys(PERM_BUTTON_SECTIONS).map(i=> '#' + i).join(',')).forEach(el=>{
+    scope.querySelectorAll('[data-edit],[data-del],[data-sale-adjust],[data-quick-add],[data-wage-add],[data-undo-id],[data-snap-restore],#undoBtn,#restoreJsonBtn,#importProduction,' + Object.keys(PERM_BUTTON_SECTIONS).map(i=> '#' + i).join(',')).forEach(el=>{
       if(!permsNeedMet(permsNeedOf(el))) el.classList.add(PERM_HIDE_CLASS);
     });
     const undo = document.getElementById && document.getElementById('undoBtn');
@@ -317,7 +318,7 @@ function permsGuardClick(e){
   try{
     const t = e.target && e.target.closest ? e.target : null;
     if(!t) return false;
-    const hit = t.closest('[data-edit],[data-del],[data-quick-add],[data-wage-add],[data-undo-id],[data-snap-restore],#undoBtn,#restoreJsonBtn,#importProduction,' + Object.keys(PERM_BUTTON_SECTIONS).map(i=> '#' + i).join(','));
+    const hit = t.closest('[data-edit],[data-del],[data-sale-adjust],[data-quick-add],[data-wage-add],[data-undo-id],[data-snap-restore],#undoBtn,#restoreJsonBtn,#importProduction,' + Object.keys(PERM_BUTTON_SECTIONS).map(i=> '#' + i).join(','));
     let need = hit ? permsNeedOf(hit) : null;
     if(!need){
       // Add / Save buttons of a page's form.

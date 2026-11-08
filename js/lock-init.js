@@ -707,6 +707,8 @@ function wireScrollAwareFab(fabBackup){
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest ? e.target.closest('[data-rec-info]') : null;
     if(btn){ recInfoShow(btn.getAttribute('data-rec-info')); return; }
+    const adjBtn = e.target.closest ? e.target.closest('[data-sale-adjust]') : null;
+    if(adjBtn && typeof openSaleAdjustSheet === 'function'){ openSaleAdjustSheet(adjBtn.getAttribute('data-sale-adjust')); return; }
     if(typeof recInfoHide === 'function') recInfoHide();
   });
   // Settings groups: opening one closes the others, and the open one is remembered across re-renders.

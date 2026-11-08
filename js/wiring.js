@@ -648,7 +648,7 @@ function wirePanel(id){
       // cases, qty/rate/amount are kept as they were; only the other fields (date, invoice, client,
       // quality, dyeing, description) are editable. To actually change qty/rate on an L-tracked sale,
       // fix it via Return Lot / a fresh Confirm L, not a plain edit.
-      const isLLocked = !!(existing && (existing.lStatus==='applied' || existing.lStatus==='returned' || existing.lAdjustedFromId));
+      const isLLocked = !!(existing && (existing.lStatus==='applied' || existing.lStatus==='returned' || existing.lAdjustedFromId || existing.rSupersededBy || existing.rAdjustedFromId));
       if(isLLocked){
         rec.qty = Number(existing.qty); rec.rate = Number(existing.rate)||rate; rec.amount = Number(existing.amount);
       }
@@ -665,7 +665,7 @@ function wirePanel(id){
           if(DATA.sale[idx].dyeing && !DATA.sale[idx].lStatus && !DATA.sale[idx].lAdjustedFromId) DATA.sale[idx].lStatus = 'awaiting';
         }
         EDITING = null;
-        if(isLLocked) showToast('Qty/Rate/Amount are locked on this entry (linked to an L (AIL) shortage record) — only the other fields were updated.');
+        if(isLLocked) showToast('Qty/Rate/Amount are locked on this entry (linked to an L (AIL) shortage or an agreed rate adjustment) — only the other fields were updated. To change the rate, use Adjust (or undo the adjustment first).');
       } else {
         // A lot going out to a dyeing unit is the one that comes back with an "L (AIL)"
         // shortage call — see lShortageMeters/lDeductionAmount in calc.js — so a fresh Sale
@@ -2303,8 +2303,14 @@ function wireDelete(key){
       if(key === 'sale'){
         const goneSale = DATA.sale.find(r=>r.id===delId);
         if(goneSale){
-          if(goneSale.lAdjustedFromId) idsToDelete.add(goneSale.lAdjustedFromId);
-          if(goneSale.lSupersededBy) idsToDelete.add(goneSale.lSupersededBy);
+          // The whole chain goes together: L (AIL) pair links AND agreed-rate-adjustment links, in both directions.
+          const queue = [goneSale];
+          while(queue.length){
+            const cur = queue.pop();
+            [cur.lAdjustedFromId, cur.lSupersededBy, cur.rAdjustedFromId, cur.rSupersededBy].forEach(id=>{
+              if(id && !idsToDelete.has(id)){ idsToDelete.add(id); const nx = DATA.sale.find(x=>x.id===id); if(nx) queue.push(nx); }
+            });
+          }
         }
       }
       DATA[key] = DATA[key].filter(r=>!idsToDelete.has(r.id));
@@ -2469,6 +2475,62 @@ function wireLConfirm(){
       await save(); switchTab('overview');
     };
   });
+}
+// ---- Adjust a Sale's rate (an agreed discount) - v3.19.6 -----------------------------------------------------
+// Opened from the "Adjust" button on a Sales Log row (click handled in lock-init.js). Only AGREED discounts are recorded:
+// "Agree & save" creates the linked adjusted entry (applySaleRateAdjustment in calc.js); closing the sheet changes nothing.
+function closeSaleAdjustSheet(){
+  ['sa_bg','sa_sheet'].forEach(id=>{ const el = document.getElementById(id); if(el) el.remove(); });
+}
+function openSaleAdjustSheet(saleId){
+  const rec = DATA.sale.find(r=>r.id===saleId);
+  // An already-adjusted entry can be adjusted again (or have its latest adjustment undone); a superseded one cannot.
+  const problem = saleRateAdjustProblem(rec);
+  if(problem){ showToast(problem, 6000); return; }
+  closeSaleAdjustSheet();
+  const rate = saleRateOf(rec), r4 = n => Math.round(n * 10000) / 10000;
+  const hist = rec.rHistory || [];
+  const bg = document.createElement('div'); bg.className = 'wg-sheetbg on'; bg.id = 'sa_bg';
+  const sh = document.createElement('div'); sh.className = 'wg-sheet on'; sh.id = 'sa_sheet';
+  sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Adjust rate');
+  sh.innerHTML = `<h2 style="margin:0 0 4px">Adjust rate</h2>
+    <p class="note" style="margin:0 0 10px"><b>${escHtml(rec.client)}</b> · ${escHtml(rec.quality||'—')} · ${fmtQtyMtr(rec.qty)} mtr · now ${fmtRs2(rate)} per mtr · ${fmtRs(rec.amount)}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Discount per mtr (Rs)</label><input id="sa_per" type="number" inputmode="decimal" step="0.01" min="0" autofocus></div>
+      <div class="field"><label>or new rate (Rs)</label><input id="sa_new" type="number" inputmode="decimal" step="0.01" min="0"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div class="field"><label>Agreed on</label><input id="sa_date" type="date" value="${todayStr()}"></div>
+      <div class="field"><label>Note (optional)</label><input id="sa_note" type="text" placeholder="e.g. agreed in meeting"></div>
+    </div>
+    <div class="calc-amount" id="sa_preview" style="margin-top:10px">Enter the agreed discount.</div>
+    ${hist.length ? `<div class="note" style="margin-top:8px"><b>Already agreed on this lot</b>${hist.map(h=>`<div>${fmtDate(h.date)} — ${fmtRs2(h.fromRate)} → ${fmtRs2(h.toRate)} (−${fmtRs(h.discount)})${h.note ? ' — ' + escHtml(h.note) : ''}</div>`).join('')}</div>` : ''}
+    <div class="form-actions"><button type="button" class="primary" id="sa_save">Agree &amp; save</button><button type="button" class="ghost" id="sa_close">Close</button>${rec.rAdjustedFromId ? '<button type="button" class="ghost" id="sa_undo">Undo last adjustment</button>' : ''}</div>`;
+  document.body.appendChild(bg); document.body.appendChild(sh);
+  setTimeout(()=>{ const f = document.getElementById('sa_per'); if(f) f.focus(); }, 60);
+  const per = document.getElementById('sa_per'), nw = document.getElementById('sa_new'), pv = document.getElementById('sa_preview');
+  const refresh = ()=>{
+    const p = Number(per.value) || 0;
+    if(!(p > 0)){ pv.textContent = 'Enter the agreed discount.'; return; }
+    const to = r4(rate - p), disc = Math.floor(Number(rec.qty) * p + 1e-6);
+    pv.textContent = to > 0 ? `${fmtRs2(rate)} → ${fmtRs2(to)} · −${fmtRs(disc)} on ${fmtQtyMtr(rec.qty)} mtr · new amount ${fmtRs((Number(rec.amount)||0) - disc)}` : 'The discount must be smaller than the current rate.';
+  };
+  per.addEventListener('input', ()=>{ const p = Number(per.value) || 0; nw.value = p > 0 ? r4(rate - p) : ''; refresh(); });
+  nw.addEventListener('input', ()=>{ const n = Number(nw.value) || 0; per.value = (n > 0 && n < rate) ? r4(rate - n) : ''; refresh(); });
+  bg.onclick = closeSaleAdjustSheet;
+  document.getElementById('sa_close').onclick = closeSaleAdjustSheet;
+  document.getElementById('sa_save').onclick = async ()=>{
+    const res = applySaleRateAdjustment(saleId, per.value, document.getElementById('sa_date').value, document.getElementById('sa_note').value);
+    if(res.error){ showToast(res.error, 6000); return; }
+    await save(); closeSaleAdjustSheet();
+    showToast(`Rate adjusted: ${fmtRs2(res.fromRate)} → ${fmtRs2(res.toRate)} (−${fmtRs(res.discount)})`, 5000);
+    switchTab('sale');
+  };
+  const undo = document.getElementById('sa_undo');
+  if(undo) undo.onclick = async ()=>{
+    if(!undo.dataset.armed){ undo.dataset.armed = '1'; undo.textContent = 'Tap again to undo'; setTimeout(()=>{ if(undo.isConnected){ delete undo.dataset.armed; undo.textContent = 'Undo last adjustment'; } }, 4000); return; }
+    undoSaleRateAdjustment(saleId); await save(); closeSaleAdjustSheet(); showToast('Last rate adjustment undone.', 4000); switchTab('sale');
+  };
 }
 function empBasisToggle(){
   const b = document.getElementById('new_employees_basis'); if(!b) return;

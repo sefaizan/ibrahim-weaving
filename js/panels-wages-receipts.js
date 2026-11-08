@@ -976,6 +976,25 @@ function lNegotiatedNote(rec){
 }
 function saleReceiptRows(r, rate){
   const plainRow = ()=> [{label:r.quality||'—', qty:fmtQtyMtr(r.qty), rate:fmtRs2(rate), amount:fmtRs(r.amount)}];
+  // An agreed rate discount (v3.19.6): the original lot, then one "Less: Rate adjustment" row per agreed discount, so the client
+  // can follow Rs 100 -> Rs 99 in the same table. After an L (AIL) shortage the dispatched / shortage rows come first.
+  if(r.rHistory && r.rHistory.length){
+    const rows = [];
+    const lOrig = r.lAdjustedFromId ? DATA.sale.find(s=>s.id===r.lAdjustedFromId) : null;
+    if(lOrig){
+      rows.push({label:`${lOrig.quality||'—'} — Dispatched`, qty:fmtQtyMtr(lOrig.qty), rate:fmtRs2(lOrig.rate || rate), amount:fmtRs(lOrig.amount)});
+      rows.push({label:`Less: L (AIL) Shortage${lOrig.lCount ? ` (${fmtLCount(lOrig.lCount)} L)` : ''}${lNegotiatedNote(lOrig)}`, qty:`-${fmtQtyMtr(lOrig.lShortageQty)}`, rate:'', amount:`-${fmtRs(lOrig.lDeduction)}`});
+    } else {
+      const b = r.rBase || {qty: r.qty, rate, amount: r.amount};
+      rows.push({label:`${r.quality||'—'} — Original rate`, qty:fmtQtyMtr(b.qty), rate:fmtRs2(b.rate), amount:fmtRs(b.amount)});
+    }
+    r.rHistory.forEach(h=> rows.push({label:`Less: Rate adjustment${h.date ? ` (${fmtDate(h.date)})` : ''}`, qty:fmtQtyMtr(h.qty), rate:`-${fmtRs2(h.perMtr)}`, amount:`-${fmtRs(h.discount)}`}));
+    return {rows, totalLabel:'Net Total (after rate adjustment)', totalAmount: fmtRs(r.amount)};
+  }
+  if(r.rSupersededBy){
+    const fin = saleFinalEntry(r);
+    return {rows: plainRow(), totalLabel:'Net Total (see adjusted invoice)', totalAmount: fmtRs(fin ? fin.amount : r.amount)};
+  }
   if(r.lAdjustedFromId){
     const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
     if(orig) return {
@@ -1022,7 +1041,8 @@ function buildReceiptFields(saleId){
   // Matches saleReceiptRows' Net Total exactly: a superseded original nets out its own
   // deduction, a returned lot counts for nothing, and everything else (including an
   // adjustment entry, whose stored amount is already net) is its stored amount as-is.
-  const currentSale = r.lStatus==='applied' ? (Number(r.amount)||0) - (Number(r.lDeduction)||0)
+  const currentSale = r.rSupersededBy ? (Number((saleFinalEntry(r)||r).amount)||0)
+    : r.lStatus==='applied' ? (Number(r.amount)||0) - (Number(r.lDeduction)||0)
     : r.lStatus==='returned' ? 0
     : Number(r.amount)||0;
   const currentBalance = previousBalance + currentSale;

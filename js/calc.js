@@ -486,11 +486,85 @@ function lDeductionAmount(shortageQty, rate){ return Math.floor((Number(shortage
 // only the adjusted entry (or nothing, if returned) should count anywhere balances, totals,
 // or breakdowns are computed. The original stays in DATA.sale (and the Sales Log) purely as
 // an audit trail — see lSupersededBy / lAdjustedFromId on the records themselves.
-function activeSaleRows(){ return DATA.sale.filter(s=> s.lStatus!=='applied' && s.lStatus!=='returned'); }
+// v3.19.6: a Sale whose RATE was adjusted (an agreed discount) is superseded the same way - the original stays in the log as the
+// record (rSupersededBy -> the entry that replaced it) and only the adjusted entry (rAdjustedFromId, with its rHistory) is counted.
+function isSaleSuperseded(s){ return !!s && (s.lStatus==='applied' || s.lStatus==='returned' || !!s.rSupersededBy); }
+function activeSaleRows(){ return DATA.sale.filter(s=> !isSaleSuperseded(s)); }
+// The rate a Sale was made at: the typed rate, else amount / qty.
+function saleRateOf(r){ return Number(r && r.rate) || ((r && Number(r.qty)) ? (Number(r.amount)||0) / Number(r.qty) : 0); }
+// Why a Sale cannot take a rate adjustment right now ('' = it can).
+function saleRateAdjustProblem(rec){
+  if(!rec) return 'That sale entry could not be found.';
+  if(isSaleSuperseded(rec)) return 'This entry was already replaced - adjust the newer entry instead.';
+  if(rec.lStatus==='awaiting') return 'This lot is still waiting for its L (AIL) check - finish that first, then adjust the rate.';
+  if(!(Number(rec.qty) > 0) || !(saleRateOf(rec) > 0)) return 'This sale has no quantity or rate to adjust.';
+  return '';
+}
+// Applies an AGREED rate discount (perMtr rupees off every meter of the lot) to a Sale: the original is kept as the record and a
+// linked adjusted entry (new rate, reduced amount, rHistory of every agreed adjustment on the lot) replaces it in all totals -
+// the same pair idea as the L (AIL) shortage. Returns {adj, discount, fromRate, toRate} or {error}.
+function applySaleRateAdjustment(saleId, perMtr, date, note){
+  const rec = DATA.sale.find(r=>r.id===saleId);
+  const problem = saleRateAdjustProblem(rec);
+  if(problem) return {error: problem};
+  const per = Math.round((Number(perMtr)||0) * 10000) / 10000;
+  if(!(per > 0)) return {error: 'Enter a discount per meter above zero.'};
+  const fromRate = saleRateOf(rec), toRate = Math.round((fromRate - per) * 10000) / 10000;
+  if(!(toRate > 0)) return {error: 'The discount must be smaller than the current rate (Rs ' + fromRate + ').'};
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))) return {error: 'Pick the date the discount was agreed.'};
+  const qty = Number(rec.qty), discount = Math.floor(qty * per + 1e-6);
+  if(!(discount > 0)) return {error: 'That discount comes to less than Rs 1 on this lot.'};
+  const entry = {date, perMtr: per, fromRate, toRate, qty, discount};
+  if(String(note||'').trim()) entry.note = String(note).trim();
+  const adj = {};
+  Object.keys(rec).forEach(k=>{ if(k[0] !== '_' && k !== 'rSupersededBy') adj[k] = rec[k]; });   // never copy who/when stamps
+  Object.assign(adj, {
+    id: uid(), rate: toRate, amount: (Number(rec.amount)||0) - discount,
+    rAdjustedFromId: rec.id, rBase: rec.rBase || {qty, rate: fromRate, amount: Number(rec.amount)||0},
+    rHistory: (rec.rHistory || []).concat([entry]),
+  });
+  rec.rSupersededBy = adj.id;
+  DATA.sale.push(adj);
+  return {adj, discount, fromRate, toRate};
+}
+// Undo the latest agreed adjustment on an adjusted entry: the entry goes, the one it replaced counts again.
+function undoSaleRateAdjustment(adjId){
+  const adj = DATA.sale.find(r=>r.id===adjId);
+  if(!adj || !adj.rAdjustedFromId) return false;
+  const prev = DATA.sale.find(r=>r.id===adj.rAdjustedFromId);
+  DATA.sale = DATA.sale.filter(r=>r.id!==adjId);
+  if(prev) delete prev.rSupersededBy;
+  return true;
+}
+// The entry that currently stands for a lot (follows rSupersededBy to the end of the chain).
+function saleFinalEntry(r){
+  let cur = r, guard = 0;
+  while(cur && cur.rSupersededBy && guard++ < 50) cur = DATA.sale.find(x=>x.id===cur.rSupersededBy) || cur;
+  return cur;
+}
+// Every agreed rate discount still standing, newest first, with totals - for the "Rate Adjustments" card.
+function computeSaleDiscounts(){
+  const items = [];
+  activeSaleRows().forEach(s=> (s.rHistory || []).forEach(h=> items.push({...h, saleId: s.id, client: s.client, quality: s.quality})));
+  items.sort((a,b)=> b.date.localeCompare(a.date));
+  const month = todayStr().slice(0,7);
+  const total = items.reduce((t,h)=>t + h.discount, 0);
+  const thisMonth = items.filter(h=>h.date.slice(0,7) === month).reduce((t,h)=>t + h.discount, 0);
+  const byClient = {};
+  items.forEach(h=>{ byClient[h.client] = (byClient[h.client]||0) + h.discount; });
+  return {items, total, thisMonth, byClient};
+}
+// " (rate adjusted Rs 100 -> Rs 99)" for the Client Statement.
+function saleRateNote(s){
+  const h = s && s.rHistory;
+  if(!h || !h.length) return '';
+  return ` (rate adjusted Rs ${h[0].fromRate} \u2192 Rs ${h[h.length-1].toRate})`;
+}
 // Short " (...)" suffix noting a Sale's L (AIL) status on the Client Statement — so the
 // client sees the same check result there as on the Sales Log and the receipt, not just a
 // plain figure that quietly differs from what was originally dispatched.
-function saleStatementLNote(s){
+function saleStatementLNote(s){ return saleStatementLNote0(s) + saleRateNote(s); }
+function saleStatementLNote0(s){
   if(s.lStatus==='awaiting') return ' (L (AIL) pending)';
   if(s.lStatus==='ok') return ' (L (AIL): OK)';
   if(s.lAdjustedFromId){
@@ -1687,7 +1761,7 @@ function costQuote(inp, agreed){
  * An order is one client + one quality + an agreed rate. Sales point at it with sale.order; the order never
  * closes by itself because deliveries never land on the exact meters (closed = the owner's call). */
 function orderStats(o, today){
-  const live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned', sum = (a, f) => a.reduce((t, r) => t + (Number(f(r)) || 0), 0);
+  const live = s => !isSaleSuperseded(s), sum = (a, f) => a.reduce((t, r) => t + (Number(f(r)) || 0), 0);
   const rows = (DATA.sale || []).filter(s => s.order === o.id && live(s));
   const got = sum(rows, r => r.qty), val = sum(rows, r => r.amount), qty = Number(o.qty) || 0;
   const tol = o.tolerance !== undefined && o.tolerance !== '' && o.tolerance !== null ? Number(o.tolerance) : 5;
@@ -1703,7 +1777,7 @@ function orderStats(o, today){
 /* How fast an order is being delivered (v3.18.28): meters per week over the last 28 days, the weeks left at that pace, and days since the last delivery. */
 function orderPace(o, today){
   today = today || todayStr();
-  const live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned', rows = (DATA.sale || []).filter(s => s.order === o.id && live(s));
+  const live = s => !isSaleSuperseded(s), rows = (DATA.sale || []).filter(s => s.order === o.id && live(s));
   const day = x => Math.round(new Date(x + 'T00:00:00').getTime() / 86400000), t = day(today);
   const recent = rows.filter(r => r.date && t - day(r.date) >= 0 && t - day(r.date) < 28).reduce((m, r) => m + (Number(r.qty) || 0), 0);
   const last = rows.reduce((m, r) => r.date > m ? r.date : m, ''), pending = Math.max(0, (Number(o.qty) || 0) - rows.reduce((m, r) => m + (Number(r.qty) || 0), 0));
@@ -1740,7 +1814,7 @@ function orderChanges(o, rec){
 }
 // Everything the completion statement of an order shows (v3.18.21). The balance is the client's whole account (all orders), as of today.
 function orderCompletion(o, today){
-  const st = orderStats(o, today), live = s => s.lStatus !== 'applied' && s.lStatus !== 'returned';
+  const st = orderStats(o, today), live = s => !isSaleSuperseded(s);
   const rows = (DATA.sale || []).filter(s => s.order === o.id && live(s)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const within = Math.abs(st.pct) <= st.tol;
   return {rows, got: st.got, val: st.val, avg: st.avg, qty: st.qty, diff: st.diff, pct: st.pct, tol: st.tol, within, offRate: st.offRate,

@@ -320,15 +320,33 @@ function productionPanel(){
 // Small status badge for a Sale row's L (AIL) tracking — shown in the Sales Log so a lot's
 // shortage history is visible at a glance without opening its receipt.
 function lBadge(r){
+  if(r.rSupersededBy) return `<span class="note" style="color:var(--rust);margin:0">Rate adjusted — see newer entry</span>`;
   if(r.lStatus==='awaiting') return `<span class="note" style="color:var(--rust);margin:0">⏳ Awaiting</span>`;
   if(r.lStatus==='ok') return `<span class="note" style="margin:0">L (AIL) OK</span>`;
   if(r.lStatus==='applied') return `<span class="note" style="color:var(--rust);margin:0">${r.lCount ? `${fmtLCount(r.lCount)} L (AIL)` : 'L (AIL) OK'} — ${fmtQtyPlain16(r.lShortageQty)} mtr / ${fmtRs(r.lDeduction)} deducted</span>`;
   if(r.lStatus==='returned') return `<span class="note" style="color:var(--red);margin:0"><b>Returned</b>${r.lCount?` (${fmtLCount(r.lCount)} L)`:''}</span>`;
   if(r.lAdjustedFromId){
     const orig = DATA.sale.find(s=>s.id===r.lAdjustedFromId);
-    return `<span class="note" style="margin:0">L (AIL) adj.${orig?` — was ${fmtQtyMtr(orig.qty)}, now ${fmtQtyMtr(r.qty)} mtr`:''}</span>`;
+    return `<span class="note" style="margin:0">L (AIL) adj.${orig?` — was ${fmtQtyMtr(orig.qty)}, now ${fmtQtyMtr(r.qty)} mtr`:''}${r.rHistory && r.rHistory.length ? ' · rate adjusted' : ''}</span>`;
   }
+  if(r.rHistory && r.rHistory.length) return `<span class="note" style="margin:0">Rate adjusted</span>`;
   return '—';
+}
+const ICON_ADJUST = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/></svg>';
+// "Adjust" on a Sale row: record an agreed rate discount (see applySaleRateAdjustment). Not offered while the lot waits for its L (AIL) check.
+function saleAdjustBtn(r){
+  if(saleRateAdjustProblem(r)) return '';
+  return `<button class="ghost rowbtn adjust" data-sale-adjust="${r.id}" aria-label="Adjust rate (agreed discount)" title="Adjust rate (agreed discount)"><span class="ic">${ICON_ADJUST}</span><span class="lbl">Adjust</span></button>`;
+}
+// Card listing every agreed rate discount (only when there is at least one): totals, then one row per agreed adjustment.
+function saleDiscountsCardHtml(){
+  const d = computeSaleDiscounts();
+  if(!d.items.length) return '';
+  const clients = Object.keys(d.byClient).sort((a,b)=>d.byClient[b]-d.byClient[a]);
+  return `<div class="card"><div class="card-head"><h2>Rate Adjustments (agreed discounts)</h2></div>
+    <p class="note" style="margin:0 0 8px"><b>Total given: ${fmtRs(d.total)}</b> · This month: ${fmtRs(d.thisMonth)}${clients.length > 1 ? ' · ' + clients.map(c=>`${escHtml(c)} ${fmtRs(d.byClient[c])}`).join(' · ') : ''}</p>
+    ${logTable('saleDiscounts', ['Agreed on','Client','Quality','Rate','Mtr','Discount','Note'], d.items,
+      h=>[fmtDate(h.date), `<span class="name">${escHtml(h.client)}</span>`, escHtml(h.quality||'—'), `${fmtRs2(h.fromRate)} → ${fmtRs2(h.toRate)}`, fmtQtyMtr(h.qty), `−${fmtRs(h.discount)}`, escHtml(h.note||'—')])}</div>`;
 }
 function salePanel(){
   const clientVal = FILTER.saleClient || '';
@@ -336,13 +354,13 @@ function salePanel(){
   let filteredSale = DATA.sale;
   if(clientVal) filteredSale = filteredSale.filter(r=>r.client===clientVal);
   if(qualityVal) filteredSale = filteredSale.filter(r=>r.quality===qualityVal);
-  const filteredSaleActive = filteredSale.filter(r=> r.lStatus!=='applied' && r.lStatus!=='returned');
+  const filteredSaleActive = filteredSale.filter(r=> !isSaleSuperseded(r));
   // A record involved in an L (AIL) adjustment either side of the link: the original
   // (now lStatus 'applied'/'returned', greyed out and excluded from every total) or the
   // adjusted/replacement entry that superseded it (r.lAdjustedFromId set). Kept as its own
   // filtered set so the "linked records" toggle below can show just this pair-history view
   // without also dragging in every ordinary active sale.
-  const filteredSaleLinked = filteredSale.filter(r=> r.lStatus==='applied' || r.lStatus==='returned' || r.lAdjustedFromId);
+  const filteredSaleLinked = filteredSale.filter(r=> r.lStatus==='applied' || r.lStatus==='returned' || r.lAdjustedFromId || r.rSupersededBy || r.rAdjustedFromId);
   const filterQty = filteredSaleActive.reduce((s,r)=>s+(Number(r.qty)||0),0);
   const filterAmt = filteredSaleActive.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const saleTotals = sumAllAndMonth(activeSaleRows(), 'amount');
@@ -403,6 +421,7 @@ function salePanel(){
       <button class="primary" id="addSale">Add Entry</button>
       <button class="ghost" id="cancelSale" style="display:none">Cancel Edit</button>
     </div></div>
+    ${saleDiscountsCardHtml()}
     <div class="card"><h2>Sales Log</h2>
       <div class="grid cols-2">
         <div class="field"><label>Filter by Client</label><select id="sf_client"><option value="">All Clients</option>${groupedClientOpts()}</select></div>
@@ -410,17 +429,17 @@ function salePanel(){
       </div>
       ${(clientVal||qualityVal) ? `<p class="note">Showing ${filteredSale.length} entr${filteredSale.length===1?'y':'ies'}${clientVal?` for <b>${clientVal}</b>`:''}${qualityVal?` — <b>${qualityVal}</b>`:''} — ${fmtQtyMtr(filterQty)} mtr, total ${fmtRs(filterAmt)}.</p>` : ''}
       <button type="button" class="ghost" id="saleLinkedToggle" style="margin-bottom:10px">${FILTER.saleLinked ? '← Back to Active Records' : `Show Linked (L) Records${filteredSaleLinked.length?` (${filteredSaleLinked.length})`:''}`}</button>
-      ${FILTER.saleLinked ? `<p class="note">Showing only sales that were dispatched to a dyeing unit and had an L (AIL) shortage applied or the lot returned — the original entry (greyed out, excluded from every total) alongside the adjusted entry that replaced it.</p>` : ''}
+      ${FILTER.saleLinked ? `<p class="note">Showing only sales that had an L (AIL) shortage applied, the lot returned, or an agreed rate adjustment — the original entry (greyed out, excluded from every total) alongside the adjusted entry that replaced it.</p>` : ''}
       ${logTable('sale',
       ['Date','Invoice','Client','Quality','Qty','Rate','Amount','Dyeing','L (AIL)','Description',''],
       (FILTER.saleLinked ? filteredSaleLinked : filteredSaleActive).slice().reverse(),
       r=>{
-        const cells = [fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')), fmtRs(r.amount), escHtml(r.dyeing||'—'), lBadge(r), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${actionBtns('sale',r.id)}</span>`];
+        const cells = [fmtDate(r.date), escHtml(r.invoice||'—'), `<span class="name">${escHtml(r.client)}</span>`, escHtml(r.quality), fmtQtyMtr(r.qty), (r.rate ? fmtRs2(r.rate) : (r.qty ? fmtRs2((Number(r.amount)||0)/r.qty) : '—')) + (r.rHistory && r.rHistory.length ? `<div class="note" style="margin:2px 0 0">was ${fmtRs2(r.rHistory[0].fromRate)}</div>` : ''), fmtRs(r.amount), escHtml(r.dyeing||'—'), lBadge(r), escHtml(r.desc||'—'), `<span class="row-actions">${receiptBtn(r.id)}${canShareFiles() ? shareReceiptBtn(r.id) : ''}${saleAdjustBtn(r)}${actionBtns('sale',r.id)}</span>`];
         // Superseded (L applied) or returned entries no longer count anywhere money is
         // totaled (see activeSaleRows in calc.js) — greyed out here so that's visible at a
         // glance in the log itself, not just implied by the badge text. Only reachable via
         // the "Show Linked (L) Records" toggle now — the default view excludes them outright.
-        if(r.lStatus==='applied' || r.lStatus==='returned') cells.rowStyle = 'opacity:0.55';
+        if(isSaleSuperseded(r)) cells.rowStyle = 'opacity:0.55';
         return cells;
       }
     )}</div>`;
