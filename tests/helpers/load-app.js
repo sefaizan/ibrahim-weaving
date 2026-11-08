@@ -41,6 +41,8 @@ function loadApp(){
     var nowStr = () => __now;
     var fmtQtyMtr = n => String(n);
     var recoveryDescription = r => 'Payment';
+    var __uid = 0;
+    var uid = () => 'u' + (++__uid);   // the page's id maker (core.js)
   `, ctx);
   vm.runInContext(src, ctx, { filename: 'js/calc.js' });
 
