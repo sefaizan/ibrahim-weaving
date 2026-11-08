@@ -23,7 +23,7 @@
        1. Changed files only (just the files actually touched this round) — for deploying
           straight over the existing repo on github.com without re-uploading everything.
        2. The full app (every file) — a complete replacement copy. -->
-<meta name="app-build" content="v3.19.5-dark-optout-for-apk">
+<meta name="app-build" content="v3.19.6-sale-rate-adjust">
 <script>
   // Applies the saved theme before first paint, straight from localStorage (not the app's
   // window.storage-backed DATA, which loads async later) — this is a pure device/UI
@@ -221,7 +221,7 @@
   .view-badge[hidden]{ display:none; }
   /* View-only phone (js/view-only.js): every control that adds, edits, deletes or saves ledger data is hidden. */
   body.view-only .vo-hide, body.view-only .form-actions,
-  body.view-only [data-edit], body.view-only [data-del], body.view-only [data-finish], body.view-only [data-add], body.view-only [data-cancel]:not(#pinShowChange):not(#pinShowDisable),
+  body.view-only [data-edit], body.view-only [data-del], body.view-only [data-sale-adjust], body.view-only [data-finish], body.view-only [data-add], body.view-only [data-cancel]:not(#pinShowChange):not(#pinShowDisable),
   body.view-only [data-toggle-active], body.view-only [data-move], body.view-only [data-cheque], body.view-only [data-replace-cheque],
   body.view-only [data-link-replacement], body.view-only [data-rh-edit], body.view-only [data-rh-del],
   body.view-only [data-l-ok], body.view-only [data-l-toggle], body.view-only [data-l-return], body.view-only [data-l-confirm], body.view-only [data-l-cancel], body.view-only [data-l-box],
@@ -1581,7 +1581,7 @@
     </button>
     <div class="appbar-meta">
       <span class="week-badge" id="weekBadge" hidden></span>
-      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.5</span></span>
+      <span class="meta-row"><span class="sync-badge" id="syncBadge" hidden></span><span class="app-version" id="appVersionTag">v3.19.6</span></span>
     </div>
   </header>
 
