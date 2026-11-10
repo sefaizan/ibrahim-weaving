@@ -9,7 +9,7 @@ function renderPanel(id){
     expense: expensePanel, family: familyPanel, personal: personalPanel, personalloans: personalLoansPanel, ownerloans: ownerLoansPanel,
     warp: warpPanel, warpbeams: warpBeamsPanel, weft: weftPanel, wages: wagesPanel,
     loans: loansPanel, ratecalc: ratecalcPanel, costing: costingPanel, orders: ordersPanel,
-    checkpoints: checkpointsPanel, fiscal: typeof fiscalPanel === 'function' ? fiscalPanel : () => '', settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
+    checkpoints: checkpointsPanel, stockcount: stockCountPanel, fiscal: typeof fiscalPanel === 'function' ? fiscalPanel : () => '', settings: settingsPanel, graphs: graphsPanel, backup: backupPanel,
     inbox: typeof proposalsInboxPanel === 'function' ? proposalsInboxPanel : () => '', // owner only (js/proposals.js)
     audit: typeof auditPanel === 'function' ? auditPanel : () => '', // owner only (js/audit.js)
   };
@@ -1559,6 +1559,46 @@ function wirePanel(id){
     wireEnterSubmit(['cp_date','cp_time','cp_bal'],'addCheckpoint');
     wireDelete('checkpoints');
     wireEditGeneric('checkpoints','addCheckpoint','cancelCheckpoints',{cp_date:'date',cp_time:'time',cp_bal:'balance',cp_rem:'remarks'});
+  }
+  if(id==='stockcount'){
+    // calculated stock of a quality, leaving out the count being edited so editing it compares with the right figure
+    const scExpected = q=>{
+      const row = (computeStats('').stockByQuality||[]).find(r=> r.name === q);
+      let e = row ? row.stock : 0;
+      if(EDITING && EDITING.key==='stockAdjust'){ const ex = DATA.stockAdjust.find(r=> r.id===EDITING.id); if(ex && ex.quality===q) e -= Number(ex.delta)||0; }
+      return e;
+    };
+    const scShow = ()=>{
+      const box = document.getElementById('sc_calc'), q = v('sc_quality');
+      if(!box) return;
+      if(!q || v('sc_cnt')===''){ box.classList.remove('on'); box.textContent = 'Pick a quality and enter the counted meters'; return; }
+      const e = scExpected(q), d = Math.round((Number(v('sc_cnt'))-e)*10000)/10000;
+      box.classList.add('on');
+      box.textContent = `Calculated stock ${fmtQtyMtr(e)} mtr \u2192 adjustment ${d===0 ? 'none needed' : stockSigned(d)+' mtr'}`;
+    };
+    document.getElementById('sc_quality').onchange = scShow;
+    document.getElementById('sc_cnt').addEventListener('input', scShow);
+    document.getElementById('addStockCount').onclick = async ()=>{
+      const q = v('sc_quality'), cnt = Number(v('sc_cnt')), exp = q ? scExpected(q) : 0, delta = Math.round((cnt-exp)*10000)/10000;
+      if(!requireFields([
+        [v('sc_date'), 'Pick the date first.', 'sc_date'],
+        [q, 'Pick the quality first.', 'sc_quality'],
+        [v('sc_cnt') !== '' && cnt >= 0, 'Enter the meters you counted (0 is fine).', 'sc_cnt'],
+        [Math.abs(delta) > 0.0001, 'The count matches the stock already shown, so there is nothing to adjust.', 'sc_cnt'],
+      ])) return;
+      const rec = {date:v('sc_date'), time:v('sc_time'), quality:q, counted:cnt, expected:Math.round(exp*10000)/10000, delta, reason:v('sc_reason'), remarks:v('sc_rem')};
+      if(EDITING && EDITING.key==='stockAdjust'){
+        const idx = DATA.stockAdjust.findIndex(r=>r.id===EDITING.id);
+        if(idx>-1) DATA.stockAdjust[idx] = {...DATA.stockAdjust[idx], ...rec};
+        EDITING = null;
+      } else {
+        DATA.stockAdjust.push({id:uid(), ...rec}); PAGE.stockAdjust = 1;
+      }
+      await save(); switchTab('stockcount');
+    };
+    wireEnterSubmit(['sc_date','sc_time','sc_cnt'],'addStockCount');
+    wireDelete('stockAdjust');
+    wireEditGeneric('stockAdjust','addStockCount','cancelStockCount',{sc_date:'date',sc_time:'time',sc_quality:'quality',sc_cnt:'counted',sc_reason:'reason',sc_rem:'remarks'}, scShow);
   }
   if(id==='graphs'){
     const fromSel = document.getElementById('graphsFrom');

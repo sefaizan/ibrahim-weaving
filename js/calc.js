@@ -1115,7 +1115,11 @@ function computeStats(monthVal){
   // it isn't sitting anywhere as stock once an L is confirmed, so it must come off stock too,
   // not just off the adjusted Sale's billed qty (which is what soldCum already reflects).
   const lShortageCum = sumWhere(DATA.sale.filter(s=>s.lStatus==='applied'),'lShortageQty',null,cumEnd);
-  const stock = producedCum - soldCum - lShortageCum;
+  // v3.19.7: Stock Count adjustments (physical count minus calculated stock, signed meters). They move stock only -
+  // never Produced, Sold, wages, sales or receivables.
+  const adjRows = DATA.stockAdjust || [];
+  const adjCum = sumWhere(adjRows,'delta',null,cumEnd);
+  const stock = producedCum - soldCum - lShortageCum + adjCum;
   const profitCum = salesAmtCum - (bizExpCum+famExpCum+personalExpCum+warpCostCum+weftCostCum);
   const profitMonth = salesAmtMonth - (bizExpMonth+famExpMonth+personalExpMonth+warpCostMonth+weftCostMonth);
 
@@ -1123,14 +1127,15 @@ function computeStats(monthVal){
   const producedByQ = sumWhereBy(DATA.production,'quality','qty',null,cumEnd);
   const soldByQ = sumWhereBy(activeSaleRows(),'quality','qty',null,cumEnd);
   const lShortageByQ = sumWhereBy(DATA.sale.filter(s=>s.lStatus==='applied'),'quality','lShortageQty',null,cumEnd);
+  const adjByQ = sumWhereBy(adjRows,'quality','delta',null,cumEnd);
   // Produced / Sold inside the selected period only (what the table shows when a period is chosen); stock itself stays cumulative to the period end
   const producedByQP = start ? sumWhereBy(DATA.production,'quality','qty',start,end) : producedByQ;
   const soldByQP = start ? sumWhereBy(activeSaleRows(),'quality','qty',start,end) : soldByQ;
-  const qualityNames = orderedGroupNames(DATA.qualities.map(q=>q.name), [DATA.production,'quality'], [DATA.sale,'quality']);
+  const qualityNames = orderedGroupNames(DATA.qualities.map(q=>q.name), [DATA.production,'quality'], [DATA.sale,'quality'], [adjRows,'quality']);
   const stockByQuality = qualityNames.map(name=>{
-    const produced = producedByQ[name]||0, sold = soldByQ[name]||0, lShort = lShortageByQ[name]||0;
-    return {name, produced, sold, producedP: producedByQP[name]||0, soldP: soldByQP[name]||0, stock: produced-sold-lShort};
-  }).filter(r=> r.produced || r.sold);
+    const produced = producedByQ[name]||0, sold = soldByQ[name]||0, lShort = lShortageByQ[name]||0, adjusted = adjByQ[name]||0;
+    return {name, produced, sold, adjusted, producedP: producedByQP[name]||0, soldP: soldByQP[name]||0, stock: produced-sold-lShort+adjusted};
+  }).filter(r=> r.produced || r.sold || r.adjusted);
 
   // Sales & receivables breakdown by client
   const salesByC = sumWhereBy(activeSaleRows(),'client','amount',null,cumEnd);
@@ -1202,7 +1207,7 @@ function computeStats(monthVal){
     warpSetsCum,warpSetsMonth,weftBagsCum,weftBagsMonth,wagesPaidCum,wagesPaidMonth,loanGivenCum,loanGivenMonth,loanRepaidCum,loanRepaidMonth,
     personalLoanGivenCum,personalLoanGivenMonth,personalLoanRepaidCum,personalLoanRepaidMonth,
     ownerLoanInCum,ownerLoanInMonth,ownerLoanRepaidCum,ownerLoanRepaidMonth,ownerLoanOwed,
-    receivable,stock,profitCum,profitMonth,cash,checkpoint,stockByQuality,receivablesByClient,
+    receivable,stock,stockAdjusted:adjCum,profitCum,profitMonth,cash,checkpoint,stockByQuality,receivablesByClient,
     qualityNames,clientQualityBreakdown};
 }
 
@@ -1767,7 +1772,7 @@ function orderStats(o, today){
   const tol = o.tolerance !== undefined && o.tolerance !== '' && o.tolerance !== null ? Number(o.tolerance) : 5;
   const diff = got - qty, pct = qty ? diff / qty * 100 : 0;
   const mon = currentWageWeek(today || todayStr()).from;   // this wage week's Friday (name kept short; it is the week start)
-  const stock = Math.max(0, sum((DATA.production || []).filter(p => p.quality === o.quality), r => r.qty) - sum((DATA.sale || []).filter(s => s.quality === o.quality && live(s)), r => r.qty));
+  const stock = Math.max(0, sum((DATA.production || []).filter(p => p.quality === o.quality), r => r.qty) - sum((DATA.sale || []).filter(s => s.quality === o.quality && live(s)), r => r.qty) + sum((DATA.stockAdjust || []).filter(a => a.quality === o.quality), r => r.delta));
   const pending = Math.max(0, qty - got);
   return {got, val, qty, avg: got ? val / got : 0, diff, pct, tol, pending, stock, toWeave: Math.max(0, pending - stock), batches: rows.length,
     last: rows.reduce((m, r) => r.date > m ? r.date : m, ''), weekGot: sum(rows.filter(r => r.date >= mon), r => r.qty),

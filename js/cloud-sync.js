@@ -1061,7 +1061,7 @@ async function cloudCurrentHash(){ return sha256Hex(JSON.stringify(DATA)); }
 // syncs every section. Which ledger keys live in which section is decided here and nowhere else:
 // a key that is not listed goes to 'tools', which is owner-only, so a new key can never leak by accident.
 const CLOUD_SECTIONS = [
-  { id:'production', keys:['production','loomAssignments','warpBeams'] },
+  { id:'production', keys:['production','loomAssignments','warpBeams','stockAdjust'] },
   { id:'reference',  keys:['qualities','looms','employees'] },
   { id:'sales',      keys:['sale','orders','clients','dyeingUnits'] },
   { id:'recovery',   keys:['recovery','banks'] },
@@ -1588,7 +1588,7 @@ function mergeLedgers(local, remote){
 // What a merge brought in, for the confirmation notice: compares this device's ledger with the merged
 // result by record id — new records per list (\"+3 sales\"), records that changed, and records removed
 // because the other device deleted them. Returns '' when nothing differs.
-const MERGE_LIST_NAMES = { sale:['sale','sales'], recovery:['payment','payments'], production:['production entry','production entries'], expense:['expense','expenses'], warp:['warp entry','warp entries'], weft:['weft entry','weft entries'], wagePayments:['wage payment','wage payments'], wageBonuses:['wage bonus','wage bonuses'], wageSettlements:['wage settlement','wage settlements'], loanPayments:['loan payment','loan payments'], ownerLoans:['owner loan entry','owner loan entries'], warpBeams:['warp beam','warp beams'], clients:['client','clients'], employees:['employee','employees'], qualities:['quality','qualities'], looms:['loom','looms'], banks:['bank','banks'], family:['family entry','family entries'], personal:['personal entry','personal entries'], personalLoans:['personal loan','personal loans'], familyMembers:['family member','family members'], checkpoints:['checkpoint','checkpoints'] };
+const MERGE_LIST_NAMES = { sale:['sale','sales'], recovery:['payment','payments'], production:['production entry','production entries'], expense:['expense','expenses'], warp:['warp entry','warp entries'], weft:['weft entry','weft entries'], wagePayments:['wage payment','wage payments'], wageBonuses:['wage bonus','wage bonuses'], wageSettlements:['wage settlement','wage settlements'], loanPayments:['loan payment','loan payments'], ownerLoans:['owner loan entry','owner loan entries'], warpBeams:['warp beam','warp beams'], stockAdjust:['stock count','stock counts'], clients:['client','clients'], employees:['employee','employees'], qualities:['quality','qualities'], looms:['loom','looms'], banks:['bank','banks'], family:['family entry','family entries'], personal:['personal entry','personal entries'], personalLoans:['personal loan','personal loans'], familyMembers:['family member','family members'], checkpoints:['checkpoint','checkpoints'] };
 function mergeSummaryText(before, merged){
   const added = [], changed = [], removed = [];
   Object.keys(merged || {}).forEach(k=>{

@@ -161,7 +161,7 @@ const PERM_ALL_TOTALS = ['production', 'reference', 'sales', 'recovery', 'expens
 // Which section(s) a drawer tab needs to be seen. '*' = the whole-business pages.
 const PERM_TAB_SECTIONS = {
   graphs: '*', fiscal: '*', costing: '*', // (overview is decided card by card: permsOverviewAllowed)
-  production: ['production'], warpbeams: ['production'],
+  production: ['production'], warpbeams: ['production'], stockcount: ['production'],
   sale: ['sales'], orders: ['sales'], recovery: ['recovery'], expense: ['expenses'], wages: ['wages'], loans: ['loans'],
   family: ['family'], personal: ['family'], personalloans: ['family'],
   ownerloans: ['tools'], // owner's own money lent to the business: owner-only (tools is never in a preset role)

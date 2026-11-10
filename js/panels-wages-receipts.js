@@ -788,6 +788,34 @@ function checkpointsPanel(){
     )}</div>`;
 }
 
+/* ---------------- Stock Count (v3.19.7) ----------------
+ * Type what is physically on the shelf for one quality; the app saves the difference from the calculated stock as a signed
+ * adjustment. It moves Stock only - Produced, Sold, wages, sales and receivables are untouched. */
+const STOCK_COUNT_REASONS = ['Miscount','Cutting waste','Damaged / spoiled','Missed entry','Other'];
+function stockSigned(d){ d = Number(d)||0; return (d > 0 ? '+' : d < 0 ? '\u2212' : '') + fmtQtyMtr(Math.abs(d)); }
+function stockCountPanel(){
+  return `<div class="card"><div class="card-head"><h2>Count Stock</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
+    <p class="note info-note" hidden>Use this when the cloth on the shelf does not match the stock shown. Pick the quality and enter the meters you really have. The app saves the difference as an adjustment, so only Stock changes: Produced, Sold, wages, sales and receivables stay exactly as logged. Counted again later? Just add another count.</p>
+    <div class="grid cols-2">
+      ${selectField('Quality','sc_quality',DATA.qualities)}
+      ${field('Counted on shelf (mtr)','sc_cnt','number','data-keep-keyboard')}
+      ${field('Date','sc_date','date',`value="${todayStr()}"`)}
+      ${field('Time','sc_time','time',`value="${nowStr()}"`)}
+      ${selectField('Reason','sc_reason',STOCK_COUNT_REASONS.map(n=>({name:n})))}
+    </div>
+    <div class="gx-tip" id="sc_calc" style="margin-top:10px">Pick a quality and enter the counted meters</div>
+    <div class="grid cols-1" style="margin-top:12px">${textareaField('Remarks','sc_rem')}</div>
+    <div class="form-actions">
+      <button class="primary" id="addStockCount">Save Count</button>
+      <button class="ghost" id="cancelStockCount" style="display:none">Cancel Edit</button>
+    </div></div>
+    <div class="card"><h2>Stock Count Log</h2>${logTable('stockAdjust',
+      ['Date','Quality','Counted','Was','Adjustment','Reason',''],
+      DATA.stockAdjust.slice().sort((a,b)=> (b.date+(b.time||'')) < (a.date+(a.time||'')) ? -1 : 1),
+      r=>[fmtDate(r.date), escHtml(r.quality||'\u2014'), fmtQtyMtr(r.counted), fmtQtyMtr(r.expected), `<b>${stockSigned(r.delta)}</b>`, escHtml(r.reason||'\u2014'), actionBtns('stockAdjust',r.id)]
+    )}</div>`;
+}
+
 function table(headers, rows, cardable=false){
   if(!rows.length) return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead></table><div class="empty">No entries yet — add one above</div>`;
   // cardable: also stamp each cell with its column label so the phone card layout (CSS) can show
