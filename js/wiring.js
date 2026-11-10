@@ -111,7 +111,7 @@ function wirePanel(id){
       applyFinishTick(rec);
       nextBtn.disabled = true;
       const next = nextLoomAfter(rec.loom);
-      DATA.production.push({id:uid(), ...rec}); PAGE.production = 1;
+      DATA.production.push({id:uid(), ...rec}); PAGE.production = 1; beamRollTaken(rec);
       PRODUCTION_PREFILL = {date:rec.date, quality:rec.quality, loom:next || ''};
       await save(); switchTab('production');
       // If this entry brought the loom's beam close to its end, say so (once a day per beam)
@@ -126,10 +126,11 @@ function wirePanel(id){
       if(EDITING && EDITING.key==='production'){
         const idx = DATA.production.findIndex(r=>r.id===EDITING.id);
         if(idx>-1) DATA.production[idx] = {...DATA.production[idx], ...rec};
+        beamRollTaken(rec);
         EDITING = null;
       } else {
         applyFinishTick(rec);
-        DATA.production.push({id:uid(), ...rec}); PAGE.production = 1;
+        DATA.production.push({id:uid(), ...rec}); PAGE.production = 1; beamRollTaken(rec);
       }
       await save(); switchTab('production');
       beamAlertToast(takeBeamAlert(rec.loom)); // the loom's beam may now be about to end
@@ -490,16 +491,16 @@ function wirePanel(id){
         const box = q(c,'.mb-bx'), loom = c.dataset.loom, beams = beamsForLoom(loom), on = beams.filter(b=> b.date <= date);
         let html = '', choice = '';
         if(on.length && date){
-          const active = on[0], prior = beams[beams.indexOf(active) + 1];
-          if(beams.length > 1 && active.date === date && prior){
-            const cap = (Number(prior.length)||0) * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100), woven = (computeWarpBeamUsage()[prior.id] || {woven:0}).woven;
-            const sel = [active.id, prior.id].includes(c.dataset.beam) ? c.dataset.beam : (cap - woven > 0.5 ? prior.id : active.id);
+          const ch = beamChoiceFor(loom, date, null), active = ch ? ch.active : on[0], prior = ch ? ch.prior : null;
+          if(ch){   // v3.19.8: also asks for the first entry on a new beam while the beam before may still own a roll
+            const sel = [active.id, prior.id].includes(c.dataset.beam) ? c.dataset.beam : ((ch.pending || ch.room) ? prior.id : active.id);
             choice = sel;
             html = `<div class="field"><label>This entry is from</label><div style="display:flex;gap:16px;flex-wrap:wrap;padding:6px 0">`
-              + `<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" class="mb_bch" name="mbb_${escHtml(loom)}" value="${prior.id}"${sel===prior.id?' checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})</label>`
+              + `<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" class="mb_bch" name="mbb_${escHtml(loom)}" value="${prior.id}"${sel===prior.id?' checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})${ch.pending?' \u2014 last roll pending':''}</label>`
               + `<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" class="mb_bch" name="mbb_${escHtml(loom)}" value="${active.id}"${sel===active.id?' checked':''}> New beam (${fmtDate(active.date)}, ${escHtml(active.warpType||'')})</label></div></div>`;
           }
         }
+        if(!choice){ const nb = beams[0]; if(nb && beamRollPending(nb) && nb.date <= date) choice = nb.id; }   // the loom's newest beam is still waiting for its last roll
         c.dataset.beam = choice;
         const o = beamFinishOffer({date, loom, qty:t, beam:choice});
         if(!o) c.dataset.fin = '';
@@ -610,7 +611,7 @@ function wirePanel(id){
           recs.push(r);
         }
         finishQ.forEach(f=>finishBeamAt(f.beam, f.date, f.time));
-        recs.forEach(r=>DATA.production.push({id:uid(), ...r}));
+        recs.forEach(r=>{ DATA.production.push({id:uid(), ...r}); beamRollTaken(r); });
         PAGE.production = 1;
         await save(); switchTab('production');
         const savedMsg = `Saved ${recs.length} production entr${recs.length===1?'y':'ies'}.`;
@@ -2364,20 +2365,48 @@ function wireDelete(key){
 // beam has been chained on yet, so it wouldn't otherwise show as Finished. "Reopen"
 // undoes it. Has no visible effect on a beam a newer beam has already superseded, since
 // that one shows Finished automatically regardless of this flag.
+// v3.19.8: "Mark Finished" asks WHEN the beam finished (default now; e.g. Thursday night) and whether its last roll is still on the loom
+// (Yes by default: a roll cannot come off until the next beam is attached). Yes keeps the beam "pending" until that roll is logged.
+function openBeamFinishSheet(rec){
+  const old = document.getElementById('beamFinSheet'); if(old) old.remove();
+  const el = document.createElement('div'); el.id = 'beamFinSheet';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center';
+  const radio = (val, label, on)=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="radio" name="bf_roll" value="${val}"${on?' checked':''}> ${label}</label>`;
+  el.innerHTML = `<div style="background:var(--card);color:var(--ink);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:var(--elev-2)">
+    <h3 style="margin:0 0 4px">Mark beam finished</h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">Loom ${escHtml(rec.loom)} \u00B7 logged ${fmtDate(rec.date)} \u00B7 ${escHtml(rec.warpType||'')}</div>
+    <div class="grid cols-2">${field('Finished on','bf_date','date',`value="${todayStr()}"`)}${field('Time','bf_time','time',`value="${nowStr()}"`)}</div>
+    <div class="field"><label>Last roll still on the loom?</label><div style="display:flex;gap:18px;padding:6px 0">${radio('yes','Yes',true)}${radio('no','No',false)}</div></div>
+    <div id="bf_err" style="color:var(--rust);font-size:13px;min-height:18px"></div>
+    <div class="form-actions"><button class="primary" id="bf_save">Save</button><button class="ghost" id="bf_cancel">Cancel</button></div></div>`;
+  document.body.appendChild(el);
+  const close = ()=> el.remove();
+  el.onclick = e=>{ if(e.target === el) close(); };
+  document.getElementById('bf_cancel').onclick = close;
+  document.getElementById('bf_save').onclick = async ()=>{
+    const d = v('bf_date'), t = v('bf_time') || '00:00', err = document.getElementById('bf_err');
+    if(!d){ err.textContent = 'Pick the finish date first.'; return; }
+    if(d + ' ' + t < rec.date + ' ' + (rec.time || '00:00')){ err.textContent = 'That is before this beam was logged.'; return; }
+    if(d + ' ' + t > todayStr() + ' ' + nowStr()){ err.textContent = 'That time is in the future.'; return; }
+    const yes = (document.querySelector('input[name="bf_roll"]:checked') || {}).value !== 'no';
+    finishBeamAt(rec, d, t);
+    if(yes) rec.rollPending = true; else delete rec.rollPending;
+    close(); await save(); switchTab('warpbeams');
+  };
+}
 function wireBeamFinishToggle(){
   document.querySelectorAll('[data-finish]').forEach(btn=>{
     btn.onclick = async ()=>{
       const [beamId, action] = btn.dataset.finish.split(':');
       const rec = DATA.warpBeams.find(r=>r.id===beamId);
       if(!rec) return;
-      if(action==='finish'){
-        rec.finished = true;
-        rec.finishedDate = todayStr();
-        rec.finishedTime = nowStr();
-      } else {
+      if(action==='finish'){ openBeamFinishSheet(rec); return; }   // v3.19.8: asks for the finish date/time and the last roll
+      if(action==='norole'){ delete rec.rollPending; }
+      else {
         rec.finished = false;
         delete rec.finishedDate;
         delete rec.finishedTime;
+        delete rec.rollPending;
       }
       await save(); switchTab('warpbeams');
     };

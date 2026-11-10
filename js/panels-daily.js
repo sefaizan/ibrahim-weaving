@@ -1019,6 +1019,14 @@ document.addEventListener('click', e=>{
 // existing entry is loaded for editing, so its saved choice is restored, not overwritten —
 // and when only the Date field changed, so an already-correct choice isn't reset under you).
 function renderBeamToggle(forceCurrent){
+  renderBeamToggleCore(forceCurrent);
+  // v3.19.8: say so when a finished beam on this loom is still waiting for its last roll
+  const wrap = document.getElementById('p_beamToggleWrap'), loom = v('p_loom');
+  if(!wrap || !loom) return;
+  const pend = beamsForLoom(loom).filter(beamRollPending);
+  if(pend.length) wrap.insertAdjacentHTML('beforeend', pend.map(b=>`<div class="note" style="margin:4px 0 8px;color:var(--gold)">Loom ${escHtml(loom)}: the beam logged ${fmtDate(b.date)} (${escHtml(b.warpType||'')}) finished ${fmtDate(b.finishedDate)}${b.finishedTime ? ' \u00B7 ' + escHtml(b.finishedTime) : ''}. Its last roll is not logged yet.</div>`).join(''));
+}
+function renderBeamToggleCore(forceCurrent){
   const loom = v('p_loom');
   const date = v('p_date');
   const wrap = document.getElementById('p_beamToggleWrap');
@@ -1040,11 +1048,12 @@ function renderBeamToggle(forceCurrent){
   const onOrBefore = beams.filter(b=> b.date <= date);
   if(onOrBefore.length === 0){ clear(); return; } // entry predates every beam on this loom
   const active = onOrBefore[0];
-  const activeIdx = beams.indexOf(active);
-  const prior = beams[activeIdx + 1]; // installed just before `active`, if any
-  if(active.date === date && prior){
-    // The changeover day: both beams are legitimately possible, so ask.
-    const selected = (!forceCurrent && (existing===active.id || existing===prior.id)) ? existing : active.id;
+  // v3.19.8: asked on the changeover day AND for the first entry on a new beam while the previous beam may still own a roll
+  const ch = beamChoiceFor(loom, date, (EDITING && EDITING.key==='production') ? EDITING.id : null);
+  if(ch){
+    const prior = ch.prior;
+    // The roll may belong to either beam, so ask. Default: the previous beam when it is waiting for its last roll, else the new one.
+    const selected = (!forceCurrent && (existing===active.id || existing===prior.id)) ? existing : (ch.pending ? prior.id : active.id);
     hidden.value = selected;
     wrap.innerHTML = `<div class="field"><label>This entry is from</label>
       <div style="display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap">
@@ -1052,7 +1061,7 @@ function renderBeamToggle(forceCurrent){
           <input type="radio" name="p_beam_choice" value="${active.id}" ${selected===active.id?'checked':''}> New beam (${fmtDate(active.date)}, ${escHtml(active.warpType||'')})
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
-          <input type="radio" name="p_beam_choice" value="${prior.id}" ${selected===prior.id?'checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})
+          <input type="radio" name="p_beam_choice" value="${prior.id}" ${selected===prior.id?'checked':''}> Previous beam (${fmtDate(prior.date)}, ${escHtml(prior.warpType||'')})${ch.pending?' \u2014 last roll pending':''}
         </label>
       </div></div>`;
     wrap.querySelectorAll('input[name="p_beam_choice"]').forEach(radio=>{
@@ -1101,7 +1110,8 @@ function computePurchaseYield(){
 function finishedOnCell(d){
   if(!d || !d.finishedOn) return d && d.finishedHow === 'manual' ? 'Marked finished (no date)' : '—';
   const how = d.finishedHow === 'replaced' ? 'replaced by next beam' : 'marked finished';
-  return `${fmtDate(d.finishedOn)}${d.finishedTime ? ' · ' + escHtml(d.finishedTime) : ''}<br><span style="font-size:11px;color:var(--ink-soft)">${how}</span>`;
+  const idle = d.idleDays > 0.04 ? `<br><span style="font-size:11px;color:var(--ink-soft)">loom idle ${fmtNum(Math.round(d.idleDays*10)/10)} days before the next beam</span>` : '';
+  return `${fmtDate(d.finishedOn)}${d.finishedTime ? ' · ' + escHtml(d.finishedTime) : ''}<br><span style="font-size:11px;color:var(--ink-soft)">${how}</span>${idle}`;
 }
 // Overall Summary / Beam-Level Detail inside each purchase panel fold away independently; the choice is remembered per
 // purchase across re-renders (a Set of closed sections, so everything starts open).
@@ -1288,10 +1298,14 @@ function warpBeamsPanel(){
           ? `<span style="color:var(--rust)">${fmtQtyMtr(u.remaining)} (over)</span>`
           : fmtQtyMtr(u.remaining);
         let statusCell;
+        const bBtn = 'padding:3px 8px;font-size:12px;margin-top:4px';
         if(r.finished){
-          statusCell = `<span class="badge month">Finished</span><br><button class="ghost" data-finish="${r.id}:reopen" style="padding:3px 8px;font-size:12px;margin-top:4px">Reopen</button>`;
+          const pend = beamRollPending(r);
+          statusCell = `<span class="badge ${pend?'progress':'month'}">${pend?'Finished \u00B7 last roll pending':'Finished'}</span><br>`
+            + (pend ? `<button class="ghost" data-finish="${r.id}:norole" style="${bBtn}">No last roll coming</button> ` : '')
+            + `<button class="ghost" data-finish="${r.id}:reopen" style="${bBtn}">Reopen</button>`;
         } else if(u.hasNext){
-          statusCell = '<span class="badge month">Finished</span>';
+          statusCell = `<span class="badge month">Finished</span><br><button class="ghost" data-finish="${r.id}:finish" style="${bBtn}">Set finish time</button>`;
         } else {
           statusCell = `<span class="badge progress">Active</span><br><button class="ghost" data-finish="${r.id}:finish" style="padding:3px 8px;font-size:12px;margin-top:4px">Mark Finished</button>`;
         }

@@ -1227,6 +1227,30 @@ function computeStats(monthVal){
 // beam is done but its replacement hasn't been logged yet).
 // Returns [{r, beam}] for every Production entry that belongs to a beam (entries that belong to
 // no beam are left out). Used for the woven totals below and for the beam forecast.
+// v3.19.8: a beam marked finished while its last roll is still on the loom (b.rollPending) stays "pending" until that roll is logged.
+function beamRollPending(b){ return !!(b && b.finished && b.rollPending); }
+// Saving a production entry linked to a pending beam is that last roll: the beam is no longer pending.
+function beamRollTaken(rec){
+  const b = rec && rec.beam ? (DATA.warpBeams || []).find(x=> x.id === rec.beam) : null;
+  if(b && b.rollPending) delete b.rollPending;
+}
+// Should the entry form ask "previous beam or current beam?" Yes on the day a new beam was chained (as before), and now also for the
+// FIRST entry on a newly logged beam while the beam before it could still own a roll (marked "last roll pending", or with room left).
+// Returns {active, prior, pending, room} or null. excludeId = the entry being edited (so editing the first entry still asks).
+function beamChoiceFor(loom, date, excludeId){
+  if(!loom || !date) return null;
+  const beams = (DATA.warpBeams || []).filter(b=> b.loom === loom).sort((a,b)=> dtOf(b)-dtOf(a));   // newest first
+  const on = beams.filter(b=> b.date <= date);
+  if(!on.length) return null;
+  const active = on[0], prior = beams[beams.indexOf(active) + 1];
+  if(!prior) return null;
+  const woven = (computeWarpBeamUsage()[prior.id] || {woven:0}).woven;
+  const room = (Number(prior.length)||0) * (1 - BEAM_ENTRY_SHRINKAGE_PCT/100) - woven > 0.5;
+  const pending = beamRollPending(prior);
+  const firstOnActive = !beamProductionLinks().some(l=> l.beam.id === active.id && l.r.id !== excludeId);
+  if(!(active.date === date || (firstOnActive && (pending || room)))) return null;
+  return {active, prior, pending, room};
+}
 function beamProductionLinks(){
   const byLoom = {};
   DATA.warpBeams.forEach(b=>{ (byLoom[b.loom] = byLoom[b.loom]||[]).push(b); });
@@ -1270,6 +1294,7 @@ function computeWarpBeamUsage(){
       result[b.id].remaining = (Number(b.length)||0) - result[b.id].woven;
       result[b.id].hasNext = !!next;
       result[b.id].isActive = !next && !b.finished;
+      result[b.id].rollPending = beamRollPending(b);
     });
   });
   return result;
@@ -1292,20 +1317,27 @@ function computeBeamDetails(){
       const next = list[i+1];
       const startDt = dtOf(b);
       let endDt;
-      if(next) endDt = dtOf(next);
+      // v3.19.8: a finish time typed by hand (e.g. Thursday night) wins over the newer beam's install time when it is earlier -
+      // the loom stood without a beam from then until the new one was attached (idleDays).
+      const manualDt = (b.finished && b.finishedDate) ? new Date(b.finishedDate+'T'+(b.finishedTime||'00:00')+':00Z') : null;
+      const manualFirst = !!(manualDt && (!next || manualDt <= dtOf(next)));
+      if(manualFirst) endDt = manualDt;
+      else if(next) endDt = dtOf(next);
       else if(b.finished) endDt = new Date((b.finishedDate||todayStr())+'T'+(b.finishedTime||'00:00')+':00Z');
       else endDt = now;
       const daysTaken = Math.max(0, (endDt-startDt)/86400000);
       // When the beam finished: the moment the next beam was chained onto the loom, or the date/time it
       // was marked Finished by hand. null while it is still the active beam.
       let finishedOn = null, finishedTime = '', finishedHow = null;
-      if(next){ finishedOn = next.date; finishedTime = next.time || ''; finishedHow = 'replaced'; }
+      if(manualFirst && b.finishedDate){ finishedOn = b.finishedDate; finishedTime = b.finishedTime || ''; finishedHow = 'manual'; }
+      else if(next){ finishedOn = next.date; finishedTime = next.time || ''; finishedHow = 'replaced'; }
       else if(b.finished){ finishedOn = b.finishedDate || null; finishedTime = b.finishedTime || ''; finishedHow = 'manual'; }
       const u = usage[b.id] || {woven:0, isActive:true};
       const length = Number(b.length)||0;
       const shrinkage = length - u.woven; // positive = beam yielded less cloth than its logged length; negative = it yielded more ("over")
       const shrinkagePct = length>0 ? (shrinkage/length*100) : null;
-      details[b.id] = {woven:u.woven, isActive:u.isActive, daysTaken, shrinkage, shrinkagePct, finishedOn, finishedTime, finishedHow};
+      const idleDays = (manualFirst && next) ? Math.max(0, (dtOf(next)-manualDt)/86400000) : null;
+      details[b.id] = {woven:u.woven, isActive:u.isActive, daysTaken, shrinkage, shrinkagePct, finishedOn, finishedTime, finishedHow, idleDays, rollPending: beamRollPending(b)};
     });
   });
   return details;
@@ -1332,7 +1364,7 @@ function beamEntryCheck(rec, skipId){
   if(!list.length) return {ok:true};
   const newLog = `Please log the new warp beam against a new purchase first, then add production for this loom.`;
   const last = list[list.length-1];
-  if(last.finished && rec.date && rec.date > (last.finishedDate || last.date)){
+  if(last.finished && !last.rollPending && rec.date && rec.date > (last.finishedDate || last.date)){
     return {ok:false, msg:`Loom ${loom}: this beam is finished. ${newLog}`};
   }
   // Which beam would this entry belong to (same rule as beamProductionLinks)
