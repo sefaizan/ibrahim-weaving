@@ -33,7 +33,6 @@ const TABS = [
   {id:'overview', label:'Overview', icon:'dashboard', group:'Daily'},
   {id:'graphs', label:'Graphs', icon:'monitoring', group:'Daily'}, // right under Overview (moved from Tools in v3.18.1)
   {id:'production', label:'Production', icon:'precision_manufacturing', group:'Daily'},
-  {id:'stockcount', label:'Stock Count', icon:'inventory_2', group:'Daily'}, // v3.19.7: physical count per quality -> adjustment
   {id:'sale', label:'Sale', icon:'point_of_sale', group:'Money'},
   {id:'orders', label:'Orders', icon:'assignment', group:'Money'},
   {id:'recovery', label:'Recovery', icon:'payments', group:'Money'},
