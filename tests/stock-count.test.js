@@ -35,14 +35,23 @@ describe('stock count adjustments', () => {
     closeTo(s.stockByQuality.find(r => r.name === 'Q1').stock, 9);
     closeTo(s.stockByQuality.find(r => r.name === 'Q3').stock, 7);
   });
-  test('wired in: data default, tab, permission, sync section, backup, export and undo labels, Urdu', () => {
+  test('wired in: lives in Settings > Stock (no tab of its own), 16ths input, sync, backup, export and undo labels', () => {
     assert.match(read('js/core.js'), /"stockAdjust": \[\]/);
-    assert.match(read('js/core.js'), /id:'stockcount'/);
-    assert.match(read('js/view-only.js'), /stockcount: \['production'\]/);
+    assert.doesNotMatch(read('js/core.js'), /id:'stockcount'/);
+    assert.doesNotMatch(read('js/view-only.js'), /stockcount/);
+    assert.match(read('js/shell.js'), /stockCountCards\(\)/);
+    assert.match(read('js/shell.js'), /\['Total Stock','By Quality','Count Stock','Weft Stock'\]/);
+    assert.match(read('js/panels-wages-receipts.js'), /meterFracField\('Counted on shelf \(mtr\)','sc_cnt','sc_cnt_16'\)/);
+    assert.match(read('js/wiring.js'), /combineMtr16\(v\('sc_cnt'\), v\('sc_cnt_16'\)\)/);
+    assert.match(read('js/wiring.js'), /splitMtr16\(rec\.counted\)/);
+    assert.match(read('js/wiring.js'), /wireStockCount\(\);/);
     assert.match(read('js/cloud-sync.js'), /'warpBeams','stockAdjust'\]/);
     assert.match(read('js/shell.js'), /'checkpoints','stockAdjust'\]/);
     assert.match(read('js/shell.js'), /stockAdjust:'Stock_Counts'/);
     assert.match(read('js/shell.js'), /stockAdjust:'Stock count'/);
-    assert.match(read('js/wiring.js'), /stockcount: stockCountPanel/);
+  });
+  test('a count in sixteenths adjusts by the exact fraction', () => {
+    const app = loadApp(); app.setData(ledger([{ id: 'a1', date: '2026-09-10', quality: 'Q1', counted: 4.8125, expected: 5, delta: -0.1875 }]));
+    closeTo(app.computeStats('').stockByQuality.find(r => r.name === 'Q1').stock, 4.8125);
   });
 });
