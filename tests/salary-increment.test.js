@@ -57,6 +57,8 @@ describe('salary increments', () => {
   });
   test('wired in: Increment button only for salaried staff with wages edit access, hidden on view-only phones, old form guarded', () => {
     assert.match(read('js/shell.js'), /x\.salaried && canSalEdit/);
+    assert.doesNotMatch(read('js/shell.js'), /rowbtn" data-sal-inc/);                 // not in the cramped button strip (v3.19.11)
+    assert.match(read('js/shell.js'), /\+ Give increment/);
     assert.match(read('js/view-only.js'), /\[data-sal-inc\]/);
     assert.match(read('index.html'), /body\.view-only \[data-sal-inc\]/);
     assert.match(read('js/wiring.js'), /openSalarySheet\(DATA\.employees\.find/);
