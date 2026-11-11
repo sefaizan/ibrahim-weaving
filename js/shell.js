@@ -195,7 +195,14 @@ function employeeSettingsFields(){
     + '<div class="field emp-sal-f" style="display:none"><label>Salary effective from</label><input id="new_employees_from" type="date"></div>'
     + '<div class="field emp-sal-f" style="display:none"><label>Last working day (optional)</label><input id="new_employees_to" type="date"></div>' : '');
 }
+// "Weekly salary Rs 27,500 / week - raised 1-9-2026" for a salaried person's row (only the plain label when this phone holds no salary data).
+function salaryRowLabel(name){
+  const w = salaryWeeklyOn(name); if(!(w > 0)) return 'Weekly salary';
+  const up = salaryHistory(name).filter(r=> r.change > 0).pop();
+  return 'Weekly salary ' + fmtRs(w) + ' / week' + (up ? ' \u00B7 raised ' + fmtDate(up.date) : '');
+}
 function settingsPanel(){
+  const canSalEdit = typeof permsCan !== 'function' || permsCan('wages', 'e');
   const section = (title, key, placeholder, isName, hasActiveToggle) => `
     <div class="card">
       <div class="card-head"><h2>${title}</h2><button type="button" class="info-btn" data-info-toggle title="Info">i</button></div>
@@ -217,9 +224,9 @@ function settingsPanel(){
           ${DATA[key].length ? DATA[key].map((x,idx)=>{
             const inactive = hasActiveToggle && x.active === false;
             const shown = key==='weftTypes' ? weftTypeLabel(x) : x.name;
-            const clientSub = key==='clients' ? [x.phone, x.address, x.creditLimit?('Limit Rs '+Number(x.creditLimit).toLocaleString()):''].filter(Boolean).map(escHtml).join(' · ') : key==='employees' ? [x.title, x.salaried ? 'Weekly salary' : 'Per meter'].filter(Boolean).map(escHtml).join(' · ') : '';
+            const clientSub = key==='clients' ? [x.phone, x.address, x.creditLimit?('Limit Rs '+Number(x.creditLimit).toLocaleString()):''].filter(Boolean).map(escHtml).join(' · ') : key==='employees' ? [x.title, x.salaried ? salaryRowLabel(x.name) : 'Per meter'].filter(Boolean).map(escHtml).join(' · ') : '';
             const nameCell = isName ? `<span class="name">${escHtml(shown)}</span>` : escHtml(shown);
-            return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${clientSub?`<div class="note" style="margin:2px 0 0">${clientSub}</div>`:''}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
+            return `<tr${inactive?' style="opacity:0.55"':''}><td>${nameCell}${clientSub?`<div class="note" style="margin:2px 0 0">${clientSub}</div>`:''}${inactive?' <span class="badge" style="background:var(--paper-dim);color:var(--ink-soft)">Inactive</span>':''}</td><td style="white-space:nowrap"><span class="row-actions">${moveBtns(key,idx,idx===0,idx===DATA[key].length-1)}${(key==='employees' && x.salaried && canSalEdit) ? `<button class="ghost rowbtn" data-sal-inc="${x.id}">Increment</button>` : ''}${hasActiveToggle?`<button class="ghost rowbtn toggle" data-toggle-active="${key}:${x.id}"><span class="lbl">${inactive?'Activate':'Deactivate'}</span></button>`:''}${actionBtns(key,x.id)}</span></td></tr>`;
           }).join('')
             : `<tr><td colspan="2" class="empty">No entries yet</td></tr>`}
         </tbody>

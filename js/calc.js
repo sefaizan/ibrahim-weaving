@@ -196,13 +196,48 @@ function endStaffSalary(name, lastDay){
   saveStaffSalary(name, 0, nextDayStr(lastDay), '');
 }
 // Adds or corrects one salary rate (one per effective-from date) and sets the last working day.
-function saveStaffSalary(name, weekly, from, to){
+function saveStaffSalary(name, weekly, from, to, reason){
   if(!DATA.staffSalary) DATA.staffSalary = {};
   const s = DATA.staffSalary[name] = DATA.staffSalary[name] || {rates:[]};
   const e = s.rates.find(r=>r.date === from);
   if(e) e.weekly = weekly; else s.rates.push({date:from, weekly});
+  if(reason !== undefined){ const r = s.rates.find(x=>x.date === from); if(reason) r.reason = reason; else delete r.reason; }   // v3.19.10: optional note on a raise
   s.rates.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
   if(to) s.to = to; else delete s.to;
+}
+
+// v3.19.10: salary increments (salaried staff only: this only ever touches DATA.staffSalary, never the per-meter wage rates).
+// The history, oldest first: each row has the weekly salary from its date, the change against the previous salary (null for the first
+// salary or a restart) and the reason. A zero weekly entry is the "salary ended" marker, not a salary.
+function salaryHistory(name){
+  const s = staffSalaryOf(name); if(!s || !Array.isArray(s.rates)) return [];
+  let prev = 0;
+  return s.rates.filter(r=>r && r.date).slice().sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0).map(r=>{
+    const w = Number(r.weekly) || 0, ended = w <= 0;
+    const row = {date:r.date, weekly:w, ended, reason:r.reason || '', change: (ended || !prev) ? null : w - prev, pct: (ended || !prev) ? null : (w - prev) / prev * 100};
+    prev = ended ? 0 : w;
+    return row;
+  });
+}
+// Gives (or corrects) a salary from a date the owner picks. Returns {ok:true} or {ok:false, msg}. Days before the date keep the old salary;
+// a date in the past simply adds the difference for the days already worked to what the person is owed.
+function addSalaryIncrement(name, weekly, from, reason){
+  weekly = Number(weekly);
+  if(!isSalariedEmp(name)) return {ok:false, msg:'Increments are only for salaried staff.'};
+  if(!(weekly > 0)) return {ok:false, msg:'Enter the new weekly salary.'};
+  if(!from) return {ok:false, msg:'Pick the date the new salary starts.'};
+  const s = staffSalaryOf(name);
+  if(s && s.to && from > s.to) return {ok:false, msg:'That date is after the last working day (' + s.to + ').'};
+  saveStaffSalary(name, weekly, from, s && s.to ? s.to : '', String(reason || '').trim());
+  return {ok:true};
+}
+// Removes one salary line. The only salary of a person cannot be removed (turn salary off in the employee form instead).
+function deleteSalaryRate(name, date){
+  const s = staffSalaryOf(name); if(!s || !Array.isArray(s.rates)) return {ok:false, msg:'No salary found.'};
+  const row = s.rates.find(r=>r.date === date); if(!row) return {ok:false, msg:'No salary found for that date.'};
+  if(Number(row.weekly) > 0 && s.rates.filter(r=>Number(r.weekly) > 0).length < 2) return {ok:false, msg:'This is the only salary on record. To stop the salary, change the pay basis in the employee form.'};
+  s.rates = s.rates.filter(r=>r !== row);
+  return {ok:true};
 }
 
 // Adds a new bonus; with paidNow it also logs the matching wage payment (cash given, or a bill paid for the

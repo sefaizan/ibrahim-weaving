@@ -1832,6 +1832,7 @@ function wirePanel(id){
   }
   if(id==='settings'){
     wireStockCount();
+    document.querySelectorAll('[data-sal-inc]').forEach(b=>{ b.onclick = ()=> openSalarySheet(DATA.employees.find(e=>e.id === b.dataset.salInc)); });
     const darkToggle = document.getElementById('darkModeToggle');
     if(darkToggle) darkToggle.addEventListener('change', ()=>{
       const dark = darkToggle.checked;
@@ -1966,6 +1967,9 @@ function wirePanel(id){
         if(canSal && basis === 'salary'){
           if(!(sal > 0)){ showToast('Enter the weekly salary, or choose Per meter as the pay basis.', 5000); return; }
           if(salTo && salTo < salFrom){ showToast('Last working day is before the salary start date.', 5000); return; }
+          // v3.19.10: changing the amount of a salary that already starts on this date would rewrite the past, not give a raise
+          const gs = staffSalaryOf(editingRec ? labelOf(editingRec) : name), ex = gs && Array.isArray(gs.rates) ? gs.rates.find(r=> r.date === salFrom && Number(r.weekly) > 0) : null;
+          if(ex && Number(ex.weekly) !== sal){ showToast('This person already has ' + fmtRs(ex.weekly) + ' / week from ' + fmtDate(salFrom) + '. For a raise use the Increment button and pick the new date; to fix a mistake, use Edit there.', 8000); return; }
         }
         const setEmp = (rec, salKey)=>{
           if(!isEmp) return;
@@ -2369,6 +2373,69 @@ function wireStockCount(){
     wireEditGeneric('stockAdjust','addStockCount','cancelStockCount',{sc_date:'date',sc_time:'time',sc_quality:'quality',sc_reason:'reason',sc_rem:'remarks'},
       (rec)=>{ const sp = splitMtr16(rec.counted); document.getElementById('sc_cnt').value = sp.whole; document.getElementById('sc_cnt_16').value = sp.sixteenths; scShow(); });
   }
+}
+// v3.19.10: "Salary & increments" sheet for one salaried person (Settings > People > Employees > Increment). Shows the salary history and
+// lets the owner give a raise from a date picked on a date selector (new weekly salary, or raise by %). Salaried staff only.
+function openSalarySheet(emp){
+  if(!emp) return;
+  const name = emp.name;
+  const old = document.getElementById('salarySheet'); if(old) old.remove();
+  const el = document.createElement('div'); el.id = 'salarySheet';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center';
+  document.body.appendChild(el);
+  let editDate = null;   // the salary line being corrected (null = giving a new raise)
+  const close = ()=>{ el.remove(); SETTINGS_OPEN = 'people'; switchTab('settings'); };
+  const sv = (id)=> (document.getElementById(id) || {}).value || '';
+  const render = ()=>{
+    const hist = salaryHistory(name), now = salaryWeeklyOn(name);
+    const rows = hist.slice().reverse().map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)">
+        <div style="min-width:0"><b>${r.ended ? 'Salary ended' : fmtRs(r.weekly) + ' / week'}</b> <span style="color:var(--ink-soft);font-size:12px">from ${fmtDate(r.date)}</span>
+          ${r.change != null ? `<div style="font-size:12px;color:var(--ink-soft)">${r.change >= 0 ? '+' : '\u2212'}${fmtRs(Math.abs(r.change))} (${r.change >= 0 ? '+' : '\u2212'}${fmtNum(Math.round(Math.abs(r.pct)*10)/10)}%)${r.reason ? ' \u00B7 ' + escHtml(r.reason) : ''}</div>` : (r.reason ? `<div style="font-size:12px;color:var(--ink-soft)">${escHtml(r.reason)}</div>` : '')}</div>
+        <div style="white-space:nowrap">${r.ended ? '' : `<button class="ghost rowbtn" data-sal-edit="${r.date}">Edit</button> `}<button class="ghost rowbtn" data-sal-del="${r.date}">Delete</button></div></div>`).join('');
+    const ed = editDate ? hist.find(r=>r.date === editDate) : null;
+    el.innerHTML = `<div style="background:var(--card);color:var(--ink);width:100%;max-width:480px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:var(--elev-2)">
+      <h3 style="margin:0 0 2px">Salary &amp; increments</h3>
+      <div style="font-size:13px;color:var(--ink-soft);margin-bottom:8px">${escHtml(name)} \u00B7 ${now > 0 ? 'now ' + fmtRs(now) + ' / week' : 'no salary in force today'}</div>
+      <div class="grid cols-2">
+        ${field('New weekly salary (Rs)','sal_new','number','inputmode="decimal" step="any" min="0"')}
+        ${field('or raise by (%)','sal_pct','number','inputmode="decimal" step="any" min="0"')}
+        ${field('Effective from','sal_date','date',`value="${ed ? ed.date : todayStr()}"`)}
+        ${field('Reason (optional)','sal_reason','text','placeholder="e.g. yearly increment"')}
+      </div>
+      <div class="gx-tip" id="sal_prev" style="margin-top:8px">Enter the new weekly salary</div>
+      <div id="sal_err" style="color:var(--rust);font-size:13px;min-height:18px"></div>
+      <div class="form-actions"><button class="primary" id="sal_save">${ed ? 'Update salary' : 'Save increment'}</button>${ed ? '<button class="ghost" id="sal_cancel">Cancel edit</button>' : ''}<button class="ghost" id="sal_close">Close</button></div>
+      <h4 style="margin:14px 0 2px">Salary history</h4>${rows || '<div class="note">No salary recorded yet.</div>'}</div>`;
+    if(ed){ document.getElementById('sal_new').value = ed.weekly; document.getElementById('sal_reason').value = ed.reason || ''; }
+    const base = ()=>{ const d = sv('sal_date'); return d ? salaryWeeklyOn(name, salaryDayBefore(d)) : now; };
+    const prev = ()=>{
+      const w = Number(sv('sal_new')), b = base(), box = document.getElementById('sal_prev');
+      if(!(w > 0)){ box.classList.remove('on'); box.textContent = 'Enter the new weekly salary'; return; }
+      box.classList.add('on');
+      box.textContent = b > 0 ? `${fmtRs(b)} \u2192 ${fmtRs(w)} / week (${w >= b ? '+' : '\u2212'}${fmtRs(Math.abs(w - b))}, ${w >= b ? '+' : '\u2212'}${fmtNum(Math.round(Math.abs(w - b) / b * 1000) / 10)}%)` : `${fmtRs(w)} / week`;
+    };
+    document.getElementById('sal_new').addEventListener('input', ()=>{ document.getElementById('sal_pct').value = ''; prev(); });
+    document.getElementById('sal_pct').addEventListener('input', ()=>{ const p = Number(sv('sal_pct')), b = base(); if(p > 0 && b > 0) document.getElementById('sal_new').value = Math.round(b * (1 + p / 100)); prev(); });
+    document.getElementById('sal_date').addEventListener('change', prev);
+    prev();
+    document.getElementById('sal_close').onclick = close;
+    const cn = document.getElementById('sal_cancel'); if(cn) cn.onclick = ()=>{ editDate = null; render(); };
+    el.onclick = e=>{ if(e.target === el) close(); };
+    el.querySelectorAll('[data-sal-edit]').forEach(b=> b.onclick = ()=>{ editDate = b.dataset.salEdit; render(); });
+    el.querySelectorAll('[data-sal-del]').forEach(b=> b.onclick = async ()=>{
+      const r = deleteSalaryRate(name, b.dataset.salDel);
+      if(!r.ok){ document.getElementById('sal_err').textContent = r.msg; return; }
+      editDate = null; await save(); render();
+    });
+    document.getElementById('sal_save').onclick = async ()=>{
+      const err = document.getElementById('sal_err'), d = sv('sal_date');
+      if(editDate && editDate !== d){ const dr = deleteSalaryRate(name, editDate); if(!dr.ok){ err.textContent = dr.msg; return; } }   // the correction moved the date
+      const r = addSalaryIncrement(name, sv('sal_new'), d, sv('sal_reason'));
+      if(!r.ok){ err.textContent = r.msg; return; }
+      editDate = null; await save(); showToast('Salary saved from ' + fmtDate(d) + '.', 4000); render();
+    };
+  };
+  render();
 }
 // v3.19.8: "Mark Finished" asks WHEN the beam finished (default now; e.g. Thursday night) and whether its last roll is still on the loom
 // (Yes by default: a roll cannot come off until the next beam is attached). Yes keeps the beam "pending" until that roll is logged.
