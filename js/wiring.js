@@ -622,6 +622,7 @@ function wirePanel(id){
     }
   }
   if(id==='sale'){
+    const sd = document.querySelector('details[data-sale-disc]'); if(sd) sd.addEventListener('toggle', ()=>{ SALE_DISC_OPEN = sd.open; });
     document.getElementById('addSale').onclick = async ()=>{
       const qty=combineMtr16(v('s_qty'), v('s_qty_16')), rate=Number(v('s_rate'));
       // An older sale saved before rates were stored has an Amount but no Rate. Editing it (even just
@@ -2635,17 +2636,17 @@ function openSaleAdjustSheet(saleId){
   const sh = document.createElement('div'); sh.className = 'wg-sheet on'; sh.id = 'sa_sheet';
   sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Adjust rate');
   sh.innerHTML = `<h2 style="margin:0 0 4px">Adjust rate</h2>
-    <p class="note" style="margin:0 0 10px"><b>${escHtml(rec.client)}</b> · ${escHtml(rec.quality||'—')} · ${fmtQtyMtr(rec.qty)} mtr · now ${fmtRs2(rate)} per mtr · ${fmtRs(rec.amount)}</p>
+    <p class="note" style="margin:0 0 10px"><b>${escHtml(rec.client)}</b> · ${escHtml(rec.quality||'—')} · ${fmtQtyMtr(rec.qty)} mtr · now ${fmtRateN(rate)} per mtr · ${fmtRs(rec.amount)}</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div class="field"><label>Discount per mtr (Rs)</label><input id="sa_per" type="number" inputmode="decimal" step="0.01" min="0" autofocus></div>
-      <div class="field"><label>or new rate (Rs)</label><input id="sa_new" type="number" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="field"><label>Discount per mtr (Rs)</label><input id="sa_per" type="number" inputmode="decimal" step="any" min="0" autofocus></div>
+      <div class="field"><label>or new rate (Rs)</label><input id="sa_new" type="number" inputmode="decimal" step="any" min="0"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <div class="field"><label>Agreed on</label><input id="sa_date" type="date" value="${todayStr()}"></div>
       <div class="field"><label>Note (optional)</label><input id="sa_note" type="text" placeholder="e.g. agreed in meeting"></div>
     </div>
     <div class="calc-amount" id="sa_preview" style="margin-top:10px">Enter the agreed discount.</div>
-    ${hist.length ? `<div class="note" style="margin-top:8px"><b>Already agreed on this lot</b>${hist.map(h=>`<div>${fmtDate(h.date)} — ${fmtRs2(h.fromRate)} → ${fmtRs2(h.toRate)} (−${fmtRs(h.discount)})${h.note ? ' — ' + escHtml(h.note) : ''}</div>`).join('')}</div>` : ''}
+    ${hist.length ? `<div class="note" style="margin-top:8px"><b>Already agreed on this lot</b>${hist.map(h=>`<div>${fmtDate(h.date)} — ${fmtRateN(h.fromRate)} → ${fmtRateN(h.toRate)} (−${fmtRs(h.discount)})${h.note ? ' — ' + escHtml(h.note) : ''}</div>`).join('')}</div>` : ''}
     <div class="form-actions"><button type="button" class="primary" id="sa_save">Agree &amp; save</button><button type="button" class="ghost" id="sa_close">Close</button>${rec.rAdjustedFromId ? '<button type="button" class="ghost" id="sa_undo">Undo last adjustment</button>' : ''}</div>`;
   document.body.appendChild(bg); document.body.appendChild(sh);
   setTimeout(()=>{ const f = document.getElementById('sa_per'); if(f) f.focus(); }, 60);
@@ -2653,8 +2654,8 @@ function openSaleAdjustSheet(saleId){
   const refresh = ()=>{
     const p = Number(per.value) || 0;
     if(!(p > 0)){ pv.textContent = 'Enter the agreed discount.'; return; }
-    const to = r4(rate - p), disc = Math.floor(Number(rec.qty) * p + 1e-6);
-    pv.textContent = to > 0 ? `${fmtRs2(rate)} → ${fmtRs2(to)} · −${fmtRs(disc)} on ${fmtQtyMtr(rec.qty)} mtr · new amount ${fmtRs((Number(rec.amount)||0) - disc)}` : 'The discount must be smaller than the current rate.';
+    const pr = previewSaleRateAdjustment(rec, p);
+    pv.textContent = pr.toRate > 0 ? `${fmtRateN(rate)} → ${fmtRateN(pr.toRate)} · −${fmtRs(pr.discount)} on ${fmtQtyMtr(rec.qty)} mtr · new amount ${fmtRs(pr.newAmount)}` : 'The discount must be smaller than the current rate.';
   };
   per.addEventListener('input', ()=>{ const p = Number(per.value) || 0; nw.value = p > 0 ? r4(rate - p) : ''; refresh(); });
   nw.addEventListener('input', ()=>{ const n = Number(nw.value) || 0; per.value = (n > 0 && n < rate) ? r4(rate - n) : ''; refresh(); });
@@ -2664,7 +2665,7 @@ function openSaleAdjustSheet(saleId){
     const res = applySaleRateAdjustment(saleId, per.value, document.getElementById('sa_date').value, document.getElementById('sa_note').value);
     if(res.error){ showToast(res.error, 6000); return; }
     await save(); closeSaleAdjustSheet();
-    showToast(`Rate adjusted: ${fmtRs2(res.fromRate)} → ${fmtRs2(res.toRate)} (−${fmtRs(res.discount)})`, 5000);
+    showToast(`Rate adjusted: ${fmtRateN(res.fromRate)} → ${fmtRateN(res.toRate)} (−${fmtRs(res.discount)})`, 5000);
     switchTab('sale');
   };
   const undo = document.getElementById('sa_undo');

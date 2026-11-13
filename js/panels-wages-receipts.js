@@ -1014,9 +1014,9 @@ function saleReceiptRows(r, rate){
       rows.push({label:`Less: L (AIL) Shortage${lOrig.lCount ? ` (${fmtLCount(lOrig.lCount)} L)` : ''}${lNegotiatedNote(lOrig)}`, qty:`-${fmtQtyMtr(lOrig.lShortageQty)}`, rate:'', amount:`-${fmtRs(lOrig.lDeduction)}`});
     } else {
       const b = r.rBase || {qty: r.qty, rate, amount: r.amount};
-      rows.push({label:`${r.quality||'—'} — Original rate`, qty:fmtQtyMtr(b.qty), rate:fmtRs2(b.rate), amount:fmtRs(b.amount)});
+      rows.push({label:`${r.quality||'—'} — Original rate`, qty:fmtQtyMtr(b.qty), rate:fmtRateN(b.rate), amount:fmtRs(b.amount)});
     }
-    r.rHistory.forEach(h=> rows.push({label:`Less: Rate adjustment${h.date ? ` (${fmtDate(h.date)})` : ''}`, qty:fmtQtyMtr(h.qty), rate:`-${fmtRs2(h.perMtr)}`, amount:`-${fmtRs(h.discount)}`}));
+    r.rHistory.forEach(h=> rows.push({label:`Less: Rate adjustment${h.date ? ` (${fmtDate(h.date)})` : ''}`, qty:fmtQtyMtr(h.qty), rate:`-${fmtRateN(h.perMtr)}`, amount:`-${fmtRs(h.discount)}`}));
     return {rows, totalLabel:'Net Total (after rate adjustment)', totalAmount: fmtRs(r.amount)};
   }
   if(r.rSupersededBy){

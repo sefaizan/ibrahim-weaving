@@ -339,14 +339,16 @@ function saleAdjustBtn(r){
   return `<button class="ghost rowbtn adjust" data-sale-adjust="${r.id}" aria-label="Adjust rate (agreed discount)" title="Adjust rate (agreed discount)"><span class="ic">${ICON_ADJUST}</span><span class="lbl">Adjust</span></button>`;
 }
 // Card listing every agreed rate discount (only when there is at least one): totals, then one row per agreed adjustment.
+let SALE_DISC_OPEN = false;
 function saleDiscountsCardHtml(){
   const d = computeSaleDiscounts();
   if(!d.items.length) return '';
   const clients = Object.keys(d.byClient).sort((a,b)=>d.byClient[b]-d.byClient[a]);
-  return `<div class="card"><div class="card-head"><h2>Rate Adjustments (agreed discounts)</h2></div>
-    <p class="note" style="margin:0 0 8px"><b>Total given: ${fmtRs(d.total)}</b> · This month: ${fmtRs(d.thisMonth)}${clients.length > 1 ? ' · ' + clients.map(c=>`${escHtml(c)} ${fmtRs(d.byClient[c])}`).join(' · ') : ''}</p>
+  // v3.19.12: collapsible (closed by default, the total stays visible in the heading); it remembers if you opened it.
+  return `<details class="card" data-sale-disc${SALE_DISC_OPEN ? ' open' : ''}><summary style="cursor:pointer"><b>Rate Adjustments (agreed discounts)</b> <span class="note" style="margin:0 0 0 6px">Total given: ${fmtRs(d.total)}</span></summary>
+    <p class="note" style="margin:8px 0"><b>Total given: ${fmtRs(d.total)}</b> · This month: ${fmtRs(d.thisMonth)}${clients.length > 1 ? ' · ' + clients.map(c=>`${escHtml(c)} ${fmtRs(d.byClient[c])}`).join(' · ') : ''}</p>
     ${logTable('saleDiscounts', ['Agreed on','Client','Quality','Rate','Mtr','Discount','Note'], d.items,
-      h=>[fmtDate(h.date), `<span class="name">${escHtml(h.client)}</span>`, escHtml(h.quality||'—'), `${fmtRs2(h.fromRate)} → ${fmtRs2(h.toRate)}`, fmtQtyMtr(h.qty), `−${fmtRs(h.discount)}`, escHtml(h.note||'—')])}</div>`;
+      h=>[fmtDate(h.date), `<span class="name">${escHtml(h.client)}</span>`, escHtml(h.quality||'—'), `${fmtRateN(h.fromRate)} → ${fmtRateN(h.toRate)}`, fmtQtyMtr(h.qty), `−${fmtRs(h.discount)}`, escHtml(h.note||'—')])}</details>`;
 }
 function salePanel(){
   const clientVal = FILTER.saleClient || '';

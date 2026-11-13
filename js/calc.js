@@ -547,20 +547,31 @@ function applySaleRateAdjustment(saleId, perMtr, date, note){
   const fromRate = saleRateOf(rec), toRate = Math.round((fromRate - per) * 10000) / 10000;
   if(!(toRate > 0)) return {error: 'The discount must be smaller than the current rate (Rs ' + fromRate + ').'};
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||''))) return {error: 'Pick the date the discount was agreed.'};
-  const qty = Number(rec.qty), discount = Math.floor(qty * per + 1e-6);
+  // v3.19.12: decimals count. A sale's amount is qty x rate floored to whole rupees (as in the Sale form), so the adjusted amount is
+  // qty x NEW rate floored the same way - not the old amount minus a discount that had its decimals cut off first. (A sale saved
+  // without a rate has only an amount, so there the exact discount qty x per comes off the amount instead.)
+  const qty = Number(rec.qty), oldAmount = Number(rec.amount) || 0;
+  const newAmount = Math.floor((Number(rec.rate) > 0 ? qty * toRate : oldAmount - qty * per) + 1e-6), discount = oldAmount - newAmount;
   if(!(discount > 0)) return {error: 'That discount comes to less than Rs 1 on this lot.'};
   const entry = {date, perMtr: per, fromRate, toRate, qty, discount};
   if(String(note||'').trim()) entry.note = String(note).trim();
   const adj = {};
   Object.keys(rec).forEach(k=>{ if(k[0] !== '_' && k !== 'rSupersededBy') adj[k] = rec[k]; });   // never copy who/when stamps
   Object.assign(adj, {
-    id: uid(), rate: toRate, amount: (Number(rec.amount)||0) - discount,
+    id: uid(), rate: toRate, amount: newAmount,
     rAdjustedFromId: rec.id, rBase: rec.rBase || {qty, rate: fromRate, amount: Number(rec.amount)||0},
     rHistory: (rec.rHistory || []).concat([entry]),
   });
   rec.rSupersededBy = adj.id;
   DATA.sale.push(adj);
   return {adj, discount, fromRate, toRate};
+}
+// What an agreed discount would do to a sale, without saving: {fromRate, toRate, newAmount, discount} (same rule as applySaleRateAdjustment).
+function previewSaleRateAdjustment(rec, perMtr){
+  const per = Math.round((Number(perMtr)||0) * 10000) / 10000, fromRate = saleRateOf(rec), toRate = Math.round((fromRate - per) * 10000) / 10000;
+  const qty = Number(rec.qty), oldAmount = Number(rec.amount) || 0;
+  const newAmount = Math.floor((Number(rec.rate) > 0 ? qty * toRate : oldAmount - qty * per) + 1e-6);
+  return {fromRate, toRate, newAmount, discount: oldAmount - newAmount};
 }
 // Undo the latest agreed adjustment on an adjusted entry: the entry goes, the one it replaced counts again.
 function undoSaleRateAdjustment(adjId){

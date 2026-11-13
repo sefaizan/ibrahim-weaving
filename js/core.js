@@ -140,6 +140,8 @@ const fmtRsShort = n => { const a = Math.abs(Math.round(n||0)), sg = (n<0 && a) 
   if(a >= 10000000) return sg + 'Rs ' + (a/10000000).toFixed(2) + ' Cr';
   if(a >= 100000) return sg + 'Rs ' + (a/100000).toFixed(2) + ' lakh';
   return fmtRs(n); };
+// A per-meter rate or discount keeps the decimals it was typed with (Rs 99.25, Rs 99.875): at least 2, at most 4.
+const fmtRateN = n => 'Rs ' + (Number(n)||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:4});
 const fmtRs2 = n => 'Rs ' + (n||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmtNum = n => (Math.round((n||0)*100)/100).toLocaleString('en-IN');
 // Receipt-only quantity format: the trade convention here is quarters expressed as
