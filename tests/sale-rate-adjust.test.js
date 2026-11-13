@@ -15,7 +15,7 @@ const plain = x => JSON.parse(JSON.stringify(x));
 function loadReceipt(saleRows){
   const ctx = vm.createContext({
     DATA: Object.assign(emptyData(), { sale: saleRows, recovery: [] }),
-    fmtQtyMtr: n => String(n), fmtRs: n => 'Rs ' + Math.round(n || 0).toLocaleString('en-IN'), fmtRs2: n => 'Rs ' + (Number(n) || 0).toFixed(2),
+    fmtQtyMtr: n => String(n), fmtRs: n => 'Rs ' + Math.round(n || 0).toLocaleString('en-IN'), fmtRs2: n => 'Rs ' + (Number(n) || 0).toFixed(2), fmtRateN: n => 'Rs ' + (Number(n) || 0).toFixed(2),
     fmtDate: d => d, dateTimeStamp: () => 'T', fmtLCount: n => String(n), escHtml: s => String(s), todayStr: () => '2026-11-08', nowStr: () => '12:00',
     recoveryDescription: () => 'Payment', uid: (() => { let i = 0; return () => 'u' + (++i); })(),
   });
@@ -55,10 +55,27 @@ describe('applying an agreed discount', () => {
     closeTo(ledger.totalSales, 118800);
     assert.match(ledger.rows.map(x => x.detail).join('|'), /rate adjusted Rs 100 → Rs 99/);
   });
-  test('discount comes off in whole rupees like the sale amount itself (fractional meters)', () => {
+  test('decimals count: the adjusted amount is exactly what a fresh sale at the new rate would be (qty x new rate, whole rupees)', () => {
     setup({ qty: 1234.5, amount: 123450 });
     const r = app.applySaleRateAdjustment('S1', 1, '2026-11-08');
-    closeTo(r.discount, 1234); closeTo(live()[0].amount, 123450 - 1234);
+    closeTo(live()[0].amount, Math.floor(1234.5 * 99 + 1e-6)); closeTo(live()[0].amount, 122215);
+    closeTo(r.discount, 123450 - 122215);
+  });
+  test('a discount with decimals per meter is not cut to whole rupees first (Rs 0.125 x 100 mtr)', () => {
+    setup({ qty: 100, amount: 10000 });
+    const r = app.applySaleRateAdjustment('S1', 0.125, '2026-11-08');
+    closeTo(r.toRate, 99.875); closeTo(live()[0].amount, 9987); closeTo(r.discount, 13);
+  });
+  test('a small decimal discount on a few meters still counts (Rs 0.5 on 3 mtr)', () => {
+    setup({ qty: 3, amount: 300 });
+    const r = app.applySaleRateAdjustment('S1', 0.5, '2026-11-08');
+    closeTo(live()[0].amount, 298); closeTo(r.discount, 2);       // 3 x 99.5 = 298.5 -> 298
+  });
+  test('the sheet preview shows exactly what Agree & save will store', () => {
+    setup({ qty: 1234.5, amount: 123450 });
+    const p = app.previewSaleRateAdjustment(live()[0], 0.75);
+    const r = app.applySaleRateAdjustment('S1', 0.75, '2026-11-08');
+    closeTo(p.newAmount, live()[0].amount); closeTo(p.discount, r.discount); closeTo(p.toRate, r.toRate);
   });
   test('a second agreed discount stacks on the first, and both stay in the history', () => {
     setup();
@@ -194,5 +211,21 @@ describe('wiring', () => {
   });
   test('only agreed discounts are saved: the sheet only creates anything from "Agree & save"', () => {
     assert.equal((wiring.match(/applySaleRateAdjustment\(/g) || []).length, 1);
+  });
+});
+
+describe('rate adjustment card and rate display (v3.19.12)', () => {
+  const rd = f => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', f), 'utf8');
+  test('the Rate Adjustments card is collapsible, closed by default, remembers when opened, and shows the total while closed', () => {
+    const src = rd('js/panels-daily.js');
+    assert.match(src, /<details class="card" data-sale-disc\$\{SALE_DISC_OPEN \? ' open' : ''\}><summary/);
+    assert.match(src, /let SALE_DISC_OPEN = false;/);
+    assert.match(rd('js/wiring.js'), /details\[data-sale-disc\]/);
+  });
+  test('rates keep up to 4 decimals on screen (Rs 99.875, not Rs 99.88); the inputs accept any decimal', () => {
+    const m = rd('js/core.js').match(/const fmtRateN = n => [^\n]+/);
+    const fmtRateN = new Function(m[0] + '; return fmtRateN;')();
+    assert.equal(fmtRateN(99.875), 'Rs 99.875'); assert.equal(fmtRateN(100), 'Rs 100.00'); assert.equal(fmtRateN(99.25), 'Rs 99.25');
+    assert.match(rd('js/wiring.js'), /id="sa_per" type="number" inputmode="decimal" step="any"/);
   });
 });
