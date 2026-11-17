@@ -339,6 +339,11 @@ function saleAdjustBtn(r){
   return `<button class="ghost rowbtn adjust" data-sale-adjust="${r.id}" aria-label="Adjust rate (agreed discount)" title="Adjust rate (agreed discount)"><span class="ic">${ICON_ADJUST}</span><span class="lbl">Adjust</span></button>`;
 }
 // Card listing every agreed rate discount (only when there is at least one): totals, then one row per agreed adjustment.
+// v3.19.13: Rate per lb for the warp / weft log tables. The saved rate; an old entry saved without one shows amount / lbs instead.
+function yarnRateCell(r){
+  const rate = Number(r.rate) > 0 ? Number(r.rate) : (Number(r.lbs) > 0 && Number(r.amount) > 0 ? Number(r.amount) / Number(r.lbs) : 0);
+  return rate > 0 ? fmtRateN(rate) : '\u2014';
+}
 let SALE_DISC_OPEN = false;
 function saleDiscountsCardHtml(){
   const d = computeSaleDiscounts();
@@ -884,9 +889,9 @@ function warpPanel(){
       <button class="ghost" id="cancelWarp" style="display:none">Cancel Edit</button>
     </div></div>
     <div class="card"><h2>Warp (Tana) Log</h2>${logTable('warp',
-      ['Date','Time','Type','Supplier','Cartons','Weight (lbs)','Amount',''],
+      ['Date','Time','Type','Supplier','Cartons','Weight (lbs)','Rate / lb','Amount',''],
       DATA.warp.slice().reverse(),
-      r=>[fmtDate(r.date), r.time||'—', escHtml(r.type||'—'), r.supplier?`<span class="name">${escHtml(r.supplier)}</span>`:'—', (r.cartons&&r.kgPerCarton)?`${fmtNum(r.cartons)} × ${fmtNum(r.kgPerCarton)}kg`:'—', fmtNum(r.lbs), fmtRs(r.amount), actionBtns('warp',r.id)]
+      r=>[fmtDate(r.date), r.time||'—', escHtml(r.type||'—'), r.supplier?`<span class="name">${escHtml(r.supplier)}</span>`:'—', (r.cartons&&r.kgPerCarton)?`${fmtNum(r.cartons)} × ${fmtNum(r.kgPerCarton)}kg`:'—', fmtNum(r.lbs), yarnRateCell(r), fmtRs(r.amount), actionBtns('warp',r.id)]
     )}</div>`;
 }
 function weftPanel(){
@@ -922,9 +927,9 @@ function weftPanel(){
       <button class="ghost" id="cancelWeft" style="display:none">Cancel Edit</button>
     </div></div>
     <div class="card"><h2>Weft (Bana) Log</h2>${logTable('weft',
-      ['Date','Time','Type','Supplier','Bags','Weight (lbs)','Amount',''],
+      ['Date','Time','Type','Supplier','Bags','Weight (lbs)','Rate / lb','Amount',''],
       DATA.weft.slice().reverse(),
-      r=>[fmtDate(r.date), r.time||'—', escHtml(r.type||'—'), r.supplier?`<span class="name">${escHtml(r.supplier)}</span>`:'—', (r.bags&&r.lbsPerBag)?`${fmtNum(r.bags)} × ${fmtNum(r.lbsPerBag)}lbs`:'—', fmtNum(r.lbs), fmtRs(r.amount), actionBtns('weft',r.id)]
+      r=>[fmtDate(r.date), r.time||'—', escHtml(r.type||'—'), r.supplier?`<span class="name">${escHtml(r.supplier)}</span>`:'—', (r.bags&&r.lbsPerBag)?`${fmtNum(r.bags)} × ${fmtNum(r.lbsPerBag)}lbs`:'—', fmtNum(r.lbs), yarnRateCell(r), fmtRs(r.amount), actionBtns('weft',r.id)]
     )}</div>`;
 }
 /* ---------------- Warp Beams (per-loom length tracking, FIFO by install date) ---------------- */
