@@ -880,7 +880,20 @@ function recordMatchesSearch(rec, term){
 // record into the array of display cells that table() expects for one row. The search box
 // only appears once a table actually has enough records to need it (or a search is already
 // active), so short lists stay uncluttered.
+// v3.19.14: in every log table the leading Date / Time columns ("Agreed on" too) are shown at the END, just before the blank-header
+// action-buttons column. Returns the new column order as indexes into the original headers (identity when the table does not start with one).
+function logColumnOrder(headers){
+  const DATE_COLS = ['Date','Time','Agreed on'], name = h=> String(h == null ? '' : h).trim();
+  const n = headers.length, hasAct = n > 0 && name(headers[n-1]) === '';
+  let lead = 0; while(lead < n && DATE_COLS.includes(name(headers[lead])) && !(hasAct && lead === n-1)) lead++;
+  const all = headers.map((_,i)=>i);
+  if(!lead) return all;
+  const dates = all.slice(0, lead), act = hasAct ? [n-1] : [];
+  return all.slice(lead, n - act.length).concat(dates, act);
+}
 function logTable(pageKey, headers, sortedRecords, mapFn){
+  const order = logColumnOrder(headers), shownHeaders = order.map(i=>headers[i]);
+  const shownRow = r=>{ const c = mapFn(r), out = order.map(i=>c[i]); if(c.rowStyle) out.rowStyle = c.rowStyle; return out; };
   const term = SEARCH[pageKey] || '';
   const filtered = term ? sortedRecords.filter(r=>recordMatchesSearch(r, term)) : sortedRecords;
   const {pageRows, page, totalPages} = paginateRows(pageKey, filtered);
@@ -898,7 +911,7 @@ function logTable(pageKey, headers, sortedRecords, mapFn){
   // buttons clear of the fixed Backup & Restore fab (bottom-right of the screen) when this
   // block lands at the bottom of the visible page — without shifting either row off-center.
   const footer = paginationControls(pageKey, page, totalPages, filtered.length) + exportBarHtml(pageKey, filtered.length);
-  return searchBox + (noResults || `<div class="log-scroll log-cards">${table(headers, pageRows.map(mapFn), true)}</div>` + (footer ? `<div style="margin-bottom:80px">${footer}</div>` : ''));
+  return searchBox + (noResults || `<div class="log-scroll log-cards">${table(shownHeaders, pageRows.map(shownRow), true)}</div>` + (footer ? `<div style="margin-bottom:80px">${footer}</div>` : ''));
 }
 const ICON_PRINT = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>';
 const ICON_SHARE = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><line x1="8.3" y1="10.7" x2="15.7" y2="6.3"/><line x1="8.3" y1="13.3" x2="15.7" y2="17.7"/></svg>';
