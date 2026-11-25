@@ -1917,6 +1917,28 @@ function orderSaleWarn(rec){
  * ("Count bags") resets it. Cover in days = stock / average use per production day over the last 7 production days, so a
  * shutdown does not make the pace look tiny. */
 const WEFT_STOCK_K = 0.0000354;
+// v3.19.15: the constant corrects itself. Every physical count compares the estimate with what you counted; if the app used more or less
+// weft than the count shows, the factor below (costSettings.weftKScale) is nudged by exactly that ratio, so the next estimate is closer.
+const WEFT_SCALE_MIN = 0.7, WEFT_SCALE_MAX = 1.3;                 // the factor never leaves this band
+const WEFT_CAL_MIN_USE_LBS = 300, WEFT_CAL_RATIO_MIN = 0.6, WEFT_CAL_RATIO_MAX = 1.4;   // too little use, or a wild ratio (a typo), is not trusted
+function weftScale(){ const s = Number(costCfg().weftKScale); return s >= WEFT_SCALE_MIN && s <= WEFT_SCALE_MAX ? s : 1; }
+function weftStockK(){ return WEFT_STOCK_K * weftScale(); }
+// What the estimate said vs a count just taken (countedLbs): {estLbs, countedLbs, driftPct (app high +, low -), ratio, calibrated, scale}.
+// Call BEFORE saving the new count. Use over the period = (last count or 0) + bought since - stock; the ratio of the counted use to the app's use scales the factor.
+function weftCalibrationFor(countedLbs){
+  const cfg = costCfg(), prev = cfg.weftStockCount || null, from = prev ? String(prev.at) : '', key = (d, t) => d + ' ' + (t || '00:00');
+  const est = weftStockEstimate().lbs, old = weftScale();
+  let have = prev ? Number(prev.lbs) || 0 : 0;
+  (DATA.weft || []).forEach(w => { if(key(w.date, w.time) > from) have += Number(w.lbs) || 0; });
+  const appUse = have - est, realUse = have - countedLbs;
+  const driftPct = countedLbs > 0 ? (est - countedLbs) / countedLbs * 100 : null;
+  let scale = old, ratio = null, calibrated = false;
+  if(appUse >= WEFT_CAL_MIN_USE_LBS && realUse > 0){
+    ratio = realUse / appUse;
+    if(ratio >= WEFT_CAL_RATIO_MIN && ratio <= WEFT_CAL_RATIO_MAX){ scale = Math.min(WEFT_SCALE_MAX, Math.max(WEFT_SCALE_MIN, old * ratio)); calibrated = true; }
+  }
+  return {estLbs: est, countedLbs, driftPct, ratio, calibrated, scale: Math.round(scale * 10000) / 10000, oldScale: old};
+}
 const WEFT_ALERT_DEFAULT_DAYS = 3;
 function weftAlertDays(){ const n = Number(costCfg().weftAlertDays); return n > 0 ? n : WEFT_ALERT_DEFAULT_DAYS; }
 function weftBagLbs(){
@@ -1990,7 +2012,7 @@ function weftStockEstimate(){
   const perDate = {};
   (DATA.production || []).forEach(r => {
     const q = (DATA.qualities || []).find(x => x.name === r.quality); if(!q) return;
-    const use = (Number(r.qty) || 0) * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: WEFT_STOCK_K});
+    const use = (Number(r.qty) || 0) * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: weftStockK()});
     perDate[r.date] = (perDate[r.date] || 0) + use;
     if(key(r.date, r.time) > from) lbs -= use;
   });
@@ -2000,7 +2022,7 @@ function weftStockEstimate(){
   Object.values(loomPaceInfo()).forEach(i=>{
     const q = (DATA.qualities || []).find(x => x.name === i.lastQuality); if(!q) return;
     const e = loomEstimatedMeters(i, fromN); if(!(e.meters > 0)) return;
-    estLbs += e.meters * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: WEFT_STOCK_K}); estDays = Math.max(estDays, e.days);
+    estLbs += e.meters * costWeftLbs(q.picks, cfg.widthByReed[q.kangi] || cfg.width, {weftK: weftStockK()}); estDays = Math.max(estDays, e.days);
   });
   lbs -= estLbs;
   const today = todayStr(), days = Object.keys(perDate).filter(d => d <= today).sort().slice(-7);

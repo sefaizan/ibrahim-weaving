@@ -211,7 +211,7 @@ function weftStockCard(){
   if(!ovCardOn('weft_stock')) return '';
   const e = weftStockEstimate(); if(!e.hasData) return '';
   const r1 = n => (Math.round(n * 10) / 10).toLocaleString('en-IN'), canEdit = typeof permsCan !== 'function' || permsCan('tools', 'e');
-  const when = e.counted ? 'Counted ' + String(e.counted.at).slice(0, 10) + ' at ' + r1(weftLbsToBags(e.counted.lbs)) + ' bags, then adjusted.' : 'No physical count yet, so this starts from your first purchase.';
+  const when = e.counted ? 'Counted ' + String(e.counted.at).slice(0, 10) + ' at ' + r1(weftLbsToBags(e.counted.lbs)) + ' bags, then adjusted.' + (e.counted.estLbs > 0 && e.counted.driftPct != null ? ' Before that count the app had said ' + r1(weftLbsToBags(e.counted.estLbs)) + ' bags (' + (e.counted.driftPct >= 0 ? 'high' : 'low') + ' by ' + r1(Math.abs(e.counted.driftPct)) + '%).' : '') : 'No physical count yet, so this starts from your first purchase.';
   return `<div class="card" id="weftStockCard"${e.low ? ' style="background:var(--warn-bg-1)"' : ''}>
     <div class="card-head"><h2>🧵 Weft stock</h2></div>
     <div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:22px">${r1(Math.max(e.bags, 0))} bags</b><span class="note" style="margin:0">${r1(Math.max(e.lbs, 0))} lbs</span></div>
@@ -224,8 +224,15 @@ function weftStockCard(){
 async function weftCountSave(){
   const el = document.getElementById('wf_count_bags'), bags = parseFloat(el && el.value);
   if(!(bags >= 0)){ showToast('Enter the number of bags on hand'); return; }
-  DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftStockCount: {at: todayStr() + ' ' + nowStr(), lbs: Math.round(weftBagsToLbs(bags) * 100) / 100}});
-  await save(); showToast('Weft stock set to ' + bags + ' bags'); SETTINGS_OPEN = 'stock'; switchTab('settings');
+  const lbs = Math.round(weftBagsToLbs(bags) * 100) / 100, cal = weftCalibrationFor(lbs);   // compare with the estimate BEFORE the count replaces it
+  const count = {at: todayStr() + ' ' + nowStr(), lbs, estLbs: Math.round(cal.estLbs * 10) / 10};
+  if(cal.driftPct !== null) count.driftPct = Math.round(cal.driftPct * 10) / 10;
+  const patch = {weftStockCount: count}; if(cal.calibrated) patch.weftKScale = cal.scale;
+  DATA.costSettings = Object.assign({}, DATA.costSettings || {}, patch);
+  const r1 = n => Math.round(n * 10) / 10;
+  await save();
+  showToast('Weft stock set to ' + bags + ' bags' + (cal.driftPct !== null && cal.estLbs > 0 ? '. The app had said ' + r1(weftLbsToBags(cal.estLbs)) + ' (' + (cal.driftPct >= 0 ? '+' : '\u2212') + r1(Math.abs(cal.driftPct)) + '%)' : '') + (cal.calibrated && Math.abs(cal.scale - cal.oldScale) > 0.0005 ? '; weft use corrected by ' + (cal.scale >= cal.oldScale ? '+' : '\u2212') + r1(Math.abs(cal.scale / cal.oldScale - 1) * 100) + '%' : ''), 6000);
+  SETTINGS_OPEN = 'stock'; switchTab('settings');
 }
 async function weftAlertSave(v){
   DATA.costSettings = Object.assign({}, DATA.costSettings || {}, {weftAlertDays: Number(v)});
